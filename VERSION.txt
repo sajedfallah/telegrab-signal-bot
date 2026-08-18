@@ -1,0 +1,2 @@
+NEXUS CORE v7.0.0
+Signal Analytics + Subscription/License Engine + Persistent FSM Architecture
