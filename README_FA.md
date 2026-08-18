@@ -4,6 +4,30 @@
 
 NEXUS یک ربات ساده ارسال سیگنال نیست؛ هسته کسب‌وکار تلگرامی برای مدیریت کاربر، اشتراک، لایسنس، پرداخت، رفرال، سیگنال، گزارش و تحلیل عملکرد است.
 
+## Snapshot سورس رسمی v7.0
+
+Snapshot دقیق و پاک سورس `NEXUS CORE v7.0.0` داخل همین ریپازیتوری در مسیر زیر نگهداری می‌شود:
+
+```text
+.bootstrap/v7clean/part00 ... part05
+```
+
+این Snapshot هیچ `.env` واقعی، Token، دیتابیس، Log، Backup یا `venv` ندارد و با SHA-256 کنترل می‌شود.
+
+بعد از Clone برای Materialize کردن سورس واقعی فقط یک بار بزن:
+
+```cmd
+materialize_v7_source.bat
+```
+
+یا:
+
+```bash
+python scripts/materialize_v7_source.py
+```
+
+پس از تأیید Checksum، پوشه‌های `app/` و `tests/` و فایل‌های اجرای نسخه v7.0 استخراج می‌شوند. جزئیات کامل در `docs/SOURCE_SNAPSHOT.md` است.
+
 ## امکانات فعلی
 
 - ورود فارسی/English و امکان تغییر زبان
@@ -27,7 +51,15 @@ NEXUS یک ربات ساده ارسال سیگنال نیست؛ هسته کسب�
 - داشبورد Analytics بر اساس بازه، نماد، Trailing و کانال
 - FSM پایدار SQLite که با Restart معمولی از بین نمی‌رود
 
-## شروع سریع
+## شروع سریع از Clone تازه
+
+ابتدا:
+
+```cmd
+materialize_v7_source.bat
+```
+
+سپس:
 
 ```cmd
 py -3.11 -m venv venv
@@ -37,7 +69,7 @@ python -m pip install -r requirements.txt --timeout 120 --retries 10
 python run.py
 ```
 
-یا:
+یا پس از Materialize:
 
 ```cmd
 setup_windows.bat
@@ -52,7 +84,7 @@ start_windows.bat
 run_tests.bat
 ```
 
-نسخه مبنای v7.0 دارای ۲۱ تست Pass شده است.
+نسخه مبنای v7.0 دارای **۲۱ تست Pass شده** است.
 
 ## مستندات کامل
 
@@ -64,6 +96,7 @@ run_tests.bat
 - `docs/OPERATIONS.md` — نصب، اجرا و عملیات
 - `docs/ROADMAP.md` — مسیر توسعه v7.1 تا v10
 - `docs/AI_HANDOFF.md` — اطلاعات لازم برای تحویل پروژه به AI/توسعه‌دهنده دیگر
+- `docs/SOURCE_SNAPSHOT.md` — Snapshot دقیق سورس، Checksum و روش استخراج
 - `AGENTS.md` — قواعد کار Agentهای کدنویسی
 - `SECURITY.md` — قواعد امنیت و فایل‌های حساس
 
