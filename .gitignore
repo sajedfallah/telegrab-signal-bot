@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*.db
+*.db-shm
+*.db-wal
+logs/
+backups/
+*.log
+.pytest_cache/
+.coverage
+.DS_Store
+Thumbs.db
