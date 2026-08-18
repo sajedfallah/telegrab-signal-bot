@@ -1,0 +1,15 @@
+name: Import NEXUS v7 source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: echo "Source import workflow will be populated with bootstrap extraction commands."
