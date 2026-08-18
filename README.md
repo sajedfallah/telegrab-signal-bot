@@ -19,6 +19,24 @@ The project began as a VIP subscription bot and evolved into a signal-management
 - **Target OS used during development/testing:** Windows 10/11
 - **Secrets:** never committed; configure a local `.env`
 
+## Canonical source snapshot
+
+The exact clean `NEXUS CORE v7.0.0` source is stored in this repository as a checksum-verified snapshot under `.bootstrap/v7clean/part00..part05`. This preserves the exact baseline while keeping secrets, runtime databases, logs, backups and virtual environments out of Git.
+
+After cloning, materialize the canonical source once:
+
+```cmd
+materialize_v7_source.bat
+```
+
+or:
+
+```bash
+python scripts/materialize_v7_source.py
+```
+
+The script verifies the archive SHA-256 before extracting `app/`, `tests/` and runtime scripts into the working tree. See [`docs/SOURCE_SNAPSHOT.md`](docs/SOURCE_SNAPSHOT.md) for the manifest and checksum.
+
 ## What NEXUS currently does
 
 ### Client experience
@@ -117,7 +135,7 @@ Paid approval activates the plan's access on the user license. Admin-issued free
 
 The admin panel includes grouped access to users, subscriptions/licenses, payments, plans/prices, referrals/loyalty, discounts, campaigns, broadcast, CRM/retention, reports, audits, backups, Auto-Trade waitlist and the Signal Center.
 
-## Repository map
+## Repository map after source materialization
 
 ```text
 .
@@ -152,6 +170,14 @@ The admin panel includes grouped access to users, subscriptions/licenses, paymen
 
 ## Install on Windows
 
+For a fresh clone, first materialize the exact v7 source:
+
+```cmd
+materialize_v7_source.bat
+```
+
+Then:
+
 ```cmd
 py -3.11 -m venv venv
 venv\Scripts\activate
@@ -160,7 +186,7 @@ python -m pip install -r requirements.txt --timeout 120 --retries 10
 python run.py
 ```
 
-Or:
+Or, after materialization:
 
 ```cmd
 setup_windows.bat
@@ -182,7 +208,7 @@ python -m compileall -q app tests
 python -m unittest discover -s tests -v
 ```
 
-The v7.0 repository baseline passes **21/21 tests** in the build environment. See `BUILD_TEST_REPORT_V7_0.txt`.
+The canonical v7.0 baseline passes **21/21 tests** in the build environment. See `BUILD_TEST_REPORT_V7_0.txt` after source materialization.
 
 ## Documentation — start here
 
@@ -195,6 +221,7 @@ The v7.0 repository baseline passes **21/21 tests** in the build environment. Se
 | [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Setup, production operations, backup and recovery notes |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Planned v7.1 → v10 development direction |
 | [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md) | Context/invariants for another AI or developer |
+| [`docs/SOURCE_SNAPSHOT.md`](docs/SOURCE_SNAPSHOT.md) | Exact v7 source snapshot, checksum and materialization |
 | [`SECURITY.md`](SECURITY.md) | Secrets, payment, access and security rules |
 | [`AGENTS.md`](AGENTS.md) | Coding-agent operating rules |
 
@@ -215,4 +242,4 @@ These are roadmap items, not missing accidental features:
 
 ---
 
-Persian product documentation is available in `README_FA.md` and `README_V7_FA.md`.
+Persian product documentation is available in `README_FA.md` and `README_V7_FA.md` after source materialization.
