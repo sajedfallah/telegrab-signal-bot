@@ -3,7 +3,8 @@ name: Import NEXUS v7 source
 on:
   push:
     paths:
-      - ".bootstrap/v7clean/part05"
+      - ".bootstrap/v7clean/TRIGGER"
+  workflow_dispatch:
 
 permissions:
   contents: write
