@@ -1,39 +1,33 @@
 # NEXUS — Latest Version
 
-**Current latest tested snapshot: NEXUS v7.0.6**  
+**Current latest tested milestone: NEXUS v7.0.6**  
 **MT5 Auto Trade EA source: v0.4.3**
 
-This snapshot is the current Telegram Bot + FastAPI + MT5 AutoTrade baseline after local execution testing on 2026-08-19.
+This is the latest version marker for the Telegram Bot + FastAPI + MT5 AutoTrade development line after local execution testing on 2026-08-19.
 
-## Included status
+## Confirmed status
 
-- Telegram signal bot core
-- FastAPI AutoTrade backend
-- MT5 AutoTrade source and required Include files
-- License activation and MT5 account binding
-- Signal polling and execution pipeline
-- Duplicate signal / duplicate trade protection
-- Broker symbol mapping
-- Entry-deviation controls
-- MARKET / LIMIT signal support
-- Trade execution diagnostics and retry-safe signal cursor
-- NEXUS trailing profiles 01–07
-- User/admin guide flows and AutoTrade reporting foundation
+- Telegram signal bot core operational
+- FastAPI AutoTrade backend operational
+- MT5 AutoTrade license activation operational
+- Auto signal polling/execution confirmed in local test
+- Duplicate signal / duplicate trade protection retained
+- Broker symbol mapping retained
+- Entry-deviation controls retained
+- MARKET / LIMIT foundations retained
+- Trade execution diagnostics and retry-safe signal cursor retained
+- NEXUS trailing profiles 01–07 retained
 - Automated regression suite: **47 passed**
 
-## Canonical clean snapshot
+## Repository security policy
 
-The clean source archive is stored in this repository under:
+Runtime secrets and state remain local and are not committed:
 
-```text
-.bootstrap/v706/part00 ... part04
-.bootstrap/v706/MANIFEST.json
-```
+- `.env`
+- Telegram bot tokens / credentials
+- `nexus_bot.db`
+- `nexus_fsm.db`
+- logs / backups / caches
+- compiled customer `.ex5` binary
 
-Archive SHA-256:
-
-```text
-3b42d06e3f2456a84a9a57f2222d9ee1d3c632422cc2061c33813cb841771fc8
-```
-
-Security note: `.env`, Telegram token, runtime databases, logs, backups, cache files and compiled `.ex5` binaries are intentionally **not committed**.
+Use `VERSION` and this file as the repository marker for the latest tested development milestone.
