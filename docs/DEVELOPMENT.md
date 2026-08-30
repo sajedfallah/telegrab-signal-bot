@@ -4,11 +4,11 @@
 
 `VERSION` is the canonical machine-readable release version. Keep release notes and compatibility metadata synchronized with it.
 
-The repository currently preserves a historical v7 source snapshot under `.bootstrap/v7clean`; `docs/SOURCE_SNAPSHOT.md` defines its checksum and materialization workflow. The snapshot is a historical reference and should not be modified as part of ordinary feature work. citeturn93file0
+The repository currently preserves a historical v7 source snapshot under `.bootstrap/v7clean`; `docs/SOURCE_SNAPSHOT.md` defines its checksum and materialization workflow. The snapshot is a historical reference and should not be modified as part of ordinary feature work.
 
 ## Module boundaries
 
-The v7 architecture is deliberately hybrid. `app/main.py` remains the integration/orchestration layer; database access is concentrated in `app/db.py`; FSM declarations live in `app/states.py`; business services live under `app/services/`; Telegram routers live under `app/routers/`; calculation and signal-card logic lives under `app/signals/`; and persistent FSM storage lives under `app/storage/`. citeturn96file0
+The v7 architecture is deliberately hybrid. `app/main.py` remains the integration/orchestration layer; database access is concentrated in `app/db.py`; FSM declarations live in `app/states.py`; business services live under `app/services/`; Telegram routers live under `app/routers/`; calculation and signal-card logic lives under `app/signals/`; and persistent FSM storage lives under `app/storage/`.
 
 ## Refactoring rules
 
