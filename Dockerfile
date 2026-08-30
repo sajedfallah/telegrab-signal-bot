@@ -11,5 +11,8 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 
 COPY . .
 
-# Runtime databases and secrets are mounted/provided at runtime.
+# The repository keeps the canonical v7 source as a checksum-verified snapshot.
+RUN python scripts/materialize_v7_source.py
+
+# Runtime databases and secrets are provided at runtime; do not bake them into the image.
 CMD ["python", "run.py"]
