@@ -1,0 +1,55 @@
+--- a/mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5
++++ b/mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5
+@@
++void FinishAdminSignalIssue()
++  {
++   g_admin_signal_busy=false;
++   if(ObjectFind(0,NXS_UI_PREFIX+"sig_issue")>=0)
++     {
++      ObjectSetString(0,NXS_UI_PREFIX+"sig_issue",OBJPROP_TEXT,"ISSUE SIGNAL");
++      ObjectSetInteger(0,NXS_UI_PREFIX+"sig_issue",OBJPROP_STATE,false);
++     }
++   ChartRedraw();
++  }
++
+ void IssueAdminSignal()
+   {
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: TP order invalid, fill targets sequentially"); SetPanel("TP ORDER INVALID: fill targets sequentially"); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: TP order invalid, fill targets sequentially"); SetPanel("TP ORDER INVALID: fill targets sequentially"); return; }
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: invalid TP",(string)(i+1)," raw=\"",raw,"\""); SetPanel("INVALID TP"+(string)(i+1)); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: invalid TP",(string)(i+1)," raw=\"",raw,"\""); SetPanel("INVALID TP"+(string)(i+1)); return; }
+@@
+-     { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: invalid signal input symbol=",symbol," sl=",sl," tp_count=",tp_count," risk=",risk); SetPanel("INVALID SIGNAL INPUT"); return; }
++     { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: invalid signal input symbol=",symbol," sl=",sl," tp_count=",tp_count," risk=",risk); SetPanel("INVALID SIGNAL INPUT"); return; }
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: market price unavailable for ",symbol); SetPanel("MARKET PRICE UNAVAILABLE"); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: market price unavailable for ",symbol); SetPanel("MARKET PRICE UNAVAILABLE"); return; }
+@@
+-     { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: invalid entry"); SetPanel("INVALID ENTRY"); return; }
++     { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: invalid entry"); SetPanel("INVALID ENTRY"); return; }
+@@
+-     { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: channel/access not selected"); SetPanel("SELECT CHANNEL ACCESS"); return; }
++     { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: channel/access not selected"); SetPanel("SELECT CHANNEL ACCESS"); return; }
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: TP order invalid at TP",(string)(i+1)); SetPanel("TP ORDER INVALID"); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: TP order invalid at TP",(string)(i+1)); SetPanel("TP ORDER INVALID"); return; }
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: BUY TP geometry invalid sl=",sl," entry=",entry," tp",(string)(i+1),"=",tps[i]); SetPanel("BUY TP GEOMETRY INVALID"); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: BUY TP geometry invalid sl=",sl," entry=",entry," tp",(string)(i+1),"=",tps[i]); SetPanel("BUY TP GEOMETRY INVALID"); return; }
+@@
+-        { g_admin_signal_busy=false; Print("NEXUS ADMIN SIGNAL REJECTED: SELL TP geometry invalid sl=",sl," entry=",entry," tp",(string)(i+1),"=",tps[i]); SetPanel("SELL TP GEOMETRY INVALID"); return; }
++        { FinishAdminSignalIssue(); Print("NEXUS ADMIN SIGNAL REJECTED: SELL TP geometry invalid sl=",sl," entry=",entry," tp",(string)(i+1),"=",tps[i]); SetPanel("SELL TP GEOMETRY INVALID"); return; }
+@@
+-      g_admin_signal_busy=false;
++      FinishAdminSignalIssue();
+@@
+-      g_admin_signal_busy=false;
++      FinishAdminSignalIssue();
+@@
+-      g_admin_signal_busy=false;
++      FinishAdminSignalIssue();
+@@
+-   g_admin_signal_busy=false;
++   FinishAdminSignalIssue();

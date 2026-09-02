@@ -1,33 +1,37 @@
 # NEXUS — Latest Version
 
-**Current latest tested milestone: NEXUS v7.0.6**  
-**MT5 Auto Trade EA source: v0.4.3**
+**Current latest audited development snapshot: NEXUS v0.6.3**  
+**Scope: Trailing Execution Truth / Reliable Receipts / MT5 Admin Signal Hardening**
 
-This is the latest version marker for the Telegram Bot + FastAPI + MT5 AutoTrade development line after local execution testing on 2026-08-19.
+Validated against the latest v0.6.3 source snapshot supplied on 2026-09-02.
 
-## Confirmed status
+## Current verified state
 
-- Telegram signal bot core operational
-- FastAPI AutoTrade backend operational
-- MT5 AutoTrade license activation operational
-- Auto signal polling/execution confirmed in local test
-- Duplicate signal / duplicate trade protection retained
-- Broker symbol mapping retained
-- Entry-deviation controls retained
-- MARKET / LIMIT foundations retained
-- Trade execution diagnostics and retry-safe signal cursor retained
-- NEXUS trailing profiles 01–07 retained
-- Automated regression suite: **47 passed**
+- Python unit/static suite before final UI fix: **206 passed, 3 skipped**
+- Python unit/static suite after final `ISSUE SIGNAL` UI cleanup fix: **207 passed, 3 skipped**
+- Python `compileall`: **PASS**
+- MARKET deviation contract hardened: literal zero thresholds are rejected at the API boundary; omitted values fall back to the configured safe default.
+- `ISSUE SIGNAL` path includes explicit validation/logging, canonical POST response parsing and direct processing of the returned canonical signal object.
+- `ISSUE SIGNAL` button cleanup is centralized so success/error paths cannot leave the UI stuck on `ISSUING...`.
+- Reliable execution receipts and live MT5 truth synchronization from v0.6.2 are retained.
+- Trailing profiles 01–07 are retained and hardened for execution truth.
+- Partial Close success requires broker retcode plus confirmed live-volume reduction.
+- Full Close success requires the real position to disappear.
+- SL/TP modification success requires broker retcode plus live position confirmation.
+- TP state is advanced only after confirmed execution.
+- Lifecycle/trailing updates remain text-only replies; no lifecycle screenshot was added.
 
-## Repository security policy
+## Repository source-sync status
 
-Runtime secrets and state remain local and are not committed:
+The default `main` branch still contains the older bootstrap/documentation layout and does **not** yet contain the complete browsable `app/`, `mt5/`, and `tests/` tree from the v0.6.3 canonical source snapshot. The `fix/v063-complete-hardening` branch records the v0.6.3 audit, regression patch and tests so the source-sync gap is explicit and traceable.
 
-- `.env`
-- Telegram bot tokens / credentials
-- `nexus_bot.db`
-- `nexus_fsm.db`
-- logs / backups / caches
-- compiled customer `.ex5` binary
+## Production gate
 
-Use `VERSION` and this file as the repository marker for the latest tested development milestone.
+This snapshot is **not declared Production Ready** until both are completed on the real Windows/MT5 environment:
+
+1. MetaEditor compilation: `0 errors, 0 warnings`.
+2. Real broker/demo E2E proof: Issue -> canonical signal -> EA receive -> risk sizing -> OrderSend -> actual position/order -> SL/TP -> lifecycle receipts -> Telegram truth reporting.
+
+## Security
+
+Never commit `.env`, Telegram/admin tokens, runtime databases, logs, backups, caches, account secrets, or customer `.ex5` binaries.
