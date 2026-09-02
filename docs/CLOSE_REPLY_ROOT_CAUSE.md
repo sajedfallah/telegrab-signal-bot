@@ -27,7 +27,9 @@ The reconciliation path now separates broker truth from Telegram delivery finali
 
 ## Runtime configuration verification
 
-Using the supplied deployment `.env` on the hardening branch:
+The supplied deployment `.env` is tracked only on `fix/v065-close-reply-hardening` for the requested test period; it has not been merged to `main`.
+
+Using that configuration:
 
 - configuration import: PASS;
 - Telegram Bot API identity: PASS;
