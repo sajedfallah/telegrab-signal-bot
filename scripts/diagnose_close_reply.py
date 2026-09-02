@@ -18,9 +18,6 @@ import re
 import sys
 from pathlib import Path
 
-# Running `python scripts/diagnose_close_reply.py` makes scripts/ sys.path[0].
-# Add the repository root explicitly so `app` imports work identically on
-# Windows servers and GitHub Actions runners.
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -89,14 +86,23 @@ async def telegram_checks() -> bool:
 
 
 def database_checks() -> int:
-    db.init_db()
     print("\nDB close-delivery audit:")
-    with db.conn() as con:
-        rows = con.execute(
-            """SELECT * FROM signals
-               WHERE status IN ('CLOSED','CLOSING')
-               ORDER BY COALESCE(closed_at,created_at) DESC LIMIT 100"""
-        ).fetchall()
+    # Diagnostics must never manufacture a runtime DB in a clean checkout.
+    # On a deployed server an existing nexus_bot.db is inspected; on CI/fresh
+    # release workspaces DB inspection is simply skipped.
+    if not db.DB_PATH.exists():
+        print(f"No runtime database is present at {db.DB_PATH}; DB audit skipped.")
+        return 0
+    try:
+        with db.conn() as con:
+            rows = con.execute(
+                """SELECT * FROM signals
+                   WHERE status IN ('CLOSED','CLOSING')
+                   ORDER BY COALESCE(closed_at,created_at) DESC LIMIT 100"""
+            ).fetchall()
+    except Exception as exc:
+        print(f"DB audit unavailable: {type(exc).__name__}: {exc}")
+        return 0
     problems = 0
     for row in rows:
         free_done, vip_done = _reply_state(int(row["id"]))
