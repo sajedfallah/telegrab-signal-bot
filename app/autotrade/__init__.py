@@ -7,11 +7,14 @@ effects.
 
 from .history_reconcile_guard import install_history_reconcile_delivery_guard
 from .lifecycle_identity_guard import install_lifecycle_identity_guard
+from .notification_queue_guard import install_notification_queue_guard
 
 install_history_reconcile_delivery_guard()
 install_lifecycle_identity_guard()
+install_notification_queue_guard()
 
 __all__ = [
     "install_history_reconcile_delivery_guard",
     "install_lifecycle_identity_guard",
+    "install_notification_queue_guard",
 ]
