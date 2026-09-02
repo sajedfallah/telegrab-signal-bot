@@ -15,20 +15,6 @@ jobs:
   regression:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    env:
-      BOT_TOKEN: "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
-      ADMIN_IDS: "1001"
-      PUBLIC_CHANNEL_ID: "-1001234567890"
-      PUBLIC_CHANNEL_URL: "https://t.me/nexus_test_public"
-      FREE_CHANNEL_URL: "https://t.me/nexus_test_free"
-      FREE_CHANNEL_ID: "-1001234567891"
-      VIP_CHANNEL_ID: "-1001234567892"
-      SUPPORT_USERNAME: "nexus_test_support"
-      PAYMENT_CARD: "0000000000000000"
-      PAYMENT_OWNER: "NEXUS TEST"
-      TIMEZONE: "Asia/Tehran"
-      NEXUS_ADMIN_MT5_ACCOUNTS: "12345678"
-      NEXUS_ADMIN_TOKEN: "ci-only-placeholder-token"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,6 +25,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+      - name: Validate checked-in runtime env
+        run: |
+          python - <<'PY'
+          from app.config import settings
+          assert settings.bot_token
+          assert settings.admin_ids
+          assert settings.public_channel_id < 0
+          assert int(settings.free_channel_target) < 0
+          assert settings.vip_channel_id < 0
+          assert settings.nexus_admin_mt5_accounts
+          assert settings.nexus_admin_token
+          print('runtime env load: PASS')
+          print('free target:', settings.free_channel_target)
+          print('vip target:', settings.vip_channel_id)
+          print('admin MT5 account count:', len(settings.nexus_admin_mt5_accounts))
+          PY
+      - name: Verify Telegram Bot API and channel posting permissions
+        run: python scripts/diagnose_close_reply.py
       - name: Compile Python source
         run: python -m compileall -q app tests scripts
       - name: Close/reconciliation regression
