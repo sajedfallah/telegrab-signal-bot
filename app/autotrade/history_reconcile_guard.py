@@ -18,8 +18,14 @@ the durable MT5_TRADE_EVENT queue.  The temporary CLOSING state is deliberately
 not eligible for new AutoTrade polling (only ACTIVE is), but allows the normal
 CLOSE worker to publish/retry the final reply and then atomically finalize the
 signal as CLOSED.
+
+Recovery is also allowed to *re-arm* a previously consumed notification.  This
+matters for events that an older worker marked sent after treating them as
+stale/unmatched: INSERT OR IGNORE alone cannot resurrect such a row, even though
+Telegram delivery is still missing.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
@@ -37,6 +43,22 @@ def _as_dict(item: Any) -> dict:
     if hasattr(item, "model_dump"):
         return dict(item.model_dump())
     return {}
+
+
+def _normalize_identity(item: dict) -> dict:
+    """Expose the EA's canonical NX-* signal_id to legacy reconciliation.
+
+    The broker history payload carries the NEXUS code in ``signal_id``.  The
+    legacy reconciler first interprets that field as publish_token and only
+    checks the canonical signal code through a separate ``code`` field.  Mirror
+    NX-* into ``code`` so broker truth and Telegram recovery resolve the same
+    signal identity.
+    """
+    normalized = dict(item)
+    token = str(normalized.get("signal_id") or "").strip()
+    if token.upper().startswith("NX-") and not str(normalized.get("code") or "").strip():
+        normalized["code"] = token
+    return normalized
 
 
 def _resolve_signal(telegram_id: int, item: dict):
@@ -121,6 +143,60 @@ def _close_payload(item: dict, row) -> dict:
     }
 
 
+def _ensure_recovery_pending(telegram_id: int, row, payload: dict, ticket: str) -> str:
+    """Ensure one durable CLOSE notification is genuinely pending.
+
+    Returns QUEUED for a new row, REARMED when an older consumed row is made
+    pending again, or PENDING when an unsent row already exists.  A claimed
+    in-flight row is never reset, which avoids racing the active bot worker.
+    """
+    event_id = str(payload.get("event_id") or "").strip()
+    event_key = f"mt5:{int(telegram_id)}:{ticket}:{event_id}"
+    with db.conn() as con:
+        existing = con.execute(
+            "SELECT id,sent_at,claimed_at FROM autotrade_notifications WHERE event_key=? LIMIT 1",
+            (event_key,),
+        ).fetchone()
+
+    if existing is None:
+        db.enqueue_autotrade_trade_event(int(telegram_id), "CLOSE", payload, ticket)
+        with db.conn() as con:
+            con.execute(
+                "UPDATE autotrade_notifications SET signal_id=? WHERE event_key=?",
+                (int(row["id"]), event_key),
+            )
+        db.update_trade_execution(
+            int(telegram_id), ticket, event_id,
+            signal_id=int(row["id"]), status="QUEUED",
+            destination=str(row["destination"] or "BOTH"),
+        )
+        return "QUEUED"
+
+    if existing["sent_at"] is not None:
+        # An older worker may have consumed this event while it was still
+        # considered stale/unmatched.  Telegram delivery is absent, so make the
+        # exact same durable event pending again instead of pretending that an
+        # INSERT OR IGNORE queued it.
+        serialized = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        with db.conn() as con:
+            con.execute(
+                """UPDATE autotrade_notifications
+                   SET signal_id=?,payload_json=?,sent_at=NULL,claimed_at=NULL,created_at=?
+                   WHERE id=?""",
+                (int(row["id"]), serialized, db.now_iso(), int(existing["id"])),
+            )
+        db.update_trade_execution(
+            int(telegram_id), ticket, event_id,
+            signal_id=int(row["id"]), status="QUEUED", error_text="",
+            destination=str(row["destination"] or "BOTH"),
+        )
+        return "REARMED"
+
+    # Already unsent (possibly actively claimed): keep ownership with the worker
+    # and do not clear claimed_at while it may be sending Telegram.
+    return "PENDING"
+
+
 def install_history_reconcile_delivery_guard() -> None:
     """Install the idempotent history->Telegram close-delivery recovery bridge."""
     global _INSTALLED, _ORIGINAL_RECONCILE
@@ -131,9 +207,9 @@ def install_history_reconcile_delivery_guard() -> None:
     _ORIGINAL_RECONCILE = original
 
     def _delivery_safe_reconcile(telegram_id: int, items: list[dict]) -> dict:
-        normalized = [_as_dict(x) for x in items]
+        normalized = [_normalize_identity(_as_dict(x)) for x in items]
         result = dict(original(int(telegram_id), normalized))
-        queued = 0
+        queued = rearmed = pending = 0
 
         for item in normalized:
             if str(item.get("event") or "").upper() != "CLOSE":
@@ -155,14 +231,21 @@ def install_history_reconcile_delivery_guard() -> None:
                 )
 
             payload = _close_payload(item, row)
-            db.enqueue_autotrade_trade_event(int(telegram_id), "CLOSE", payload, ticket)
-            queued += 1
+            action = _ensure_recovery_pending(int(telegram_id), row, payload, ticket)
+            if action == "QUEUED":
+                queued += 1
+            elif action == "REARMED":
+                rearmed += 1
+            else:
+                pending += 1
             log.warning(
-                "[NEXUS][CLOSE_REPLY][RECOVERY_QUEUED] signal=%s ticket=%s event_id=%s",
-                row["code"], ticket, payload["event_id"],
+                "[NEXUS][CLOSE_REPLY][RECOVERY_%s] signal=%s ticket=%s event_id=%s",
+                action, row["code"], ticket, payload["event_id"],
             )
 
         result["telegram_close_retries_queued"] = queued
+        result["telegram_close_retries_rearmed"] = rearmed
+        result["telegram_close_retries_pending"] = pending
         return result
 
     _delivery_safe_reconcile.__name__ = "reconcile_mt5_history_delivery_safe"
