@@ -1,0 +1,47 @@
+name: Close Reply Hardening
+
+on:
+  push:
+    branches:
+      - fix/v065-close-reply-hardening
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BOT_TOKEN: "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+      ADMIN_IDS: "1001"
+      PUBLIC_CHANNEL_ID: "-1001234567890"
+      PUBLIC_CHANNEL_URL: "https://t.me/nexus_test_public"
+      FREE_CHANNEL_URL: "https://t.me/nexus_test_free"
+      FREE_CHANNEL_ID: "-1001234567891"
+      VIP_CHANNEL_ID: "-1001234567892"
+      SUPPORT_USERNAME: "nexus_test_support"
+      PAYMENT_CARD: "0000000000000000"
+      PAYMENT_OWNER: "NEXUS TEST"
+      TIMEZONE: "Asia/Tehran"
+      NEXUS_ADMIN_MT5_ACCOUNTS: "12345678"
+      NEXUS_ADMIN_TOKEN: "ci-only-placeholder-token"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Compile Python source
+        run: python -m compileall -q app tests scripts
+      - name: Close/reconciliation regression
+        run: python -m pytest -q tests/test_mt5_history_reconciliation.py
+      - name: Full regression suite
+        run: python -m pytest -q
