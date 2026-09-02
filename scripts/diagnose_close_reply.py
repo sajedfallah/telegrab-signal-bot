@@ -2,16 +2,20 @@ from __future__ import annotations
 
 """Runtime diagnostics for missing NEXUS closed-position Telegram replies.
 
-Safe to run on the deployed server.  The script never prints BOT_TOKEN or the
-admin token.  It checks:
+Safe to run on the deployed server. The script never prints BOT_TOKEN or the
+admin token. It checks:
 - effective FREE/VIP targets,
 - Telegram bot identity and channel membership/post permission,
 - signals that are CLOSED/CLOSING without a delivered CLOSE reply,
 - recent CLOSE-related worker errors from logs/nexus.log.
+
+Exit code is non-zero when Bot API/channel posting capability is not healthy,
+so the same command can be used as a CI/runtime gate.
 """
 
 import asyncio
 import re
+import sys
 from pathlib import Path
 
 from aiogram import Bot
@@ -39,7 +43,7 @@ def _expected(destination: str) -> tuple[bool, bool]:
     return dest in {"FREE", "BOTH"}, dest in {"VIP", "BOTH"}
 
 
-async def _check_target(bot: Bot, label: str, target) -> None:
+async def _check_target(bot: Bot, label: str, target) -> bool:
     me = await bot.get_me()
     try:
         chat = await bot.get_chat(target)
@@ -52,26 +56,32 @@ async def _check_target(bot: Bot, label: str, target) -> None:
             f"[{label}] target={target!r} chat_id={chat.id} title={getattr(chat, 'title', '')!r} "
             f"status={status} can_post_messages={can_post} permission_ok={permission_ok}"
         )
+        return permission_ok
     except Exception as exc:
         print(f"[{label}] FAILED target={target!r}: {type(exc).__name__}: {exc}")
+        return False
 
 
-async def telegram_checks() -> None:
+async def telegram_checks() -> bool:
     bot = Bot(settings.bot_token)
     try:
         me = await bot.get_me()
         print(f"BOT OK: id={me.id} username=@{me.username or ''}")
         print(f"FREE effective target: {settings.free_channel_target!r}")
         print(f"VIP effective target: {settings.vip_channel_id!r}")
-        await _check_target(bot, "FREE", settings.free_channel_target)
-        await _check_target(bot, "VIP", settings.vip_channel_id)
+        free_ok, vip_ok = await asyncio.gather(
+            _check_target(bot, "FREE", settings.free_channel_target),
+            _check_target(bot, "VIP", settings.vip_channel_id),
+        )
+        return bool(free_ok and vip_ok)
     except Exception as exc:
         print(f"BOT TOKEN/API FAILED: {type(exc).__name__}: {exc}")
+        return False
     finally:
         await bot.session.close()
 
 
-def database_checks() -> None:
+def database_checks() -> int:
     db.init_db()
     print("\nDB close-delivery audit:")
     with db.conn() as con:
@@ -99,6 +109,7 @@ def database_checks() -> None:
             )
     if not problems:
         print("No CLOSED/CLOSING signal with a missing required close reply was found in the last 100 rows.")
+    return problems
 
 
 def log_checks() -> None:
@@ -119,7 +130,16 @@ def log_checks() -> None:
         print("No close/reply-related log lines found.")
 
 
-if __name__ == "__main__":
+async def _main() -> int:
     database_checks()
     log_checks()
-    asyncio.run(telegram_checks())
+    telegram_ok = await telegram_checks()
+    if not telegram_ok:
+        print("\nFAIL: Telegram bot/channel posting capability is not healthy.")
+        return 2
+    print("\nPASS: Telegram bot identity and FREE/VIP posting permissions are healthy.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(_main()))
