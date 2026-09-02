@@ -1,0 +1,18 @@
+NEXUS v0.6.4 TEST RESULT
+========================
+
+Python unit/static suite: 206 passed, 3 skipped
+Python compile check: PASS
+
+Scope validated:
+- v0.6.2 live-truth / receipt regression suite retained
+- trailing execution-truth hardening tests added
+- Partial Close retcode + live-volume confirmation
+- full-close confirmation
+- SL/TP modification confirmation
+- TP state only after confirmed execution
+- bounded retry/backoff
+- seven trailing profiles remain supported
+
+IMPORTANT:
+This environment cannot compile MQL5 with MetaEditor/MT5 and cannot perform a real broker E2E trade. Therefore this package is NOT declared Production Ready until Windows/MetaEditor compilation and real MT5 execution validation are completed.

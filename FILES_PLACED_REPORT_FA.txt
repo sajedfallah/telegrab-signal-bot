@@ -1,0 +1,16 @@
+NEXUS V7.0.3 - فایل‌های ارسالی در مسیر صحیح قرار گرفتند
+
+1) سورس اکسپرت ارسالی:
+   mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5
+
+2) فایل API ارسالی:
+   app/autotrade/api.py
+
+3) فایل EX5 ارسالی (نام دوپسوندی اصلاح شد):
+   assets/autotrade/NEXUS_AutoTrade.ex5
+
+4) یک کپی برای استفاده/بررسی در پوشه سورس MT5:
+   mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.ex5
+
+پوشه Include نسخه V7.0.3 بدون تغییر حفظ شده است.
+برای کامپایل MQ5، فایل اصلی و پوشه Include باید کنار هم باقی بمانند.

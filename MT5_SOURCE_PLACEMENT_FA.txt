@@ -1,0 +1,17 @@
+NEXUS Auto Trade v0.4.1 - SOURCE READY
+
+Current source:
+mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5
+
+Required includes:
+mt5/NEXUS_AutoTrade/Include/*.mqh
+
+Compile NEXUS_AutoTrade.mq5 in MetaEditor.
+Then copy the newly generated:
+NEXUS_AutoTrade.ex5
+
+to:
+assets/autotrade/NEXUS_AutoTrade.ex5
+
+Only that file is distributed to Auto Trade customers.
+Do not use EX5 files under assets/autotrade/previous as the current installer.

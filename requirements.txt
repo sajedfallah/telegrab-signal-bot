@@ -1,0 +1,14 @@
+aiogram==3.29.1
+aiodns>=3.2,<4
+python-dotenv==1.0.1
+tzdata==2026.3
+
+Pillow==11.3.0
+
+fastapi==0.128.2
+uvicorn==0.48.0
+httpx>=0.27,<1
+
+# Exchange Auto Trade secure connection
+cryptography>=43,<47
+ccxt>=4.4,<5

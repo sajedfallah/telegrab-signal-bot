@@ -1,0 +1,16 @@
+NEXUS CORE v7.0.1 — REPORT CARD FINAL
+Build/Test report
+
+Changes validated:
+- One standalone daily/weekly channel report flash card; no Telegram caption.
+- Crypto and Forex shown in separate sections inside the same card.
+- Crypto P/L uses percentage; Forex P/L uses pips.
+- Public and VIP channel rows are separate for each market.
+- Average trade duration is not included.
+- Persian card font loader prefers B Yekan installed on Windows or REPORT_FA_FONT_PATH.
+- .env loading uses utf-8-sig so Windows BOM does not hide BOT_TOKEN.
+
+Validation:
+- Python compileall: PASS
+- Unit/static tests: 25/25 PASS
+- No .env, runtime DB, logs, backups, venv, or pycache included in release ZIP.

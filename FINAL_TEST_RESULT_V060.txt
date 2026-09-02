@@ -1,0 +1,14 @@
+NEXUS v0.6.0 — FINAL SOURCE VALIDATION
+
+Python compileall: PASS
+pytest: 157 passed, 3 skipped
+Functional admin signal API smoke test: PASS
+Functional admin command API smoke test: PASS
+MT5 signal authority fields/migrations: PASS
+Telegram signal handlers: runtime-disabled in Dispatcher
+Telegram channel publication from MT5 trade-event worker: removed
+Client AutoTrade distribution: restricted to issuer_type=MT5_ADMIN
+Chart screenshot: optional telemetry; does not block lifecycle
+
+NOTE: The supplied release ZIP snapshot contained 157 collected tests (3 skipped).
+The local working copy shown in the user's terminal may contain additional tests from later edits.

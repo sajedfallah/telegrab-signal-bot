@@ -1,0 +1,12 @@
+NEXUS CORE v7.0.2 — AutoTrade Core Update
+
+Validation performed in build environment:
+- Python compile check: PASS
+- Pytest: 35 passed
+- FastAPI deprecation warnings: 2 (on_event/lifespan migration; non-blocking)
+
+Important MT5 note:
+- MQL5 source is version 0.4.0.
+- MetaEditor is not available in this build environment, therefore the new source was NOT compiled here.
+- Compile mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5 in MetaEditor and place the resulting NEXUS_AutoTrade.ex5 at assets/autotrade/NEXUS_AutoTrade.ex5 before production delivery.
+- The previous v0.3.1 EX5 is archived under assets/autotrade/previous and is not used by automatic delivery.

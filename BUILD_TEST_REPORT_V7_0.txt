@@ -1,0 +1,69 @@
+NEXUS CORE v7.0.0 — BUILD / TEST REPORT
+=========================================
+
+Requested delivery scope
+------------------------
+1) Signal Analytics Dashboard
+2) Subscription / License Engine expansion
+3) Architecture hardening + persistent FSM
+
+Implemented
+-----------
+- Signal analytics dashboard with 7-day, 30-day and all-time ranges.
+- Analytics by symbol, NEXUS trailing model, and FREE vs VIP channel.
+- Active/closed trade overview, Win/Loss/BE, win rate, directional return,
+  Forex pips, Crypto percentage and average R:R.
+- Subscription plan entitlements: VIP access and Auto-Trade access.
+- Admin controls for plan entitlements and renewal discount.
+- Renewal/upgrade-aware purchase presentation and license activation.
+- License snapshots plan/source/access at activation time.
+- Paid/admin/trial license source tracking and history support.
+- Existing active entitlement is preserved when extending/upgrading.
+- Persistent FSM through dedicated SQLite storage (nexus_fsm.db).
+- FSM state definitions moved out of main.py.
+- New analytics and subscription features use separate aiogram Routers.
+- License and analytics business logic moved into service modules.
+- Existing NEXUS signal, payment, reporting and client UX flows retained.
+
+Validation performed
+--------------------
+- python -m compileall -q app tests: PASS
+- python -m unittest discover -s tests -v: PASS
+- Total tests: 21 / 21 PASS
+- Sensitive-file scan: no real .env/token, runtime DB, venv, logs or backup
+  are included in the distributed ZIP.
+
+Test coverage includes
+----------------------
+- Forex BUY/SELL calculations
+- XAU configurable pip size
+- Crypto SHORT result calculation
+- Risk:Reward calculation
+- SQLite WAL / busy timeout
+- FREE/VIP report separation
+- Paid license history behavior
+- Client menu ordering
+- Result flow single-photo behavior
+- Persistent FSM wiring (static architecture check)
+- Modular router/service/state structure
+- Plan entitlement and renewal settings
+- Upgrade preserves remaining license time and adds access
+- Paid license snapshots plan/source/entitlements
+- Analytics grouping by symbol / trailing / channel
+
+Environment limitation
+----------------------
+The build container did not have aiogram installed and outbound package download
+was unavailable, so a live Telegram polling/API test and a runtime instantiation
+of the custom FSM storage were not executed here. The storage implementation was
+checked against the aiogram 3.x BaseStorage interface and the source compiles.
+Use setup_windows.bat on the target Windows/Python 3.11 environment to install
+pinned dependencies before the live test.
+
+Security / packaging
+--------------------
+- Real .env is intentionally NOT included.
+- Copy your local .env into the extracted directory before running.
+- nexus_bot.db is NOT included.
+- nexus_fsm.db is created automatically at runtime.
+- venv/ is NOT included.

@@ -1,0 +1,6 @@
+NEXUS v0.6.1 release verification
+
+pytest: 191 passed, 3 skipped
+py_compile: app/main.py app/autotrade/api.py app/db.py app/config.py -> OK
+fresh DB signal numbering: NX-0001 -> OK
+receipt state flow rejected -> REJECTED; executed -> ACTIVE -> OK

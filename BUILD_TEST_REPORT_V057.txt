@@ -1,0 +1,22 @@
+NEXUS v0.5.7 BUILD / TEST REPORT
+
+Python tests: 116 passed, 3 skipped.
+Python compileall (app): PASS.
+Static MQL5 source checks: PASS (balanced braces and required integration markers).
+Actual MetaEditor/MQL5 compiler: NOT AVAILABLE in this Linux build environment.
+
+Release safety:
+- The pre-existing EX5 binary is not treated as the v0.5.7 build.
+- AUTOTRADE_EX5_RELEASE_ENABLED=false prevents accidental delivery of a stale EX5.
+- After compiling v0.5.7 in MetaEditor, copy the new NEXUS_AutoTrade.ex5 to assets/autotrade/ and set AUTOTRADE_EX5_RELEASE_ENABLED=true.
+
+Implemented:
+- Fail-closed license authorization.
+- Admin Token direct setup flow.
+- Compact tabbed MT5 status panel.
+- Canonical pricing.
+- Compact Telegram subscription UI and LTR price labels.
+- Manual MT5 LIMIT pending lifecycle and activation correlation.
+- PENDING trade-event contract.
+- User-scoped AutoTrade data paths.
+- Central branding path assets/branding/NEXUS_logo.png.

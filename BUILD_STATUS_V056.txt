@@ -1,0 +1,4 @@
+NEXUS v0.5.6 STANDARD/ADMIN/LICENSED FINAL SOURCE PACK
+Python tests: 89 passed, 3 skipped.
+Python compileall: passed.
+MT5 EX5 binary: NOT INCLUDED/NOT CLAIMED COMPILED. Compile NEXUS_AutoTrade.mq5 in MetaEditor.

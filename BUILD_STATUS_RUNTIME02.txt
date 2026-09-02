@@ -1,0 +1,6 @@
+NEXUS v0.6.0 Runtime Improvements Pack 02
+Python compileall: PASS
+pytest: 182 passed, 3 skipped
+MT5 source: updated and statically reviewed
+MetaEditor compile: REQUIRED on target Windows/MT5 terminal
+EX5: not included; must be compiled from this exact source

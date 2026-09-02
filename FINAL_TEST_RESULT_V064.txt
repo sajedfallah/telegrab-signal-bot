@@ -1,0 +1,19 @@
+NEXUS v0.6.4 TEST RESULT
+========================
+
+Python unit/static suite: 209 passed, 3 skipped
+Python compile check: PASS
+Release static check: PASS
+
+v0.6.4 hardening validated:
+- Fresh DB Admin identity provisioning before MT5 receipt FK insert
+- MT5 EXECUTED/PENDING publication gate preserved
+- Durable Telegram publication retry for accepted-but-undelivered signals
+- Live-state repair links existing business execution by account/ticket/signal/event type
+- Duplicate business execution prevention when transport event_id differs
+- MT5 Live Center remains broker-confirmed/current-state driven
+- Seven trailing profiles remain supported
+- Execution-confirmed SL/TP/Partial Close hardening retained
+
+IMPORTANT:
+This environment cannot compile MQL5 with MetaEditor/MT5 and cannot perform a real broker E2E trade or Telegram production delivery. Therefore this package is NOT declared Production Ready until Windows/MetaEditor compilation and real MT5 + Telegram execution validation are completed.
