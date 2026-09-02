@@ -1,17 +1,46 @@
+# Secrets / local configuration
 .env
 .env.*
 !.env.example
-venv/
+
+# Python environments and caches
 .venv/
+venv/
+env/
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime databases / state
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
+
+# Logs / runtime artifacts
 logs/
-backups/
 *.log
-.pytest_cache/
-.coverage
+assets/autotrade/mt5_events/
+backups/
+backup/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+*.whl

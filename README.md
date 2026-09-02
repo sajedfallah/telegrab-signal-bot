@@ -1,245 +1,203 @@
-# NEXUS Telegram Signal Bot — v7.0.0 Baseline
+# NEXUS Telegram Signal Bot
 
-> **Repository baseline:** `NEXUS CORE v7.0.0`  
-> This is the first version designated as suitable for real execution and ongoing development.
+[![CI](https://github.com/sajedfallah/telegrab-signal-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/sajedfallah/telegrab-signal-bot/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 
-NEXUS is a Telegram-based subscription, signal publishing, reporting, referral, and license-management platform for Forex and Crypto communities. The bot is designed around a **Telegram-first operating model**: administrators create and manage signals, users purchase or receive access licenses, signals are distributed to FREE/VIP channels, live trade updates are chained as replies, results are recorded, and daily/weekly performance reports are generated automatically.
+NEXUS is a Telegram-first signal publishing and subscription platform. It provides administrator-controlled signal creation, FREE/VIP publication, payment and entitlement flows, reporting, analytics, referrals, and a license layer prepared for AutoTrade integration. The maintained repository baseline is currently the **7.0.x** line; `VERSION` is the canonical machine-readable version and currently reports `7.0.6`. citeturn91file0
 
-The project began as a VIP subscription bot and evolved into a signal-management platform. v7.0 is the first baseline intended to be maintained as a software product rather than as a sequence of ZIP patches.
+> **Important:** The repository documentation describes AutoTrade as a prepared entitlement/integration layer; the historical v7 baseline explicitly states that real AutoTrade execution was not implemented in that baseline. Do not treat documentation as proof of live MT5 execution capability. citeturn88file0
 
-## Current baseline
+## Features
 
-- **Version:** `7.0.0`
-- **Runtime:** Python 3.11
-- **Telegram framework:** aiogram 3.x
-- **Primary database:** SQLite (`nexus_bot.db` at runtime)
-- **Persistent FSM:** SQLite (`nexus_fsm.db` at runtime)
-- **Timezone default:** `Asia/Tehran`
-- **Deployment mode:** long polling
-- **Target OS used during development/testing:** Windows 10/11
-- **Secrets:** never committed; configure a local `.env`
+- Persian/English Telegram UX.
+- Public-channel membership gate.
+- FREE and VIP signal publication.
+- Signal Center with chart framing, dynamic take-profits, risk/reward calculations and destination routing.
+- Signal lifecycle updates and reply chaining.
+- Subscription, payment, entitlement and license management.
+- Referral/points, discounts and campaigns.
+- Daily/weekly reporting and signal analytics.
+- Persistent SQLite business database and SQLite-backed FSM storage.
+- Windows-oriented development scripts and a canonical v7 source snapshot.
 
-## Canonical source snapshot
+The architecture is intentionally hybrid: stable legacy orchestration remains in `app/main.py`, while analytics, subscriptions, licensing and storage are extracted into services/routers. This is an incremental migration strategy rather than a wholesale rewrite. citeturn96file0
 
-The exact clean `NEXUS CORE v7.0.0` source is stored in this repository as a checksum-verified snapshot under `.bootstrap/v7clean/part00..part05`. This preserves the exact baseline while keeping secrets, runtime databases, logs, backups and virtual environments out of Git.
+## Requirements
 
-After cloning, materialize the canonical source once:
+- Python **3.11**.
+- Telegram Bot token created through BotFather.
+- A Telegram admin ID and destination channel IDs.
+- SQLite (bundled with Python).
+- Network access to Telegram's Bot API.
+
+The repository's canonical v7 documentation identifies Python 3.11, aiogram 3.x, SQLite and long polling as the baseline runtime choices. citeturn88file0
+
+## Installation — Windows
 
 ```cmd
-materialize_v7_source.bat
+git clone https://github.com/sajedfallah/telegrab-signal-bot.git
+cd telegrab-signal-bot
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-or:
+Copy the environment template:
 
-```bash
-python scripts/materialize_v7_source.py
+```cmd
+copy .env.example .env
 ```
 
-The script verifies the archive SHA-256 before extracting `app/`, `tests/` and runtime scripts into the working tree. See [`docs/SOURCE_SNAPSHOT.md`](docs/SOURCE_SNAPSHOT.md) for the manifest and checksum.
+Edit `.env` and provide real credentials and channel IDs. Never commit `.env`.
 
-## What NEXUS currently does
+Start the bot using the repository's runtime entry point:
 
-### Client experience
+```cmd
+python run.py
+```
 
-1. Language selection / language change (Persian or English).
-2. Mandatory public-channel membership gate.
-3. Main client navigation:
-   - Analysis & Signal Channels
-   - Buy Subscription
-   - Account
-   - Referral & Points
-   - Support / Change Language
-4. FREE signal channel access.
-5. VIP access controlled by active license/entitlements.
-6. Auto-Trade access entitlement prepared at the license layer; real Auto Trade execution is **not implemented yet**.
-7. Rial receipt-payment flow with admin approve/reject.
-8. USDT payment structure with TXID validation and anti-reuse logic when configured.
-9. Referral and NEXUS Points.
-10. Promo codes, campaign discounts, renewal discounts, and points-based discounts.
-11. Secure VIP join-request links tied to the user/license.
-12. Account view with active entitlement and paid purchase history including start/end dates.
+The historical baseline also documents `setup_windows.bat` and `start_windows.bat` where those scripts are present in the materialized source tree. citeturn93file0
 
-### Signal Center
+## Configuration
 
-Administrators can create Forex or Crypto signals with:
+`.env.example` documents the supported categories of configuration, including bot/channel identifiers, storage paths, timezone, payments, reports, AutoTrade API integration placeholders and XAU/XAG pip conventions.
 
-- chart screenshot,
-- predefined symbol menu or manual symbol,
-- BUY/SELL or LONG/SHORT direction,
-- entry,
-- stop loss,
-- **dynamic number of take profits** (not limited to TP1/TP2/TP3),
-- Forex lot size,
-- Crypto leverage,
-- risk percentage,
-- calculated R:R,
-- a fixed NEXUS trailing profile,
-- destination: FREE / VIP / BOTH.
+Minimum values:
 
-Supported NEXUS trailing profiles:
+```dotenv
+BOT_TOKEN=...
+ADMIN_IDS=123456789
+PUBLIC_CHANNEL_ID=-100...
+FREE_CHANNEL_ID=-100...
+VIP_CHANNEL_ID=-100...
+TIMEZONE=Asia/Tehran
+```
 
-- `NEXUS_TRAIL_01` — Safe Scalping
-- `NEXUS_TRAIL_02` — Step Profit Lock
-- `NEXUS_TRAIL_03` — Dynamic ATR
-- `NEXUS_TRAIL_04` — Market Structure
-- `NEXUS_TRAIL_05` — VIP Runner
-- `NEXUS_TRAIL_06` — Fast Scalping
-- `NEXUS_TRAIL_07` — NEXUS Smart Hybrid
+For AutoTrade-enabled deployments, configure the API base URL and a long random administrative secret. Keep private control APIs off the public Internet unless they are protected by appropriate transport and network controls.
 
-A published signal is one framed chart image plus a compact text caption. Live updates are reply-chained to the latest message for that signal.
-
-Supported live actions:
-
-- Break Even
-- Partial Close
-- Trailing activation/update
-- Update TP
-- Update SL
-- Close Signal
-- Retry failed publication
-
-On close, the bot asks for exit price and a final chart image. The final result is published in the same **single-photo + caption** format as the initial signal.
-
-### Performance and reports
-
-- Daily admin reports
-- Weekly admin reports
-- Daily/weekly compact channel reports
-- FREE and VIP statistics are calculated separately and displayed together in public performance reports
-- Signal Analytics Dashboard:
-  - 7 days
-  - 30 days
-  - all time
-  - symbol breakdown
-  - trailing-model breakdown
-  - FREE vs VIP comparison
-  - win/loss/break-even
-  - win rate
-  - direction-aware return
-  - Forex pips
-  - Crypto percentage
-  - average R:R
-
-### Subscription / License Engine
-
-Each subscription plan can own an entitlement snapshot including:
-
-- VIP access
-- Auto-Trade access
-- renewal discount
-- upgrade rank (reserved for continued upgrade UX)
-
-Paid approval activates the plan's access on the user license. Admin-issued free licenses also grant access. Trial access is treated separately. Early renewal preserves unused remaining time.
-
-### Administration
-
-The admin panel includes grouped access to users, subscriptions/licenses, payments, plans/prices, referrals/loyalty, discounts, campaigns, broadcast, CRM/retention, reports, audits, backups, Auto-Trade waitlist and the Signal Center.
-
-## Repository map after source materialization
+## Repository layout
 
 ```text
 .
 ├── app/
-│   ├── main.py                     # stable legacy handlers/workers/publishing pipeline
-│   ├── config.py                   # environment configuration
-│   ├── db.py                       # schema, migrations, repositories/query layer
-│   ├── states.py                   # FSM states
-│   ├── ui.py                       # inline/reply keyboard builders
-│   ├── routers/
-│   │   ├── analytics.py            # analytics admin router
-│   │   └── subscriptions.py        # plan entitlement/renewal router
-│   ├── services/
-│   │   ├── analytics_service.py    # analytics business logic
-│   │   └── license_service.py      # entitlement/license business logic
-│   ├── signals/
-│   │   ├── calculator.py           # R:R, Forex pips, Crypto return
-│   │   └── card_generator.py       # chart framing / NEXUS visual assets
-│   ├── storage/
-│   │   └── sqlite_storage.py       # persistent aiogram FSM storage
-│   └── assets/nexus_logo.png
-├── tests/                           # executable baseline regression tests
-├── docs/                            # project/product/operations/roadmap handoff
-├── AGENTS.md                        # instructions/context for AI coding agents
-├── ARCHITECTURE_V7.md               # v7 architecture summary
-├── CHANGELOG.md
-├── SECURITY.md
-├── .env.example
-├── requirements.txt
-└── run.py
+│   ├── main.py                 # Telegram integration/orchestration
+│   ├── config.py               # environment/configuration
+│   ├── db.py                   # SQLite schema, migrations and queries
+│   ├── states.py               # canonical FSM states
+│   ├── ui.py                   # keyboard/UI builders
+│   ├── routers/                # extracted Telegram/admin routers
+│   ├── services/               # business services
+│   ├── signals/                # calculations and card generation
+│   ├── storage/                # persistent FSM storage
+│   └── assets/                 # branding/static assets
+├── tests/                      # regression and unit tests
+├── docs/                       # architecture, operations and product docs
+├── scripts/                    # source/build utilities
+├── .github/                    # CI and contribution templates
+├── requirements.txt            # pinned runtime dependencies
+├── requirements-dev.txt        # pinned test/lint dependencies
+├── .env.example                # configuration template
+├── CHANGELOG.md                # release history
+├── SECURITY.md                 # security policy
+├── CONTRIBUTING.md             # contribution workflow
+├── LICENSE                     # MIT license
+└── run.py                      # runtime entry point
 ```
 
-## Install on Windows
+The v7 source snapshot documentation records the canonical source paths and materialization process. citeturn93file0
 
-For a fresh clone, first materialize the exact v7 source:
+## Testing
+
+Install development dependencies:
 
 ```cmd
-materialize_v7_source.bat
+python -m pip install -r requirements-dev.txt
 ```
 
-Then:
-
-```cmd
-py -3.11 -m venv venv
-venv\Scripts\activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt --timeout 120 --retries 10
-python run.py
-```
-
-Or, after materialization:
-
-```cmd
-setup_windows.bat
-start_windows.bat
-```
-
-Copy `.env.example` to `.env` and fill in real values locally. **Never commit `.env`.**
-
-## Tests
-
-```cmd
-run_tests.bat
-```
-
-Or:
+Run syntax compilation:
 
 ```cmd
 python -m compileall -q app tests
-python -m unittest discover -s tests -v
 ```
 
-The canonical v7.0 baseline passes **21/21 tests** in the build environment. See `BUILD_TEST_REPORT_V7_0.txt` after source materialization.
+Run tests and coverage:
 
-## Documentation — start here
+```cmd
+python -m pytest -q --cov=app --cov-report=term-missing --cov-report=xml
+```
 
-| Document | Purpose |
-|---|---|
-| [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md) | Product scope and current capabilities |
-| [`docs/FUNCTIONAL_SPEC.md`](docs/FUNCTIONAL_SPEC.md) | Detailed user/admin/signal/payment behavior |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Runtime architecture, modules and data ownership |
-| [`docs/PROJECT_HISTORY.md`](docs/PROJECT_HISTORY.md) | Evolution from early VIP bot to v7 baseline |
-| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | Setup, production operations, backup and recovery notes |
-| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Planned v7.1 → v10 development direction |
-| [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md) | Context/invariants for another AI or developer |
-| [`docs/SOURCE_SNAPSHOT.md`](docs/SOURCE_SNAPSHOT.md) | Exact v7 source snapshot, checksum and materialization |
-| [`SECURITY.md`](SECURITY.md) | Secrets, payment, access and security rules |
-| [`AGENTS.md`](AGENTS.md) | Coding-agent operating rules |
+Run static checks:
 
-## Deliberately not implemented yet
+```cmd
+python -m black --check app tests
+python -m flake8 app tests
+python -m pip check
+```
 
-These are roadmap items, not missing accidental features:
+CI executes the same classes of checks through GitHub Actions.
 
-- Vision AI/OCR-based automatic chart parsing
-- real Auto Trade execution / MT5 bridge
-- full Mini App dashboard
-- online Iranian payment gateway
-- PostgreSQL production migration
-- webhook deployment
+## Troubleshooting
 
-## Development principle
+### `No module named pytest`
 
-**Protect the stable Telegram core first.** New features should be implemented behind services/routers with migrations and tests. Avoid replacing working payment, license, signal, report or access flows without a regression test and a clear migration path.
+The virtual environment is active but the development dependencies are not installed:
 
----
+```cmd
+python -m pip install -r requirements-dev.txt
+```
 
-Persian product documentation is available in `README_FA.md` and `README_V7_FA.md` after source materialization.
+### `.venv\Scripts\activate` cannot be found
+
+You are either in the wrong directory or `.venv` has not been created:
+
+```cmd
+cd /d "C:\path\to\telegrab-signal-bot"
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+```
+
+### Telegram connection errors
+
+Check outbound HTTPS connectivity, DNS, firewall/proxy rules, and that `BOT_TOKEN` is valid. Never paste the token into an issue or chat. A network failure is not evidence that the application code is incorrect.
+
+### Bot starts but does not receive updates
+
+Confirm the bot token, polling process, and Telegram privacy/channel permissions. Ensure only one polling process is using the same bot token in the test environment.
+
+### Database problems
+
+Stop the application before manual database maintenance. Back up `nexus_bot.db` and `nexus_fsm.db` before migrations or resets. Runtime databases are intentionally ignored by Git.
+
+### Source snapshot materialization
+
+The historical v7 repository contains a checksum-verified compressed source snapshot under `.bootstrap/v7clean`. Use `materialize_v7_source.bat` or `scripts/materialize_v7_source.py` as documented in `docs/SOURCE_SNAPSHOT.md`. citeturn93file0
+
+## Security
+
+- Never commit `.env`, bot tokens, admin tokens, payment credentials, databases or logs.
+- Use unique long secrets for administrative APIs.
+- Restrict AutoTrade/control endpoints to trusted networks.
+- Do not expose SQLite runtime files or uploaded chart assets publicly.
+- Do not put personal, payment or account credentials in GitHub issues.
+- Report suspected vulnerabilities privately according to `SECURITY.md` rather than publishing exploit details.
+
+## Documentation
+
+- `docs/PROJECT_OVERVIEW.md` — product scope.
+- `docs/FUNCTIONAL_SPEC.md` — user/admin behavior.
+- `docs/ARCHITECTURE.md` — runtime architecture and responsibilities.
+- `docs/OPERATIONS.md` — deployment and operations.
+- `docs/ROADMAP.md` — planned development.
+- `docs/SOURCE_SNAPSHOT.md` — canonical v7 snapshot and checksum.
+- `SECURITY.md` — security policy.
+- `CONTRIBUTING.md` — development and review process.
+
+## Versioning and releases
+
+Use Semantic Versioning (`MAJOR.MINOR.PATCH`) for releases. The existing repository has multiple historical version metadata files, so release work must keep `VERSION` and release documentation synchronized. The current `VERSION` file reports `7.0.6`. citeturn91file0
+
+## License
+
+MIT. See `LICENSE`.

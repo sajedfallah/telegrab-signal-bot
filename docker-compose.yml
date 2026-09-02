@@ -1,0 +1,12 @@
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - nexus_data:/app/data
+    command: ["python", "run.py"]
+
+volumes:
+  nexus_data:
