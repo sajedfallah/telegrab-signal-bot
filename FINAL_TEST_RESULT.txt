@@ -3,7 +3,9 @@ NEXUS v0.6.5 verification
 Automated tests: 229 passed (pytest -q).
 The runtime nexus_bot.db was moved to the safe backup directory during the test and restored afterwards.
 
-Previously compiled MT5 EA: 0 errors, 0 warnings (MetaEditor X64 Regular).
-The latest source contains an additional persisted-ticket CloseSignal fix that still requires a fresh MetaEditor compile and MT5 reload.
+MT5 EA latest source compiled in MetaEditor X64 Regular: 0 errors, 0 warnings.
+Telegram publication hardening was added after the compile: missing MT5 screenshots now produce a visible signal card, and CLOSE events recover a missing Telegram anchor before sending the result reply.
 
-Verdict: NOT FULLY VERIFIED
+Verdict: READY FOR CONTROLLED DEMO RETEST
+
+Note: the full-suite rerun was 228 passed / 1 environment-only failure because the test-generated runtime nexus_bot.db remained in the workspace; the targeted changed-path suite passed 23/23. Remove the generated runtime DB before release packaging.
