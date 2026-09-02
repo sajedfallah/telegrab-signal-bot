@@ -45,7 +45,7 @@ Secrets are intentionally not reproduced in this report.
 
 ## Automated verification
 
-GitHub Actions `Close Reply Hardening` run #8 on commit `1849a311e1aab9ece70e9e97c36ec93838cbc35e`:
+GitHub Actions `Close Reply Hardening` run #8 on code commit `1849a311e1aab9ece70e9e97c36ec93838cbc35e` completed successfully:
 
 - runtime env validation: PASS;
 - live Telegram channel permission diagnostic: PASS;
@@ -53,6 +53,8 @@ GitHub Actions `Close Reply Hardening` run #8 on commit `1849a311e1aab9ece70e9e9
 - focused history/CLOSE reconciliation regression: `4 passed`;
 - full Python suite: `230 passed` (one third-party deprecation warning only);
 - workflow conclusion: SUCCESS.
+
+The later workflow-only adjustment does not modify runtime/CLOSE code; documentation-only pushes are now ignored by this branch workflow.
 
 ## Remaining production E2E gate
 
