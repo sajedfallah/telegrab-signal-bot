@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - fix/v065-close-reply-hardening
+    paths-ignore:
+      - "docs/**"
   pull_request:
     branches:
       - main
