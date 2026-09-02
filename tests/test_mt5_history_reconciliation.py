@@ -14,6 +14,10 @@ def _fresh_db(monkeypatch, tmp_path):
     return db
 
 
+def _now_event_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000) + 1000
+
+
 def test_reconcile_close_queues_delivery_before_terminal_closed(monkeypatch, tmp_path):
     db = _fresh_db(monkeypatch, tmp_path)
     uid = 1001
@@ -33,7 +37,7 @@ def test_reconcile_close_queues_delivery_before_terminal_closed(monkeypatch, tmp
         "event": "CLOSE", "ticket": "9001", "event_id": "RECON-CLOSE-77-9001",
         "signal_id": "SIG-1", "symbol": "BTCUSDT", "direction": "LONG",
         "volume": 0.01, "entry_price": 100, "stop_loss": 95, "take_profit": 110,
-        "exit_price": 108, "profit": 8.5, "event_time_ms": 1750000000000,
+        "exit_price": 108, "profit": 8.5, "event_time_ms": _now_event_ms(),
         "destination": "VIP",
     }
     result = db.reconcile_mt5_history(uid, [item])
@@ -83,7 +87,7 @@ def test_reconcile_close_rearms_previously_consumed_notification(monkeypatch, tm
         "event": "CLOSE", "ticket": "9104", "event_id": "RECON-CLOSE-9104",
         "signal_id": str(sig["code"]), "symbol": "XAUUSD", "direction": "SHORT",
         "volume": 0.1, "entry_price": 2400, "stop_loss": 2410, "take_profit": 2380,
-        "exit_price": 2390, "profit": 12.5, "event_time_ms": 1750000001000,
+        "exit_price": 2390, "profit": 12.5, "event_time_ms": _now_event_ms(),
         "destination": "FREE",
     }
     first = db.reconcile_mt5_history(uid, [item])
@@ -135,7 +139,7 @@ def test_reconcile_close_does_not_requeue_after_real_reply(monkeypatch, tmp_path
         "event": "CLOSE", "ticket": "9003", "event_id": "RECON-CLOSE-9003",
         "signal_id": "SIG-DONE", "symbol": "XAUUSD", "direction": "LONG",
         "volume": 0.1, "entry_price": 2000, "stop_loss": 1990, "take_profit": 2020,
-        "exit_price": 2010, "profit": 10, "event_time_ms": 1750000000000,
+        "exit_price": 2010, "profit": 10, "event_time_ms": _now_event_ms(),
         "destination": "FREE",
     }
     result = db.reconcile_mt5_history(uid, [item])
@@ -164,7 +168,7 @@ def test_reconcile_open_links_signal_without_closing(monkeypatch, tmp_path):
         "event": "OPEN", "ticket": "7001", "event_id": "RECON-OPEN-77-7001",
         "signal_id": "SIG-OPEN", "symbol": "EURUSD", "direction": "LONG",
         "volume": 0.1, "entry_price": 1.1002, "stop_loss": 1.09, "take_profit": 1.12,
-        "event_time_ms": 1750000000000, "destination": "FREE",
+        "event_time_ms": _now_event_ms(), "destination": "FREE",
     }
     result = db.reconcile_mt5_history(uid, [item])
     assert result["matched"] == 1
