@@ -56,9 +56,59 @@ def test_reconcile_close_queues_delivery_before_terminal_closed(monkeypatch, tmp
     # Reconciliation retries are transport-idempotent: no duplicate queue row.
     again = db.reconcile_mt5_history(uid, [item])
     assert again["created"] == 0
+    assert again["telegram_close_retries_pending"] == 1
     pending_again = db.pending_autotrade_notifications(50)
     assert len([n for n in pending_again if n["event_type"] == "MT5_TRADE_EVENT"]) == 1
     assert db.autotrade_trade_executions(uid, limit=50)
+
+
+def test_reconcile_close_rearms_previously_consumed_notification(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    uid = 1004
+    now = datetime.now(timezone.utc).isoformat()
+    with db.conn() as con:
+        con.execute("INSERT INTO users(telegram_id,created_at,updated_at) VALUES(?,?,?)", (uid, now, now))
+
+    sig = db.create_signal(
+        market_type="FOREX", symbol="XAUUSD", direction="SHORT", entry_price=2400,
+        stop_loss=2410, targets=[2380], risk_percent=1, rr_ratio=2,
+        destination="FREE", chart_file_id=None, created_by=uid, publish_token="RANDOM-PUBLISH-TOKEN",
+    )
+    with db.conn() as con:
+        con.execute("UPDATE signals SET status='ACTIVE' WHERE id=?", (sig["id"],))
+
+    # This matches the real EA contract: signal_id carries canonical NX-xxxx,
+    # while publish_token is an unrelated idempotency token.
+    item = {
+        "event": "CLOSE", "ticket": "9104", "event_id": "RECON-CLOSE-9104",
+        "signal_id": str(sig["code"]), "symbol": "XAUUSD", "direction": "SHORT",
+        "volume": 0.1, "entry_price": 2400, "stop_loss": 2410, "take_profit": 2380,
+        "exit_price": 2390, "profit": 12.5, "event_time_ms": 1750000001000,
+        "destination": "FREE",
+    }
+    first = db.reconcile_mt5_history(uid, [item])
+    assert first["matched"] == 1
+    assert first["repaired"] == 1
+    assert first["telegram_close_retries_queued"] == 1
+    assert db.get_signal(sig["id"])["status"] == "CLOSING"
+
+    pending = [n for n in db.pending_autotrade_notifications(50) if n["event_type"] == "MT5_TRADE_EVENT"]
+    assert len(pending) == 1
+    notification_id = int(pending[0]["id"])
+
+    # Simulate the production failure we observed: an older worker consumed the
+    # event as stale/unmatched, so sent_at is set even though no Telegram CLOSE
+    # update/message id exists.
+    db.mark_autotrade_notification_sent(notification_id)
+    assert not [n for n in db.pending_autotrade_notifications(50) if n["id"] == notification_id]
+
+    second = db.reconcile_mt5_history(uid, [item])
+    assert second["telegram_close_retries_rearmed"] == 1
+    rearmed = [n for n in db.pending_autotrade_notifications(50) if n["id"] == notification_id]
+    assert len(rearmed) == 1
+    assert rearmed[0]["sent_at"] is None
+    assert rearmed[0]["claimed_at"] is None
+    assert int(rearmed[0]["signal_id"]) == int(sig["id"])
 
 
 def test_reconcile_close_does_not_requeue_after_real_reply(monkeypatch, tmp_path):
@@ -90,6 +140,7 @@ def test_reconcile_close_does_not_requeue_after_real_reply(monkeypatch, tmp_path
     }
     result = db.reconcile_mt5_history(uid, [item])
     assert result["telegram_close_retries_queued"] == 0
+    assert result["telegram_close_retries_rearmed"] == 0
     assert db.get_signal(sig["id"])["status"] == "CLOSED"
     assert not [n for n in db.pending_autotrade_notifications(50) if n["event_type"] == "MT5_TRADE_EVENT"]
 
@@ -135,4 +186,5 @@ def test_reconciliation_schema_contains_execution_truth_fields():
     assert "gross_profit" in api and "commission" in api and "swap" in api
     assert "position_id" in api and "deal_id" in api and "cycle_id" in api
     assert "PositionInitialRiskCash" in ea
-    assert "RECOVERY_QUEUED" in guard and "status='CLOSING'" in guard
+    assert "REARMED" in guard and "status='CLOSING'" in guard
+    assert "normalized[\"code\"] = token" in guard
