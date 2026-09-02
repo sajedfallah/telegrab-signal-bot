@@ -54,7 +54,7 @@ GitHub Actions `Close Reply Hardening` run #8 on code commit `1849a311e1aab9ece7
 - full Python suite: `230 passed` (one third-party deprecation warning only);
 - workflow conclusion: SUCCESS.
 
-The later workflow-only adjustment does not modify runtime/CLOSE code; documentation-only pushes are now ignored by this branch workflow.
+A later workflow-only adjustment also preserves the same test sequence while ignoring documentation-only pushes. No runtime/CLOSE code changed after the green run.
 
 ## Remaining production E2E gate
 
