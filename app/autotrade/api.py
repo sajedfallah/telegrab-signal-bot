@@ -501,7 +501,7 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
     errors: list[str] = []
     try:
         from ..config import settings
-        from ..signals.card_generator import build_chart_frame
+        from ..signals.card_generator import build_chart_frame, build_signal_card
         from aiogram import Bot
         from aiogram.enums import ParseMode
         from aiogram.types import BufferedInputFile
@@ -525,7 +525,27 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
             raw = b""
 
     try:
-        chart_frame = await asyncio.to_thread(build_chart_frame, raw)
+        if raw:
+            chart_frame = await asyncio.to_thread(build_chart_frame, raw)
+        else:
+            # A broker/terminal may be unable to capture a screenshot (for
+            # example while the chart is still loading). Never send an empty
+            # dark frame: publish a useful signal card so the channel still
+            # receives a visible image and the result reply has an anchor.
+            card_signal = {
+                "code": row["code"], "market_type": row["market_type"],
+                "symbol": row["symbol"], "direction": row["direction"],
+                "order_type": row["order_type"], "entry": row["entry_price"],
+                "stop_loss": row["stop_loss"], "risk_percent": row["risk_percent"],
+                "trailing_code": row["trailing_code"] or "—",
+                "trailing_name": row["trailing_name"] or "—",
+                "rr": row["rr_ratio"] or "—",
+                "volume_mode": row["volume_mode"] or "RISK",
+                "lot_size": row["lot_size"], "leverage": row["leverage"],
+            }
+            for target in db.get_signal_targets(int(row["id"])):
+                card_signal[f"tp{int(target['target_no'])}"] = target["price"]
+            chart_frame = await asyncio.to_thread(build_signal_card, None, card_signal)
     except Exception as exc:
         errors.append(f"CHART_RENDER: {exc}")
         chart_frame = b""

@@ -4667,6 +4667,18 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
         # Post-signal lifecycle updates are text-only. Never render/capture/upload a chart.
         free_mid = vip_mid = None
         reply_errors: list[str] = []
+        # CLOSE can race the background publication queued after the accepted
+        # MT5 receipt. If no Telegram anchor exists yet, publish the signal
+        # fallback synchronously before attempting the result reply.
+        if not row["free_message_id"] and not row["vip_message_id"]:
+            try:
+                from .autotrade.api import _publish_mt5_admin_signal_async
+                await _publish_mt5_admin_signal_async(row, None)
+                refreshed = db.get_signal(int(row["id"]))
+                if refreshed is not None:
+                    row = refreshed
+            except Exception as exc:
+                reply_errors.append(f"SIGNAL_ANCHOR: {exc}")
         if row["destination"] in {"FREE", "BOTH"}:
             free_mid, err = await _publish_result_with_fallback(
                 bot, settings.free_channel_target, row,
