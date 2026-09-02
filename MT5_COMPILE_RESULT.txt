@@ -1,0 +1,5 @@
+NEXUS_AutoTrade.mq5 compiled in ePlanet MetaEditor (X64 Regular).
+Result: 0 errors, 0 warnings.
+Elapsed: 37.872 seconds.
+Deployed EX5: MQL5/Experts/NEXUS_AutoTrade/NEXUS_AutoTrade.ex5
+SHA256: 1862AB6370FDE5ED307B3F4697C45644878DEEBF422A26404F989AB59CEAC0C0
