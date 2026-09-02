@@ -18,6 +18,13 @@ import re
 import sys
 from pathlib import Path
 
+# Running `python scripts/diagnose_close_reply.py` makes scripts/ sys.path[0].
+# Add the repository root explicitly so `app` imports work identically on
+# Windows servers and GitHub Actions runners.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from aiogram import Bot
 from aiogram.enums import ChatMemberStatus
 
@@ -113,7 +120,7 @@ def database_checks() -> int:
 
 
 def log_checks() -> None:
-    path = Path(__file__).resolve().parents[1] / "logs" / "nexus.log"
+    path = ROOT / "logs" / "nexus.log"
     print(f"\nLog audit: {path}")
     if not path.exists():
         print("No runtime nexus.log is available in this workspace.")
