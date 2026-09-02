@@ -14,7 +14,7 @@ def test_usdt_invoice_directly_waits_for_txid():
     assert 'await state.set_state(Flow.waiting_usdt_txid)' in block
 
 def test_mt5_license_edit_uses_native_edit_focus():
-    assert '#property version   "1.64"' in EA
+    assert '#property version   "1.65"' in EA
     assert 'OBJPROP_READONLY,false' in EA
     assert 'OBJPROP_SELECTABLE,false' in EA
     assert 'CHARTEVENT_OBJECT_ENDEDIT' in EA

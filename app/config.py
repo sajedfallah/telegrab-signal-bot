@@ -25,8 +25,8 @@ def _support_url(value: str) -> str:
     return f"https://t.me/{value.lstrip('@')}"
 
 
-PROJECT_VERSION = "0.6.4"
-EA_RELEASE = "0.6.4"
+PROJECT_VERSION = "0.6.5"
+EA_RELEASE = "0.6.5"
 
 
 @dataclass(frozen=True)

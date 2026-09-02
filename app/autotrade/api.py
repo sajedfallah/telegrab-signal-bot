@@ -19,7 +19,7 @@ from .service import (
     authorize_standard_mt5, pending_commands,
 )
 
-API_VERSION = "0.6.4"
+API_VERSION = "0.6.5"
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -28,7 +28,7 @@ async def lifespan(_app):
 
 app = FastAPI(title="NEXUS Auto Trade API", version=API_VERSION, lifespan=lifespan)
 
-RECEIPT_STATUSES = "executed|activated|rejected|failed|failed_retryable|closed|pending|ignored"
+RECEIPT_STATUSES = "^(?:executed|activated|rejected|failed|failed_retryable|closed|pending|ignored)$"
 
 
 class ActivateRequest(BaseModel):
@@ -63,17 +63,17 @@ class SignalReceiptRequest(BaseModel):
 
 
 class MT5AdminSignalRequest(BaseModel):
-    market_type: str = Field(default="GOLD", pattern="FOREX|CRYPTO|GOLD|INDEX|OTHER")
+    market_type: str = Field(default="GOLD", pattern="^(?:FOREX|CRYPTO|GOLD|INDEX|OTHER)$")
     symbol: str = Field(min_length=1, max_length=64)
-    direction: str = Field(pattern="BUY|SELL|LONG|SHORT")
-    order_type: str = Field(default="MARKET", pattern="MARKET|LIMIT|BUY_LIMIT|SELL_LIMIT|BUY_STOP|SELL_STOP|BUY_STOP_LIMIT|SELL_STOP_LIMIT")
-    timeframe: str = Field(default="M5", pattern="M1|M3|M5|M15|M30|H1|H4|D1|W1")
+    direction: str = Field(pattern="^(?:BUY|SELL|LONG|SHORT)$")
+    order_type: str = Field(default="MARKET", pattern="^(?:MARKET|LIMIT|BUY_LIMIT|SELL_LIMIT|BUY_STOP|SELL_STOP|BUY_STOP_LIMIT|SELL_STOP_LIMIT)$")
+    timeframe: str = Field(default="M5", pattern="^(?:M1|M3|M5|M15|M30|H1|H4|D1|W1)$")
     entry_price: float = Field(gt=0)
     stop_loss: float = Field(gt=0)
     targets: list[float] = Field(min_length=1, max_length=10)
     risk_percent: float = Field(default=0.0, ge=0, le=100)
     rr_ratio: float | None = Field(default=None, gt=0)
-    volume_mode: str = Field(default="RISK", pattern="RISK|FIXED")
+    volume_mode: str = Field(default="RISK", pattern="^(?:RISK|FIXED)$")
     lot_size: float | None = Field(default=None, gt=0)
     leverage: float | None = Field(default=None, gt=0)
     trailing_code: str | None = Field(default=None, max_length=64)
@@ -85,11 +85,11 @@ class MT5AdminSignalRequest(BaseModel):
     request_id: str | None = Field(default=None, max_length=160)
     signal_code: str | None = Field(default=None, max_length=64)
     chart_base64: str | None = Field(default=None, max_length=8_000_000)
-    destination: str = Field(default="BOTH", pattern="FREE|VIP|BOTH")
+    destination: str = Field(default="BOTH", pattern="^(?:FREE|VIP|BOTH)$")
 
 
 class MT5AdminCommandRequest(BaseModel):
-    command: str = Field(pattern="MOVE_SL_TO_ENTRY|CLOSE_SIGNAL|CANCEL_PENDING|UPDATE_SL|UPDATE_TP|ACTIVATE_TRAILING|PARTIAL_CLOSE")
+    command: str = Field(pattern="^(?:MOVE_SL_TO_ENTRY|CLOSE_SIGNAL|CANCEL_PENDING|UPDATE_SL|UPDATE_TP|ACTIVATE_TRAILING|PARTIAL_CLOSE)$")
     value: str | None = Field(default=None, max_length=128)
     request_id: str | None = Field(default=None, max_length=160)
 
@@ -130,12 +130,12 @@ class MT5LiveStateRequest(BaseModel):
 
 
 class HistoryReconcileItem(BaseModel):
-    event: str = Field(pattern="OPEN|CLOSE")
+    event: str = Field(pattern="^(?:OPEN|CLOSE)$")
     ticket: str = Field(min_length=1, max_length=64)
     event_id: str = Field(min_length=1, max_length=160)
     signal_id: str = Field(default="", max_length=128)
     symbol: str = Field(min_length=1, max_length=64)
-    direction: str = Field(pattern="LONG|SHORT")
+    direction: str = Field(pattern="^(?:LONG|SHORT)$")
     volume: float = Field(default=0.0, ge=0.0, le=1_000_000)
     entry_price: float = Field(default=0.0, ge=0.0, le=1e12)
     stop_loss: float = Field(default=0.0, ge=0.0, le=1e12)
@@ -165,11 +165,11 @@ class HistoryReconcileRequest(BaseModel):
 class TradeEventRequest(BaseModel):
     license_key: str = ""
     account_number: str = ""
-    event: str = Field(pattern="OPEN|PENDING|UPDATE|CLOSE|CANCEL|EXPIRE")
+    event: str = Field(pattern="^(?:OPEN|PENDING|UPDATE|CLOSE|CANCEL|EXPIRE)$")
     ticket: str = Field(min_length=1, max_length=32)
     signal_id: str = Field(default="", max_length=128)
     symbol: str = Field(min_length=1, max_length=64)
-    direction: str = Field(pattern="LONG|SHORT")
+    direction: str = Field(pattern="^(?:LONG|SHORT)$")
     volume: float = Field(default=0.0, ge=0.0, le=1_000_000)
     entry_price: float = Field(default=0.0, ge=0.0, le=1e12)
     stop_loss: float = Field(default=0.0, ge=0.0, le=1e12)
@@ -188,8 +188,8 @@ class TradeEventRequest(BaseModel):
     chart_base64: str = Field(default="", max_length=7_000_000)
     event_id: str = Field(default="", max_length=160)
     event_time_ms: int = Field(default=0, ge=0, le=9_223_372_036_854_775_807)
-    destination: str = Field(default="NONE", pattern="NONE|FREE|VIP|BOTH")
-    order_type: str = Field(default="MARKET", pattern="MARKET|BUY_LIMIT|SELL_LIMIT|BUY_STOP|SELL_STOP|BUY_STOP_LIMIT|SELL_STOP_LIMIT|LIMIT")
+    destination: str = Field(default="NONE", pattern="^(?:NONE|FREE|VIP|BOTH)$")
+    order_type: str = Field(default="MARKET", pattern="^(?:MARKET|BUY_LIMIT|SELL_LIMIT|BUY_STOP|SELL_STOP|BUY_STOP_LIMIT|SELL_STOP_LIMIT|LIMIT)$")
     stop_limit_price: float = Field(default=0.0, ge=0.0, le=1e12)
     close_reason: str = Field(default="", max_length=64)
 
@@ -254,6 +254,42 @@ def _resolve_ea_auth(
         str(key).strip(), account, bind=bind, broker=broker, server=server,
         ea_version=ea_version,
     )
+
+
+def _require_broker_confirmed_receipt(row, account: str, status: str, ticket: str | None) -> None:
+    """Reject success receipts until the authoritative MT5 snapshot proves them."""
+    status_l = str(status).lower()
+    expected_type = {"executed": "POSITION", "activated": "POSITION", "pending": "ORDER"}.get(status_l)
+    if expected_type is None:
+        return
+    ticket_s = str(ticket or "").strip()
+    if not ticket_s:
+        raise HTTPException(status_code=409, detail=f"{status_l} receipt requires a broker ticket")
+    if not row:
+        raise HTTPException(status_code=409, detail="signal not found")
+    live = db.mt5_live_for_signal(str(row["code"]), str(account))
+    # ePlanet (and some other brokers) can clear POSITION_COMMENT after a
+    # partial close. In that case the current snapshot temporarily has no
+    # signal_code, but an exact broker ticket on the same authenticated account
+    # remains an authoritative and unambiguous confirmation.
+    if not live:
+        live = (
+            db.mt5_live_positions(str(account), nexus_only=True)
+            if expected_type == "POSITION"
+            else db.mt5_live_orders(str(account), nexus_only=True)
+        )
+    confirmed = any(
+        str(item.get("state_type") or "").upper() == expected_type
+        and str(item.get("ticket") or "") == ticket_s
+        and str(item.get("status") or "").upper() in {"OPEN", "PENDING"}
+        and bool(item.get("nexus_managed"))
+        for item in live
+    )
+    if not confirmed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{status_l} receipt is not confirmed by the current MT5 broker snapshot",
+        )
 
 
 @app.post("/api/v1/autotrade/account-change")
@@ -423,11 +459,12 @@ def signal_receipt_mt5_get(
     key, account, _, _, _ = _ea_auth_headers(x_license_key, x_mt5_account)
     admin = _admin_auth(x_admin_mode, x_admin_token, account)
     auth = _resolve_ea_auth(key, account, admin=admin)
+    row=db.get_signal(signal_db_id)
+    _require_broker_confirmed_receipt(row, account, status, ticket)
     try:
         db.mark_signal_receipt(signal_db_id, auth["telegram_id"], status=status, ticket=ticket, error_text=error, account_number=account)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    row=db.get_signal(signal_db_id)
     accepted=str(status).lower() in {"executed","pending"}
     is_authority=bool(row and str(row["issuer_type"] or "").upper()=="MT5_ADMIN" and str(row["issuer_account"] or "")==str(account))
     if accepted and is_authority:
@@ -969,11 +1006,12 @@ def signal_receipt(
     account = x_mt5_account or req.account_number
     admin = _admin_auth(x_admin_mode, x_admin_token, account)
     auth = _resolve_ea_auth(key, account, admin=admin)
+    row = db.get_signal(req.signal_db_id)
+    _require_broker_confirmed_receipt(row, account, req.status, req.ticket)
     try:
         db.mark_signal_receipt(req.signal_db_id, auth["telegram_id"], status=req.status, ticket=req.ticket, error_text=req.error, account_number=account)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    row = db.get_signal(req.signal_db_id)
     accepted = str(req.status).lower() in {"executed", "pending"}
     is_authority = bool(row and str(row["issuer_type"] or "").upper() == "MT5_ADMIN" and str(row["issuer_account"] or "") == str(account))
     if accepted and is_authority:

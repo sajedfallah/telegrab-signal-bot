@@ -1,3 +1,3 @@
-# NEXUS v0.6.4
+# NEXUS v0.6.5
 
-Trailing Engine Hardening: execution-confirmed SL/TP/Partial Close, broker-volume validation, TP state machine, and bounded retry/backoff.
+Broker Truth Release: clean MT5 compile, broker-confirmed MARKET/PENDING receipts, recoverable idempotency/publication claims, and hardened trailing execution.

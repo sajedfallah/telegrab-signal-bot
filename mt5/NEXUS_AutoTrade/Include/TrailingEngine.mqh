@@ -305,7 +305,7 @@ public:
             // TP execution is confirmed before any runner trail is allowed to
             // react to the newly reached target.
             Partials(ticket,sig,pt,Price(symbol,pt),entry,risk);
-            if(PositionSelectByTicket(ticket))
+            if(PositionSelectByTicket(ticket) && NexusTrailGet(sig,"tp1_done",0)>0.5)
               {
                double runner_pr=R(pt,Price(symbol,pt),entry,risk);
                StructureTrail(ticket,sig,pt,symbol,runner_pr);
@@ -318,7 +318,7 @@ public:
            {
             if(pr>=NexusTrailGet(sig,"break_even_r",1)) BE(ticket,sig,pt,entry);
             Partials(ticket,sig,pt,Price(symbol,pt),entry,risk);
-            if(PositionSelectByTicket(ticket))
+            if(PositionSelectByTicket(ticket) && NexusTrailGet(sig,"tp1_done",0)>0.5)
               {
                // Structure and ATR are runner-only. They never get a chance to
                // falsely mark a target as complete and they remain monotonic.

@@ -35,6 +35,6 @@ def test_main_does_not_await_synchronous_db_functions():
 def test_autotrade_source_and_runtime_delivery_versions_match():
     source = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
     main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
-    assert '#property version   "1.64"' in source
+    assert '#property version   "1.65"' in source
     assert 'NEXUS_AutoTrade.ex5' in main
-    assert 'NEXUS v0.6.4' in main
+    assert 'NEXUS v0.6.5' in main

@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.64"
+#property version   "1.65"
 #property description "NEXUS Auto Trade - MT5 Signal Authority / AutoTrade client - Admin execution and Telegram publication fix"
 
 #include "Include/NexusTypes.mqh"
@@ -35,7 +35,7 @@ input bool InpAdminMode=false;
 input string InpAdminToken="";
 input ENUM_NEXUS_TRAILING_PROFILE InpManualTrailingProfile=NEXUS_TRAIL_07;
 
-#define NEXUS_EA_VERSION "0.6.4"
+#define NEXUS_EA_VERSION "0.6.5"
 #define NEXUS_RUNTIME_PATCH "V062-LIVE-TRUTH-RECEIPT-RELIABLE"
 
 // Administrator credentials are intentionally NOT embedded in source code.
@@ -956,17 +956,35 @@ string NexusSignalLockKey(const string signal_id)
    return "NXS.LOCK."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"."+(string)NexusSignalHash(signal_id);
   }
 
+string NexusSignalDoneKey(const string signal_id)
+  {
+   return NexusSignalLockKey(signal_id)+".DONE";
+  }
+
 bool ClaimNexusSignal(const string signal_id)
   {
+   if(GlobalVariableCheck(NexusSignalDoneKey(signal_id)) && GlobalVariableGet(NexusSignalDoneKey(signal_id))>0.5)
+      return false;
    string key=NexusSignalLockKey(signal_id);
    if(!GlobalVariableCheck(key)) GlobalVariableSet(key,0.0);
-   return GlobalVariableSetOnCondition(key,1.0,0.0);
+   double current=GlobalVariableGet(key);
+   double now=(double)TimeCurrent();
+   // An interrupted pre-trade attempt may be reclaimed after two minutes.
+   // Completed executions use a separate permanent DONE marker.
+   if(current>0 && now-current<120.0) return false;
+   return GlobalVariableSetOnCondition(key,now,current);
   }
 
 void ReleaseNexusSignalClaim(const string signal_id)
   {
    string key=NexusSignalLockKey(signal_id);
    if(GlobalVariableCheck(key)) GlobalVariableSet(key,0.0);
+  }
+
+void CompleteNexusSignalClaim(const string signal_id)
+  {
+   GlobalVariableSet(NexusSignalDoneKey(signal_id),1.0);
+   ReleaseNexusSignalClaim(signal_id);
   }
 
 bool IsPendingSignalType(const string order_type)
@@ -990,6 +1008,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
      }
    if(g_trade.HasSignalPosition(s.signal_id))
      {
+      CompleteNexusSignalClaim(s.signal_id);
       ulong existing=g_trade.FindTicket(s.signal_id);
       string status=(IsPendingSignalType(s.order_type)?"activated":"executed");
       SendSignalReceiptReliable(s.db_id,status,(string)existing,"");
@@ -998,6 +1017,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
      }
    if(g_trade.HasSignalOrder(s.signal_id))
      {
+      CompleteNexusSignalClaim(s.signal_id);
       SendSignalReceiptReliable(s.db_id,"pending","","");
       SetExecutionStatus("PENDING",s,s.symbol,"existing NEXUS pending order"); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1023,16 +1043,17 @@ bool ProcessIncomingSignal(const NexusSignal &s)
       SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
      }
    ulong ticket=0;
-   if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
+    if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
      {
       ReleaseNexusSignalClaim(s.signal_id);
       string err=g_trade.LastError(); bool retryable=g_trade.LastFailureRetryable();
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
       if(retryable) return false;
-      AdvanceSignalCursor(s.db_id); return true;
-     }
-   string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
+       AdvanceSignalCursor(s.db_id); return true;
+      }
+    CompleteNexusSignalClaim(s.signal_id);
+    string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
    AdvanceSignalCursor(s.db_id);
@@ -1121,6 +1142,27 @@ string JsonLiveItem(const string identifier,const string ticket,const string sig
       magic,nexus?"true":"false",NexusJsonEscape(order_type));
   }
 
+string RecoverSignalCodeForTicket(const ulong ticket,const string broker_comment)
+  {
+   string sig=broker_comment;
+   StringTrimLeft(sig); StringTrimRight(sig); StringReplace(sig," ","_");
+   if(StringFind(sig,"NX-")==0) return sig;
+
+   string prefix="NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+".";
+   string suffix=".ticket";
+   int total=GlobalVariablesTotal();
+   for(int i=0;i<total;i++)
+     {
+      string key=GlobalVariableName(i);
+      if(StringFind(key,prefix)!=0) continue;
+      int suffix_pos=StringLen(key)-StringLen(suffix);
+      if(suffix_pos<=StringLen(prefix) || StringSubstr(key,suffix_pos)!=suffix) continue;
+      if((ulong)MathRound(GlobalVariableGet(key))!=ticket) continue;
+      return StringSubstr(key,StringLen(prefix),suffix_pos-StringLen(prefix));
+     }
+   return "";
+  }
+
 string BuildLivePositionsJson()
   {
    string out="";
@@ -1128,7 +1170,7 @@ string BuildLivePositionsJson()
      {
       ulong ticket=PositionGetTicket(i); if(ticket==0 || !PositionSelectByTicket(ticket)) continue;
       string comment=PositionGetString(POSITION_COMMENT);
-      string sig=comment; StringReplace(sig," ","_");
+      string sig=RecoverSignalCodeForTicket(ticket,comment);
       string item=JsonLiveItem((string)PositionGetInteger(POSITION_IDENTIFIER),(string)ticket,sig,PositionGetString(POSITION_SYMBOL),
          PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"LONG":"SHORT",PositionGetDouble(POSITION_VOLUME),PositionGetDouble(POSITION_PRICE_OPEN),
          PositionGetDouble(POSITION_PRICE_CURRENT),PositionGetDouble(POSITION_SL),PositionGetDouble(POSITION_TP),PositionGetDouble(POSITION_PROFIT),
@@ -1147,7 +1189,7 @@ string BuildLiveOrdersJson()
       ENUM_ORDER_TYPE ot=(ENUM_ORDER_TYPE)OrderGetInteger(ORDER_TYPE);
       if(!IsNexusPendingType(ot)) continue;
       string comment=OrderGetString(ORDER_COMMENT);
-      string sig=comment;
+      string sig=RecoverSignalCodeForTicket(ticket,comment);
       string dir=(ot==ORDER_TYPE_BUY_LIMIT || ot==ORDER_TYPE_BUY_STOP || ot==ORDER_TYPE_BUY_STOP_LIMIT)?"LONG":"SHORT";
       string item=JsonLiveItem((string)ticket,(string)ticket,sig,OrderGetString(ORDER_SYMBOL),dir,OrderGetDouble(ORDER_VOLUME_CURRENT),
          OrderGetDouble(ORDER_PRICE_OPEN),SymbolInfoDouble(OrderGetString(ORDER_SYMBOL),SYMBOL_BID),OrderGetDouble(ORDER_SL),OrderGetDouble(ORDER_TP),0.0,
@@ -2476,4 +2518,3 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
       RemovePositionState(position_id);
      }
   }
-

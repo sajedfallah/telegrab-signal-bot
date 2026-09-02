@@ -12,9 +12,9 @@ def test_trailing_state_helpers_are_file_scope_not_class_static_members():
     assert "static void S(" not in TRAIL
 
 def test_ea_release_version_is_consistent():
-    assert '#property version   "1.64"' in EA
+    assert '#property version   "1.65"' in EA
     assert '#property version   "1.58"' not in EA
-    assert 'NEXUS_EA_VERSION "0.6.4"' in EA
+    assert 'NEXUS_EA_VERSION "0.6.5"' in EA
 
 def test_admin_signal_panel_has_five_targets_and_channel_access():
     for token in ("sig_tp1", "sig_tp2", "sig_tp3", "sig_tp4", "sig_tp5",

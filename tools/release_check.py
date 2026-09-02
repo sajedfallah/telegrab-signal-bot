@@ -10,7 +10,7 @@ m = re.search(r'#property\s+version\s+"([^"]+)"', text)
 assert m, "EA version property missing"
 print("EA version:", m.group(1))
 
-expected = "1.64"
+expected = "1.65"
 assert m.group(1) == expected, f"EA version {m.group(1)} != {expected}"
 
 files = sorted(p.name for p in (ROOT/"mt5"/"NEXUS_AutoTrade").iterdir())

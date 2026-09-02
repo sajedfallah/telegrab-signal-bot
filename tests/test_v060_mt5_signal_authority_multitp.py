@@ -24,7 +24,7 @@ def test_admin_signal_sends_all_selected_targets_and_destination():
     assert 'destination,const string request_id' in API_CLIENT
 
 def test_backend_preserves_destination_and_up_to_ten_targets():
-    assert 'destination: str = Field(default="BOTH", pattern="FREE|VIP|BOTH")' in API
+    assert 'destination: str = Field(default="BOTH", pattern="^(?:FREE|VIP|BOTH)$")' in API
     assert 'targets: list[float] = Field(min_length=1, max_length=10)' in API
     assert 'destination=destination' in DB
     assert '"destination": str(row["destination"] or "BOTH").upper()' in SERVICE

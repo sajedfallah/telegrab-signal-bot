@@ -107,7 +107,7 @@ logging.basicConfig(
         RotatingFileHandler(LOG_DIR / "nexus.log", maxBytes=5_000_000, backupCount=5, encoding="utf-8"),
     ],
 )
-log = logging.getLogger("nexus-core-v0.6.4")  # NEXUS v0.6.4
+log = logging.getLogger("nexus-core-v0.6.5")  # NEXUS v0.6.5
 router = Router()
 
 # One serialized reply chain per signal/channel. This prevents concurrent
@@ -4914,7 +4914,7 @@ async def main():
     dp.include_router(analytics_router)
     dp.include_router(subscriptions_router)
     dp.include_router(router)
-    me=await bot.get_me(); BOT_USERNAME=me.username or ""; log.info("Starting NEXUS CORE v0.6.4 @%s",me.username)
+    me=await bot.get_me(); BOT_USERNAME=me.username or ""; log.info("Starting NEXUS CORE v0.6.5 @%s",me.username)
     if not any(_usdt_plan_ready(p) for p in _plans().values()):
         log.warning("USDT payment is not active for any plan; configure wallet/network and a plan USDT price")
     worker=asyncio.create_task(expiry_worker(bot)); backup_task=asyncio.create_task(backup_worker()); report_task=asyncio.create_task(report_worker(bot)); autotrade_notify_task=asyncio.create_task(autotrade_notification_worker(bot)); mt5_publish_task=asyncio.create_task(mt5_publication_retry_worker(bot))

@@ -85,7 +85,11 @@ def authorize_admin_mt5(account_number: str, admin_token: str | None = None) -> 
     account = str(account_number or "").strip()
     if not account:
         raise AutoTradeError("account number is required")
-    if not settings.nexus_admin_token or not admin_token or not hmac.compare_digest(str(admin_token), str(settings.nexus_admin_token)):
+    # compare_digest(str, str) rejects non-ASCII input with TypeError.  Invalid
+    # UI/header text must be an authentication failure, never an HTTP 500.
+    supplied = str(admin_token or "").encode("utf-8")
+    expected = str(settings.nexus_admin_token or "").encode("utf-8")
+    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
         raise AutoTradeError("admin authorization rejected")
     if settings.nexus_admin_mt5_accounts and account not in settings.nexus_admin_mt5_accounts:
         raise AutoTradeError("MT5 account is not allow-listed for admin mode")

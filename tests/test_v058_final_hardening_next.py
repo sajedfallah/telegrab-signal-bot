@@ -62,7 +62,7 @@ class V058FinalHardeningNextTests(unittest.TestCase):
             self.assertEqual(str(row["canonical_price_usdt"]), expected)
 
     def test_api_release_version_is_project_version(self):
-        self.assertEqual(api.API_VERSION, "0.6.4")
+        self.assertEqual(api.API_VERSION, "0.6.5")
 
     def test_stop_limit_is_accepted_by_signal_model(self):
         row = db.create_signal(

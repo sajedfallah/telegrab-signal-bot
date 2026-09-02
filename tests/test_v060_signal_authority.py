@@ -34,7 +34,7 @@ def test_v060_audit_and_heartbeat_tables_exist_in_source():
 
 
 def test_v060_ea_declares_new_authority():
-    assert 'NEXUS_EA_VERSION "0.6.4"' in EA
+    assert 'NEXUS_EA_VERSION "0.6.5"' in EA
     assert "MT5 ADMIN ONLY" in EA
     assert "TELEGRAM     REPORTING ONLY" in EA
 

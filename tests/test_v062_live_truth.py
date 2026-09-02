@@ -70,6 +70,13 @@ def test_live_snapshot_rejects_malformed_items_without_corrupting_state(monkeypa
 def test_receipt_get_endpoint_uses_correct_ea_auth_unpack_and_publication_gate(monkeypatch, tmp_path):
     db = _fresh_db(monkeypatch, tmp_path)
     signal = _admin_signal(db)
+    db.upsert_mt5_live_snapshot("80150619", positions=[{
+        "identifier":"P-1", "ticket":"92463356", "signal_code":signal["code"],
+        "symbol":"XAUUSD.ec", "direction":"LONG", "volume":0.01,
+        "entry_price":4310, "current_price":4311, "stop_loss":4307,
+        "take_profit":4315, "profit":1.0, "magic":258025,
+        "nexus_managed":True, "order_type":"MARKET",
+    }])
     from app.autotrade import api
     monkeypatch.setattr(api, "_admin_auth", lambda *args, **kwargs: {"telegram_id":400112107, "mode":"ADMIN"})
     monkeypatch.setattr(api, "_resolve_ea_auth", lambda *args, **kwargs: {"telegram_id":400112107})
@@ -106,12 +113,12 @@ def test_source_contracts_for_v062_live_truth():
     ea=(ROOT/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
     client=(ROOT/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
     main=(ROOT/"app/main.py").read_text(encoding="utf-8")
-    assert 'API_VERSION = "0.6.4"' in api
+    assert 'API_VERSION = "0.6.5"' in api
     assert '@app.post("/api/v1/autotrade/live-state")' in api
     assert '[(x,"pending") for x in orders]' in api
     assert 'CREATE TABLE IF NOT EXISTS mt5_live_state' in db
     assert 'mt5_live_positions' in db and 'mt5_live_orders' in db
-    assert 'NEXUS_EA_VERSION "0.6.4"' in ea
+    assert 'NEXUS_EA_VERSION "0.6.5"' in ea
     assert 'InpLiveSyncSeconds=5' in ea
     assert 'bool LiveState' in client
     assert 'GET is the primary receipt transport' in client

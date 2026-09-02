@@ -29,7 +29,22 @@ public:
 
    double FixedLot(const string symbol,const double requested)
      {
-      return NormalizeVolume(symbol,requested);
+      m_last_error="";
+      double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN);
+      double maxv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MAX);
+      double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
+      if(requested<=0 || minv<=0 || maxv<=0)
+        { m_last_error="invalid fixed-lot request or broker volume metadata"; return 0; }
+      if(requested<minv-1e-9 || requested>maxv+1e-9)
+        {
+         m_last_error=StringFormat("fixed lot %.8f is outside broker range %.8f..%.8f",requested,minv,maxv);
+         return 0;
+        }
+      if(step<=0) step=minv;
+      double normalized=MathFloor(requested/step+1e-9)*step;
+      if(normalized<minv-1e-9)
+        { m_last_error=StringFormat("fixed lot %.8f cannot be normalized to broker step %.8f",requested,step); return 0; }
+      return NormalizeVolume(symbol,normalized);
      }
 
    double RiskLot(const string symbol,const ENUM_ORDER_TYPE order_type,const double open_price,const double stop_price,const double risk_percent)

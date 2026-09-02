@@ -8,7 +8,7 @@ def test_current_mt5_source_is_packaged_and_compile_is_explicit():
     note = ROOT / "MT5_COMPILE_REQUIRED.md"
     assert src.is_file() and src.stat().st_size > 0
     assert note.is_file() and note.stat().st_size > 0
-    assert '#property version   "1.64"' in src.read_text(encoding="utf-8")
+    assert '#property version   "1.65"' in src.read_text(encoding="utf-8")
 
 
 def test_license_delivery_sends_ex5_guide_then_home():

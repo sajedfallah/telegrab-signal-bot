@@ -2434,20 +2434,32 @@ def list_closed_signals(limit: int = 20):
         return list(con.execute("SELECT * FROM signals WHERE status='CLOSED' ORDER BY id DESC LIMIT ?", (limit,)).fetchall())
 
 
-def claim_signal_channel(signal_id: int, channel: str) -> bool:
-    """Atomically claim publication of one signal/channel."""
+def claim_signal_channel(signal_id: int, channel: str, *, stale_after_seconds: int = 300) -> bool:
+    """Atomically claim publication, reclaiming only an unfinished stale claim."""
     channel = str(channel).upper().strip()
     if channel not in {"FREE", "VIP"}:
         raise ValueError("invalid channel")
-    try:
-        with conn() as con:
-            con.execute(
-                "INSERT INTO autotrade_publish_claims(signal_id,channel,claimed_at) VALUES(?,?,?)",
-                (int(signal_id), channel, now_iso()),
-            )
-        return True
-    except sqlite3.IntegrityError:
-        return False
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(seconds=max(30, int(stale_after_seconds)))).isoformat()
+    message_column = "free_message_id" if channel == "FREE" else "vip_message_id"
+    with conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        published = con.execute(
+            f"SELECT {message_column} FROM signals WHERE id=?", (int(signal_id),)
+        ).fetchone()
+        if not published:
+            raise ValueError("signal not found")
+        if published[0] is not None:
+            return False
+        con.execute(
+            "DELETE FROM autotrade_publish_claims WHERE signal_id=? AND channel=? AND claimed_at<?",
+            (int(signal_id), channel, cutoff),
+        )
+        cur = con.execute(
+            "INSERT OR IGNORE INTO autotrade_publish_claims(signal_id,channel,claimed_at) VALUES(?,?,?)",
+            (int(signal_id), channel, now.isoformat()),
+        )
+        return cur.rowcount == 1
 
 
 def release_signal_channel_claim(signal_id: int, channel: str) -> None:
@@ -2948,9 +2960,14 @@ def autotrade_trade_executions(telegram_id: int, *, start_iso: str | None = None
         args.append(max(1,min(int(limit),2000)))
         return list(con.execute(q,tuple(args)).fetchall())
 
-def claim_autotrade_notification(notification_id: int) -> bool:
+def claim_autotrade_notification(notification_id: int, *, stale_after_seconds: int = 300) -> bool:
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max(30, int(stale_after_seconds)))).isoformat()
     with conn() as con:
-        cur = con.execute("UPDATE autotrade_notifications SET claimed_at=? WHERE id=? AND sent_at IS NULL AND claimed_at IS NULL", (now_iso(), notification_id))
+        cur = con.execute(
+            "UPDATE autotrade_notifications SET claimed_at=? "
+            "WHERE id=? AND sent_at IS NULL AND (claimed_at IS NULL OR claimed_at<?)",
+            (now_iso(), notification_id, cutoff),
+        )
         return cur.rowcount == 1
 
 
@@ -2960,8 +2977,13 @@ def release_autotrade_notification_claim(notification_id: int) -> None:
 
 
 def pending_autotrade_notifications(limit: int = 100):
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=300)).isoformat()
     with conn() as con:
-        return list(con.execute("SELECT * FROM autotrade_notifications WHERE sent_at IS NULL AND claimed_at IS NULL ORDER BY id LIMIT ?",(max(1,min(int(limit),500)),)).fetchall())
+        return list(con.execute(
+            "SELECT * FROM autotrade_notifications WHERE sent_at IS NULL "
+            "AND (claimed_at IS NULL OR claimed_at<?) ORDER BY id LIMIT ?",
+            (cutoff, max(1,min(int(limit),500))),
+        ).fetchall())
 
 
 def mark_autotrade_notification_sent(notification_id: int):

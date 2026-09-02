@@ -7,7 +7,7 @@ TM = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "TradeManager.mqh").read_te
 API = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "APIClient.mqh").read_text(encoding="utf-8")
 
 def test_ea_version_and_visible_diagnostics():
-    assert '#property version   "1.64"' in EA
+    assert '#property version   "1.65"' in EA
     assert 'Trade state:' in EA
     assert 'Broker symbol:' in EA
     assert 'Reason:' in EA
@@ -37,4 +37,3 @@ def test_status_panel_buttons_are_above_background_and_clickable():
     assert 'OBJPROP_ZORDER,100' in EA
     assert 'OBJPROP_BACK,false' in EA
     assert 'OBJPROP_SELECTABLE,false' in EA
-

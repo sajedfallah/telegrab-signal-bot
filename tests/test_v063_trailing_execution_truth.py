@@ -55,4 +55,4 @@ def test_all_seven_modes_remain_explicit():
 
 
 def test_ea_release_is_v063():
-    assert '#define NEXUS_EA_VERSION "0.6.4"' in EA
+    assert '#define NEXUS_EA_VERSION "0.6.5"' in EA

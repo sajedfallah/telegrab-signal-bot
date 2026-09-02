@@ -39,6 +39,13 @@ private:
       GlobalVariableSet(Prefix(signal_id)+field,value);
      }
 
+   ulong SavedTicket(const string signal_id)
+     {
+      string key=Prefix(signal_id)+"ticket";
+      if(!GlobalVariableCheck(key)) return 0;
+      return (ulong)MathRound(GlobalVariableGet(key));
+     }
+
    double NormalizePrice(const string symbol,const double value)
      {
       int digits=(int)SymbolInfoInteger(symbol,SYMBOL_DIGITS);
@@ -125,6 +132,10 @@ public:
 
    bool HasSignalPosition(const string signal_id)
      {
+      ulong saved=SavedTicket(signal_id);
+      if(saved>0 && PositionSelectByTicket(saved) &&
+         (long)PositionGetInteger(POSITION_MAGIC)==m_magic)
+         return true;
       for(int i=PositionsTotal()-1;i>=0;i--)
         {
          ulong ticket=PositionGetTicket(i);
@@ -137,6 +148,10 @@ public:
 
    bool HasSignalOrder(const string signal_id)
      {
+      ulong saved=SavedTicket(signal_id);
+      if(saved>0 && OrderSelect(saved) &&
+         (long)OrderGetInteger(ORDER_MAGIC)==m_magic)
+         return true;
       for(int i=OrdersTotal()-1;i>=0;i--)
         {
          ulong ticket=OrderGetTicket(i);
@@ -160,6 +175,10 @@ public:
 
    ulong FindTicket(const string signal_id)
      {
+      ulong saved=SavedTicket(signal_id);
+      if(saved>0 && PositionSelectByTicket(saved) &&
+         (long)PositionGetInteger(POSITION_MAGIC)==m_magic)
+         return saved;
       for(int i=PositionsTotal()-1;i>=0;i--)
         {
          ulong ticket=PositionGetTicket(i);
@@ -168,6 +187,37 @@ public:
          if(PositionGetString(POSITION_COMMENT)==signal_id) return ticket;
         }
       return 0;
+     }
+
+   bool ConfirmSignalPosition(const string signal_id,const string symbol,ulong &ticket)
+     {
+      for(int attempt=0;attempt<10;attempt++)
+        {
+         ticket=FindTicket(signal_id);
+         if(ticket>0 && PositionSelectByTicket(ticket) &&
+            (long)PositionGetInteger(POSITION_MAGIC)==m_magic &&
+            (PositionGetString(POSITION_COMMENT)==signal_id || SavedTicket(signal_id)==ticket) &&
+            PositionGetString(POSITION_SYMBOL)==symbol)
+            return true;
+         if(attempt<9) Sleep(100);
+        }
+      ticket=0;
+      return false;
+     }
+
+   bool ConfirmSignalOrder(const ulong order_ticket,const string signal_id,const string symbol)
+     {
+      if(order_ticket==0) return false;
+      for(int attempt=0;attempt<10;attempt++)
+        {
+         if(OrderSelect(order_ticket) &&
+            (long)OrderGetInteger(ORDER_MAGIC)==m_magic &&
+            (OrderGetString(ORDER_COMMENT)==signal_id || SavedTicket(signal_id)==order_ticket) &&
+            OrderGetString(ORDER_SYMBOL)==symbol)
+            return true;
+         if(attempt<9) Sleep(100);
+        }
+      return false;
      }
 
    bool ValidateEntry(const NexusSignal &s,const string symbol,const double default_deviation_pct,string &reason)
@@ -332,7 +382,7 @@ public:
 
          ResetLastError();
          ok=OrderSend(req,res);
-         if(!ok || (res.retcode!=TRADE_RETCODE_DONE && res.retcode!=TRADE_RETCODE_PLACED))
+          if(!ok || (res.retcode!=TRADE_RETCODE_DONE && res.retcode!=TRADE_RETCODE_PLACED))
            {
             uint rc=res.retcode;
             m_last_error="pending order failed: "+IntegerToString((int)rc);
@@ -347,6 +397,16 @@ public:
                               rc==TRADE_RETCODE_LOCKED);
             return false;
            }
+
+          ticket=(ulong)res.order;
+          if(!ConfirmSignalOrder(ticket,s.signal_id,symbol))
+            {
+             m_last_error=StringFormat("pending order not confirmed by broker: retcode=%d order=%I64u deal=%I64u error=%d",
+                                       (int)res.retcode,res.order,res.deal,GetLastError());
+             m_last_retryable=true;
+             ticket=0;
+             return false;
+            }
 
         }
       else
@@ -377,9 +437,19 @@ public:
             if(sl_price<=ask+min_stop) { m_last_error=StringFormat("SELL SL violates broker stop distance: sl=%.8f ask=%.8f min=%.8f",sl_price,ask,min_stop); return false; }
             if(tp_price>0 && tp_price>=bid-min_stop) { m_last_error=StringFormat("SELL TP violates broker stop distance: tp=%.8f bid=%.8f min=%.8f",tp_price,bid,min_stop); return false; }
            }
-         ResetLastError();
-         ok=buy?m_trade.Buy(volume,symbol,0,sl_price,tp_price,s.signal_id):m_trade.Sell(volume,symbol,0,sl_price,tp_price,s.signal_id);
-        }
+          ResetLastError();
+          ok=buy?m_trade.Buy(volume,symbol,0,sl_price,tp_price,s.signal_id):m_trade.Sell(volume,symbol,0,sl_price,tp_price,s.signal_id);
+          uint market_rc=m_trade.ResultRetcode();
+          if(ok && market_rc!=TRADE_RETCODE_DONE && market_rc!=TRADE_RETCODE_DONE_PARTIAL)
+            {
+             ok=false;
+             m_last_error="trade request was not executed: "+m_trade.ResultRetcodeDescription()
+                          +" [retcode="+IntegerToString((int)market_rc)
+                          +" order="+(string)m_trade.ResultOrder()
+                          +" deal="+(string)m_trade.ResultDeal()
+                          +" error="+(string)GetLastError()+"]";
+            }
+         }
       if(!ok)
         {
          uint rc=m_trade.ResultRetcode();
@@ -396,11 +466,22 @@ public:
                            rc==TRADE_RETCODE_LOCKED);
          return false;
         }
-      ticket=FindTicket(s.signal_id);
-      if(ticket==0) ticket=(ulong)m_trade.ResultOrder();
+       if(normalized_type=="MARKET" && !ConfirmSignalPosition(s.signal_id,symbol,ticket))
+         {
+          uint rc=m_trade.ResultRetcode();
+          m_last_error=StringFormat("market execution not confirmed by broker position: retcode=%d order=%I64u deal=%I64u error=%d",
+                                    (int)rc,m_trade.ResultOrder(),m_trade.ResultDeal(),GetLastError());
+          m_last_retryable=true;
+          ticket=0;
+          return false;
+         }
 
       // Persistent state used for restart-safe management.
       SaveDouble(s.signal_id,"db_id",(double)s.db_id);
+      // Some brokers clear POSITION_COMMENT after a partial close. Persist the
+      // broker ticket so live-state/restart reconciliation can still recover
+      // the canonical signal identity without trusting the mutable comment.
+      SaveDouble(s.signal_id,"ticket",(double)ticket);
       SaveDouble(s.signal_id,"is_limit",normalized_type!="MARKET"?1:0);
       SaveDouble(s.signal_id,"activation_notified",normalized_type!="MARKET"?0:1);
       SaveDouble(s.signal_id,"mode",mode);
@@ -453,6 +534,86 @@ public:
       return ok;
      }
 
+   bool CloseSignal(const string signal_id)
+     {
+      m_last_error="";
+      bool found=false;
+      ulong saved=SavedTicket(signal_id);
+
+      for(int i=PositionsTotal()-1;i>=0;i--)
+        {
+         ulong ticket=PositionGetTicket(i);
+         if(ticket==0 || !PositionSelectByTicket(ticket)) continue;
+         if((long)PositionGetInteger(POSITION_MAGIC)!=m_magic) continue;
+         // Some brokers clear POSITION_COMMENT after a partial close.  The
+         // immutable broker ticket persisted at execution remains authoritative.
+         if(PositionGetString(POSITION_COMMENT)!=signal_id && ticket!=saved) continue;
+         found=true;
+         string symbol=PositionGetString(POSITION_SYMBOL);
+         m_trade.SetTypeFillingBySymbol(symbol);
+         ResetLastError();
+         bool sent=m_trade.PositionClose(ticket);
+         uint rc=m_trade.ResultRetcode();
+         if(!sent || (rc!=TRADE_RETCODE_DONE && rc!=TRADE_RETCODE_DONE_PARTIAL))
+           {
+            m_last_error="signal close failed: "+m_trade.ResultRetcodeDescription()+
+                         " [signal="+signal_id+" ticket="+(string)ticket+
+                         " retcode="+IntegerToString((int)rc)+" error="+(string)GetLastError()+"]";
+            return false;
+           }
+         bool still_open=false;
+         for(int attempt=0;attempt<10;attempt++)
+           {
+            still_open=PositionSelectByTicket(ticket);
+            if(!still_open) break;
+            if(attempt<9) Sleep(100);
+           }
+         if(still_open)
+           {
+            m_last_error="signal close not confirmed by broker [signal="+signal_id+" ticket="+(string)ticket+"]";
+            return false;
+           }
+        }
+
+      for(int i=OrdersTotal()-1;i>=0;i--)
+        {
+         ulong ticket=OrderGetTicket(i);
+         if(ticket==0 || !OrderSelect(ticket)) continue;
+         if((long)OrderGetInteger(ORDER_MAGIC)!=m_magic) continue;
+         if(OrderGetString(ORDER_COMMENT)!=signal_id && ticket!=saved) continue;
+         found=true;
+         ResetLastError();
+         bool sent=m_trade.OrderDelete(ticket);
+         uint rc=m_trade.ResultRetcode();
+         if(!sent || rc!=TRADE_RETCODE_DONE)
+           {
+            m_last_error="signal order cancel failed: "+m_trade.ResultRetcodeDescription()+
+                         " [signal="+signal_id+" ticket="+(string)ticket+
+                         " retcode="+IntegerToString((int)rc)+" error="+(string)GetLastError()+"]";
+            return false;
+           }
+         bool still_pending=false;
+         for(int attempt=0;attempt<10;attempt++)
+           {
+            still_pending=OrderSelect(ticket);
+            if(!still_pending) break;
+            if(attempt<9) Sleep(100);
+           }
+         if(still_pending)
+           {
+            m_last_error="signal order cancellation not confirmed by broker [signal="+signal_id+" ticket="+(string)ticket+"]";
+            return false;
+           }
+        }
+
+      if(!found)
+        {
+         m_last_error="no matching broker position or pending order for signal "+signal_id;
+         return false;
+        }
+      return true;
+     }
+
    bool ModifySL(const ulong ticket,const double new_sl)
      {
       if(!PositionSelectByTicket(ticket)) { m_last_error="position not found"; return false; }
@@ -468,9 +629,20 @@ public:
          m_last_error="SL modify failed: "+m_trade.ResultRetcodeDescription()+" [retcode="+IntegerToString((int)rc)+"]";
          return false;
         }
-      if(!PositionSelectByTicket(ticket)) { m_last_error="SL modify sent but position disappeared"; return false; }
-      double actual=PositionGetDouble(POSITION_SL);
       double tolerance=MathMax(point*0.5,SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE));
+      double actual=0;
+      bool selected=false;
+      for(int attempt=0;attempt<10;attempt++)
+        {
+         selected=PositionSelectByTicket(ticket);
+         if(selected)
+           {
+            actual=PositionGetDouble(POSITION_SL);
+            if(actual>0 && MathAbs(actual-new_sl)<=tolerance) break;
+           }
+         if(attempt<9) Sleep(100);
+        }
+      if(!selected) { m_last_error="SL modify sent but position disappeared"; return false; }
       if(actual<=0 || MathAbs(actual-new_sl)>tolerance)
         {
          m_last_error=StringFormat("SL modify not confirmed: requested=%.10f actual=%.10f retcode=%d",new_sl,actual,(int)rc);
@@ -494,9 +666,20 @@ public:
          m_last_error="TP modify failed: "+m_trade.ResultRetcodeDescription()+" [retcode="+IntegerToString((int)rc)+"]";
          return false;
         }
-      if(!PositionSelectByTicket(ticket)) { m_last_error="TP modify sent but position disappeared"; return false; }
-      double actual=PositionGetDouble(POSITION_TP);
       double tolerance=MathMax(point*0.5,SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE));
+      double actual=0;
+      bool selected=false;
+      for(int attempt=0;attempt<10;attempt++)
+        {
+         selected=PositionSelectByTicket(ticket);
+         if(selected)
+           {
+            actual=PositionGetDouble(POSITION_TP);
+            if((new_tp<=0 && actual==0) || (new_tp>0 && MathAbs(actual-new_tp)<=tolerance)) break;
+           }
+         if(attempt<9) Sleep(100);
+        }
+      if(!selected) { m_last_error="TP modify sent but position disappeared"; return false; }
       if(new_tp<=0)
         {
          if(actual!=0) { m_last_error=StringFormat("TP clear not confirmed: actual=%.10f retcode=%d",actual,(int)rc); return false; }
@@ -544,16 +727,16 @@ public:
             m_last_error="full close failed: "+m_trade.ResultRetcodeDescription()+" [retcode="+IntegerToString((int)rc)+"]";
             return false;
            }
-         if(PositionSelectByTicket(ticket))
+         double after=before;
+         for(int attempt=0;attempt<10;attempt++)
            {
-            double after=PositionGetDouble(POSITION_VOLUME);
-            if(after>eps)
-              {
-               m_last_error=StringFormat("full close not confirmed: before=%.8f after=%.8f retcode=%d",before,after,(int)rc);
-               return false;
-              }
+            if(!PositionSelectByTicket(ticket)) return true;
+            after=PositionGetDouble(POSITION_VOLUME);
+            if(after<=eps) return true;
+            if(attempt<9) Sleep(100);
            }
-         return true;
+         m_last_error=StringFormat("full close not confirmed: before=%.8f after=%.8f retcode=%d",before,after,(int)rc);
+         return false;
         }
 
       long mode=AccountInfoInteger(ACCOUNT_MARGIN_MODE);
@@ -577,15 +760,26 @@ public:
 
       // Execution truth: re-read the live position and require the volume to
       // have actually decreased by approximately the requested broker step.
-      if(!PositionSelectByTicket(ticket))
+      double expected=before-close_volume;
+      double tolerance=MathMax(step*0.5,1e-8);
+      double after=before;
+      bool selected=false;
+      bool confirmed=false;
+      for(int attempt=0;attempt<10;attempt++)
+        {
+         selected=PositionSelectByTicket(ticket);
+         if(!selected) break;
+         after=PositionGetDouble(POSITION_VOLUME);
+         if(after>0 && MathAbs(after-expected)<=tolerance)
+           { confirmed=true; break; }
+         if(attempt<9) Sleep(100);
+        }
+      if(!selected)
         {
          m_last_error=StringFormat("partial close unexpectedly removed position: before=%.8f requested=%.8f retcode=%d",before,close_volume,(int)rc);
          return false;
         }
-      double after=PositionGetDouble(POSITION_VOLUME);
-      double expected=before-close_volume;
-      double tolerance=MathMax(step*0.5,1e-8);
-      if(after<=0 || MathAbs(after-expected)>tolerance)
+      if(!confirmed)
         {
          m_last_error=StringFormat("partial close not confirmed: before=%.8f requested=%.8f expected_after=%.8f actual_after=%.8f retcode=%d",before,close_volume,expected,after,(int)rc);
          return false;

@@ -1,4 +1,4 @@
-# NEXUS v0.6.4 — Live Truth / Reliable Receipt / Real MT5 Position Center
+# NEXUS v0.6.5 — Broker Truth / Recoverable Delivery / Verified MT5 Build
 
 ## اجرای Backend
 ```cmd
@@ -7,7 +7,7 @@ python -m pytest -q
 ".venv\Scripts\python.exe" run_api.py
 ```
 
-Health: `http://127.0.0.1:8080/api/v1/autotrade/health` باید `version=0.6.4` بدهد.
+Health: `http://127.0.0.1:8080/api/v1/autotrade/health` باید `version=0.6.5` بدهد.
 
 ## Fresh Start
 `RESET_VNEXT_DB.bat` را اجرا کنید. فایل `.env` را حذف نکنید. اولین Signal از DB تازه `NX-0001` خواهد بود.
