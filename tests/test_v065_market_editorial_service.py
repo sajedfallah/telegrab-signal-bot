@@ -28,11 +28,51 @@ def test_translate_to_persian_accepts_existing_persian_without_network(monkeypat
 
 
 def test_translate_to_persian_rejects_non_persian_remote_result(monkeypatch):
+    editorial._TRANSLATION_CACHE.clear()
+
     async def bad_remote(*args, **kwargs):
         return "Gold rises"
 
     monkeypatch.setattr(editorial, "_translate_remote", bad_remote)
     assert asyncio.run(editorial.translate_to_persian("Gold rises", attempts=1)) is None
+
+
+def test_remote_translation_prefers_mymemory_and_skips_google(monkeypatch):
+    calls = []
+
+    async def mymemory(*args, **kwargs):
+        calls.append("mymemory")
+        return "قیمت طلا افزایش یافت"
+
+    async def google(*args, **kwargs):
+        calls.append("google")
+        raise AssertionError("Google fallback should not run when MyMemory succeeds")
+
+    monkeypatch.setattr(editorial, "_translate_mymemory", mymemory)
+    monkeypatch.setattr(editorial, "_translate_google", google)
+
+    result = asyncio.run(editorial._translate_remote("Gold rises"))
+    assert result == "قیمت طلا افزایش یافت"
+    assert calls == ["mymemory"]
+
+
+def test_remote_translation_falls_back_to_google_when_mymemory_fails(monkeypatch):
+    calls = []
+
+    async def mymemory(*args, **kwargs):
+        calls.append("mymemory")
+        raise RuntimeError("provider throttled")
+
+    async def google(*args, **kwargs):
+        calls.append("google")
+        return "قیمت طلا افزایش یافت"
+
+    monkeypatch.setattr(editorial, "_translate_mymemory", mymemory)
+    monkeypatch.setattr(editorial, "_translate_google", google)
+
+    result = asyncio.run(editorial._translate_remote("Gold rises"))
+    assert result == "قیمت طلا افزایش یافت"
+    assert calls == ["mymemory", "google"]
 
 
 def test_prepare_payload_never_exposes_source_article_link(monkeypatch):
