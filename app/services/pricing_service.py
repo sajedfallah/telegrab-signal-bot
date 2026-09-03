@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_CEILING, InvalidOperation
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import aiohttp
 
@@ -27,6 +27,36 @@ class RateQuote:
     fetched_at: str
 
 
+@dataclass(frozen=True)
+class RateProvider:
+    code: str
+    title: str
+    url: str
+    quote_unit: str = "IRR"
+
+
+PROVIDER_PRESETS: dict[str, RateProvider] = {
+    "nobitex": RateProvider(
+        "nobitex",
+        "Nobitex",
+        "https://api.nobitex.ir/v3/orderbook/USDTIRT",
+        "IRR",
+    ),
+    "wallex": RateProvider(
+        "wallex",
+        "Wallex",
+        "https://api.wallex.ir/v1/depth?symbol=USDTTMN",
+        "TMN",
+    ),
+    "international": RateProvider(
+        "international",
+        "CoinGecko International",
+        "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=irr",
+        "IRR",
+    ),
+}
+
+
 def money_usdt(value: Any) -> Decimal:
     try:
         return Decimal(str(value)).quantize(Q2)
@@ -38,52 +68,132 @@ def ceil_rial(value: Decimal) -> int:
     return int(value.quantize(Decimal("1"), rounding=ROUND_CEILING))
 
 
+def _decimal(value: Any) -> Decimal | None:
+    try:
+        parsed = Decimal(str(value))
+    except Exception:
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _first_book_price(rows: Any) -> Decimal | None:
+    if not rows or not isinstance(rows, (list, tuple)):
+        return None
+    first = rows[0]
+    if isinstance(first, dict):
+        for key in ("price", "rate", "last", "lastPrice"):
+            value = _decimal(first.get(key))
+            if value is not None:
+                return value
+    if isinstance(first, (list, tuple)) and first:
+        return _decimal(first[0])
+    return None
+
+
 def _parse_provider_payload(payload: Any) -> Decimal:
     if isinstance(payload, dict):
-        for key in ("lastTradePrice", "last", "price", "rate", "last_price"):
-            if key in payload:
-                try:
-                    return Decimal(str(payload[key]))
-                except Exception:
-                    pass
+        # CoinGecko simple-price payload: {"tether": {"irr": 12345}}
+        tether = payload.get("tether")
+        if isinstance(tether, dict):
+            value = _decimal(tether.get("irr"))
+            if value is not None:
+                return value
+
+        for key in ("lastTradePrice", "last", "price", "rate", "last_price", "lastPrice"):
+            value = _decimal(payload.get(key))
+            if value is not None:
+                return value
+
+        # Nobitex commonly returns asks/bids as arrays. Wallex returns result.ask/result.bid
+        # where each item is a dict containing a price field.
+        for key in ("asks", "ask", "bids", "bid"):
+            value = _first_book_price(payload.get(key))
+            if value is not None:
+                return value
+
         for key in ("data", "result", "ticker"):
             if key in payload:
                 try:
                     return _parse_provider_payload(payload[key])
-                except Exception:
+                except PricingError:
                     pass
-        asks = payload.get("asks")
-        bids = payload.get("bids")
-        if asks:
-            try:
-                return Decimal(str(asks[0][0]))
-            except Exception:
-                pass
-        if bids:
-            try:
-                return Decimal(str(bids[0][0]))
-            except Exception:
-                pass
     raise PricingError("USDT/RIAL provider returned an unsupported response")
 
 
-async def fetch_usdt_rial_rate() -> RateQuote:
-    manual = db.get_setting("usdt_rial_manual_rate", "").strip()
-    if manual:
-        try:
-            rate = Decimal(manual)
-            if rate > 0:
-                return RateQuote(rate, "manual_override", datetime.now(timezone.utc).isoformat())
-        except Exception:
-            pass
+def _configured_source() -> str:
+    return (db.get_setting("usdt_rial_rate_source", settings.usdt_rial_rate_source).strip().lower() or "nobitex")
 
-    source = db.get_setting("usdt_rial_rate_source", settings.usdt_rial_rate_source).strip().lower() or "nobitex"
-    url = db.get_setting("usdt_rial_rate_url", settings.usdt_rial_rate_url).strip()
-    if source == "nobitex" and (not url or "/v2/orderbook/" in url):
-        # Nobitex marks v2 orderbook as deprecated; v3 is the current documented endpoint.
-        url = "https://api.nobitex.ir/v3/orderbook/USDTIRT"
+
+def _configured_secondary(primary: str) -> str:
+    configured = db.get_setting("usdt_rial_secondary_source", "").strip().lower()
+    if configured and configured != primary:
+        return configured
+    if primary == "nobitex":
+        return "wallex"
+    if primary == "wallex":
+        return "nobitex"
+    return "nobitex"
+
+
+def provider_url(source: str) -> str:
+    source = (source or "").strip().lower()
+    if source == "custom":
+        return db.get_setting("usdt_rial_rate_url", settings.usdt_rial_rate_url).strip()
+    preset = PROVIDER_PRESETS.get(source)
+    if preset:
+        return preset.url
+    return db.get_setting("usdt_rial_rate_url", settings.usdt_rial_rate_url).strip()
+
+
+def provider_title(source: str) -> str:
+    source = (source or "").strip().lower()
+    if source == "custom":
+        return "Custom URL"
+    preset = PROVIDER_PRESETS.get(source)
+    return preset.title if preset else source or "Unknown"
+
+
+def configure_rate_provider(source: str, *, custom_url: str | None = None, secondary_source: str | None = None) -> None:
+    code = (source or "").strip().lower()
+    if code not in {*PROVIDER_PRESETS, "custom"}:
+        raise PricingError("unsupported USDT/RIAL rate provider")
+    if code == "custom":
+        url = (custom_url or "").strip()
+        if not url.startswith(("https://", "http://")):
+            raise PricingError("custom provider URL must use http:// or https://")
+        db.set_setting("usdt_rial_rate_url", url)
+    else:
+        db.set_setting("usdt_rial_rate_url", PROVIDER_PRESETS[code].url)
+    db.set_setting("usdt_rial_rate_source", code)
+
+    if secondary_source is not None:
+        secondary = secondary_source.strip().lower()
+        if secondary not in PROVIDER_PRESETS or secondary == code:
+            raise PricingError("invalid secondary USDT/RIAL provider")
+        db.set_setting("usdt_rial_secondary_source", secondary)
+
+
+def _append_query(url: str, **params: str) -> str:
+    """Append optional provider parameters without destroying existing query values."""
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update({k: v for k, v in params.items() if v})
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+async def _fetch_provider(source: str, *, url_override: str | None = None) -> RateQuote:
+    source = (source or "").strip().lower()
+    url = (url_override or provider_url(source)).strip()
     if not url:
-        raise PricingError("USDT/RIAL rate provider is not configured")
+        raise PricingError(f"USDT/RIAL provider {source or 'unknown'} is not configured")
+
+    # Keep backward compatibility with old Nobitex v2 settings.
+    if source == "nobitex" and "/v2/orderbook/" in url:
+        url = PROVIDER_PRESETS["nobitex"].url
+    if source == "wallex" and "symbol=" not in url:
+        url = _append_query(url, symbol="USDTTMN")
+    if source == "international" and "vs_currencies=" not in url:
+        url = _append_query(url, ids="tether", vs_currencies="irr")
 
     timeout = aiohttp.ClientTimeout(total=8)
     headers = {"Accept": "application/json", "User-Agent": "NEXUS/7.1 pricing"}
@@ -92,33 +202,152 @@ async def fetch_usdt_rial_rate() -> RateQuote:
             async with session.get(url) as response:
                 response.raise_for_status()
                 payload = await response.json(content_type=None)
-        rate = _parse_provider_payload(payload)
-        if rate <= 0:
-            raise PricingError("provider returned a non-positive USDT/RIAL rate")
-        return RateQuote(rate, source, datetime.now(timezone.utc).isoformat())
     except Exception as exc:
-        cached = db.get_setting("usdt_rial_last_rate", "").strip()
-        cached_at = db.get_setting("usdt_rial_last_rate_at", "").strip()
+        raise PricingError(f"{provider_title(source)} rate request failed") from exc
+
+    rate = _parse_provider_payload(payload)
+    if source == "wallex":
+        # USDTTMN is quoted in toman; NEXUS invoices store/use IRR.
+        rate *= Decimal("10")
+    if rate <= 0:
+        raise PricingError(f"{provider_title(source)} returned a non-positive rate")
+    return RateQuote(rate, source, datetime.now(timezone.utc).isoformat())
+
+
+def _record_rate_success(quote: RateQuote) -> None:
+    db.set_setting("usdt_rial_last_rate", str(quote.rate))
+    db.set_setting("usdt_rial_last_rate_at", quote.fetched_at)
+    db.set_setting("usdt_rial_last_rate_source", quote.source)
+    db.set_setting("usdt_rial_consecutive_failures", "0")
+    db.set_setting("usdt_rial_last_error", "")
+    db.set_setting("usdt_rial_failure_alerted", "0")
+
+
+def _record_rate_failure(message: str) -> int:
+    raw = db.get_setting("usdt_rial_consecutive_failures", "0").strip()
+    try:
+        count = max(0, int(raw)) + 1
+    except Exception:
+        count = 1
+    db.set_setting("usdt_rial_consecutive_failures", str(count))
+    db.set_setting("usdt_rial_last_failure_at", datetime.now(timezone.utc).isoformat())
+    db.set_setting("usdt_rial_last_error", str(message)[:1000])
+    return count
+
+
+async def refresh_usdt_rial_rate() -> RateQuote:
+    """Fetch a fresh rate from primary, then secondary, and persist health state.
+
+    Manual overrides are intentionally not treated as provider refreshes. When a
+    manual override exists, invoice pricing uses it, while this function can still
+    be called by the monitor to verify that automated providers are healthy.
+    """
+    primary = _configured_source()
+    if primary == "custom":
+        candidates = [("custom", provider_url("custom")), (_configured_secondary(primary), None)]
+    else:
+        candidates = [(primary, None), (_configured_secondary(primary), None)]
+
+    seen: set[str] = set()
+    errors: list[str] = []
+    for source, url_override in candidates:
+        source = (source or "").strip().lower()
+        if not source or source in seen:
+            continue
+        seen.add(source)
         try:
-            if cached and cached_at:
-                age = datetime.now(timezone.utc) - datetime.fromisoformat(cached_at)
-                if age <= timedelta(seconds=max(30, settings.usdt_rial_cache_seconds)):
-                    return RateQuote(Decimal(cached), "cached:" + source, cached_at)
-        except Exception:
-            pass
+            quote = await _fetch_provider(source, url_override=url_override)
+            if source != primary:
+                quote = RateQuote(quote.rate, f"fallback:{source}", quote.fetched_at)
+            _record_rate_success(quote)
+            return quote
+        except Exception as exc:
+            errors.append(f"{source}: {exc}")
+
+    detail = " | ".join(errors) or "no rate provider configured"
+    count = _record_rate_failure(detail)
+    raise PricingError(f"all USDT/RIAL providers failed (consecutive failures={count}): {detail}")
+
+
+def _manual_quote() -> RateQuote | None:
+    manual = db.get_setting("usdt_rial_manual_rate", "").strip()
+    if not manual:
+        return None
+    rate = _decimal(manual)
+    if rate is None:
+        return None
+    return RateQuote(rate, "manual_override", datetime.now(timezone.utc).isoformat())
+
+
+def _last_good_quote(*, source_prefix: str = "last_good") -> RateQuote | None:
+    cached = db.get_setting("usdt_rial_last_rate", "").strip()
+    cached_at = db.get_setting("usdt_rial_last_rate_at", "").strip()
+    cached_source = db.get_setting("usdt_rial_last_rate_source", "unknown").strip() or "unknown"
+    rate = _decimal(cached)
+    if rate is None or not cached_at:
+        return None
+    try:
+        datetime.fromisoformat(cached_at)
+    except Exception:
+        return None
+    return RateQuote(rate, f"{source_prefix}:{cached_source}", cached_at)
+
+
+async def fetch_usdt_rial_rate() -> RateQuote:
+    """Compatibility entry point: return the best usable business rate.
+
+    Order: manual override -> fresh primary/secondary -> last valid rate. The last
+    valid rate is explicitly labelled so the admin UI can show that it is stale.
+    Provider failure counters are still incremented by refresh_usdt_rial_rate().
+    """
+    manual = _manual_quote()
+    if manual:
+        return manual
+    try:
+        return await refresh_usdt_rial_rate()
+    except PricingError:
+        fallback = _last_good_quote(source_prefix="last_good")
+        if fallback:
+            return fallback
         raise PricingError(
-            "USDT/RIAL rate is temporarily unavailable. "
-            "Set a valid manual rate in Admin → Pricing Settings, "
-            "or restore access to the configured rate provider."
-        ) from exc
+            "USDT/RIAL rate is unavailable and no last valid rate exists. "
+            "Set a manual rate in Admin → Pricing Settings or restore a configured provider."
+        )
 
 
 async def get_usdt_rial_rate() -> RateQuote:
     quote = await fetch_usdt_rial_rate()
-    db.set_setting("usdt_rial_last_rate", str(quote.rate))
-    db.set_setting("usdt_rial_last_rate_at", quote.fetched_at)
-    db.set_setting("usdt_rial_last_rate_source", quote.source)
+    if quote.source == "manual_override":
+        # Keep the provider's last-good sample untouched while a temporary manual
+        # override is active; only expose the manual rate to the current invoice.
+        return quote
+    if not quote.source.startswith("last_good:"):
+        # refresh_usdt_rial_rate already persisted the fresh/fallback sample.
+        _record_rate_success(quote)
     return quote
+
+
+def rate_health() -> dict[str, Any]:
+    primary = _configured_source()
+    secondary = _configured_secondary(primary)
+    try:
+        failures = max(0, int(db.get_setting("usdt_rial_consecutive_failures", "0") or 0))
+    except Exception:
+        failures = 0
+    return {
+        "primary": primary,
+        "primary_title": provider_title(primary),
+        "primary_url": provider_url(primary),
+        "secondary": secondary,
+        "secondary_title": provider_title(secondary),
+        "manual_override": db.get_setting("usdt_rial_manual_rate", "").strip(),
+        "last_rate": db.get_setting("usdt_rial_last_rate", "").strip(),
+        "last_rate_at": db.get_setting("usdt_rial_last_rate_at", "").strip(),
+        "last_rate_source": db.get_setting("usdt_rial_last_rate_source", "").strip(),
+        "consecutive_failures": failures,
+        "last_failure_at": db.get_setting("usdt_rial_last_failure_at", "").strip(),
+        "last_error": db.get_setting("usdt_rial_last_error", "").strip(),
+    }
 
 
 def discounted_usdt(base: Decimal, discount_percent: Decimal = Decimal("0")) -> Decimal:
@@ -160,7 +389,7 @@ def quote_purchase(user_id: int, plan_code: str, discount_percent: Decimal = Dec
     current_vip = bool(access.get("vip"))
     current_auto = bool(access.get("autotrade"))
 
-    proration_enabled = db.get_setting("upgrade_proration_enabled", "true").strip().lower() in {"1","true","yes","on"}
+    proration_enabled = db.get_setting("upgrade_proration_enabled", "true").strip().lower() in {"1", "true", "yes", "on"}
 
     if plan_vip and not plan_auto:  # VIP-only
         if current_vip:
