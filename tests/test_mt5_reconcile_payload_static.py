@@ -33,21 +33,12 @@ def test_build_reconcile_item_emits_real_event_time_and_epoch_milliseconds():
 def test_build_reconcile_item_keeps_placeholder_argument_alignment_contract():
     block = _build_reconcile_block()
 
-    # Scope the ordering assertion to the payload StringFormat argument list.
-    # BuildReconcileItem also uses `anchor` earlier when constructing event_id;
-    # searching the whole function would incorrectly match that occurrence.
-    args_start = block.index('event_name,(ulong)anchor,NexusJsonEscape(event_id)')
-    args = block[args_start:]
-
-    required_order = [
-        'DoubleToString(r.commission,8)',
-        'DoubleToString(r.swap,8)',
-        'DoubleToString(r.risk_cash,8)',
-        'DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8)',
-        '(long)r.identifier',
-        '(ulong)anchor',
-        'ReconcileIsoEventTime(event_time)',
-        '(long)event_time*1000',
-    ]
-    offsets = [args.index(token) for token in required_order]
-    assert offsets == sorted(offsets)
+    # Assert the exact tail of the StringFormat argument list. There are two
+    # `(ulong)anchor` arguments in this call (ticket and deal_id), so generic
+    # first-occurrence ordering checks are ambiguous and can false-fail.
+    expected_tail = (
+        "DoubleToString(r.commission,8),DoubleToString(r.swap,8),DoubleToString(r.risk_cash,8),\n"
+        "      DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8),(long)r.identifier,(ulong)anchor,ReconcileIsoEventTime(event_time),\n"
+        "      (long)event_time*1000);"
+    )
+    assert expected_tail in block
