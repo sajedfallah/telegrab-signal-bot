@@ -30,6 +30,10 @@ app = FastAPI(title="NEXUS Auto Trade API", version=API_VERSION, lifespan=lifesp
 
 RECEIPT_STATUSES = "^(?:executed|activated|rejected|failed|failed_retryable|closed|pending|ignored)$"
 
+# Telegram publication is fail-closed. Only a durable, broker-confirmed
+# execution receipt may create the original Telegram signal/screenshot.
+PUBLISHABLE_RECEIPT_STATUSES = {"EXECUTED", "PENDING", "ACTIVATED"}
+
 
 class ActivateRequest(BaseModel):
     license_key: str
@@ -498,6 +502,24 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
     The publication asset is staged before MT5 execution and consumed only here.
     Channel claims make publication idempotent across duplicate receipts/retries.
     """
+    receipt = db.mt5_signal_live_state(int(row["id"])) or {}
+    exec_status = str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
+
+    # This guard is intentionally inside the publisher itself so EVERY caller
+    # (accepted receipt, retry worker, CLOSE anchor recovery, future callers)
+    # inherits the same execution-truth invariant.
+    if exec_status not in PUBLISHABLE_RECEIPT_STATUSES:
+        return {
+            "free_message_id": None,
+            "vip_message_id": None,
+            "errors": [
+                f"EXECUTION_GATE: receipt status {exec_status} is not publishable"
+            ],
+            "published": False,
+            "complete": False,
+            "execution_status": exec_status,
+        }
+
     errors: list[str] = []
     try:
         from ..config import settings
@@ -555,8 +577,6 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
     target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
     tp_lines = "\n".join(f"🎯 TP{n}: <code>{target_map[n]:g}</code>" for n in sorted(target_map)) or "🎯 TP: —"
     order_type = str(row["order_type"] or "MARKET").upper()
-    receipt = db.mt5_signal_live_state(int(row["id"]))
-    exec_status = str(receipt.get("receipt_status") or "EXECUTED").upper()
     caption = (
         "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
         f"<b>{row['code']}</b>  🟦 {order_type}\n\n"
