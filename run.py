@@ -7,6 +7,7 @@ from app.main import main
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
 from app.autotrade.result_card_guard import install_result_card_formatter
 from app.ux_runtime_patch import install as install_user_ux_hardening
+from app.services.chat_hygiene_runtime import install as install_chat_hygiene_runtime
 from app.services.pricing_admin_runtime import install as install_pricing_admin_runtime
 from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
@@ -19,6 +20,7 @@ from app.services.market_public_channel_runtime import install as install_market
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
 install_user_ux_hardening(main_module)
+install_chat_hygiene_runtime(main_module)
 install_pricing_admin_runtime(main_module)
 install_account_runtime(main_module)
 install_report_runtime(main_module)
