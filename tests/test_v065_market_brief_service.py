@@ -10,12 +10,12 @@ RSS = """<?xml version='1.0'?>
 <item>
 <title>Breaking: US CPI inflation surprises markets as Gold jumps</title>
 <link>https://example.com/cpi</link>
-<pubDate>Thu, 03 Sep 2026 12:00:00 GMT</pubDate>
+<pubDate>Fri, 04 Sep 2026 01:00:00 GMT</pubDate>
 </item>
 <item>
 <title>Minor company update with no macro relevance</title>
 <link>https://example.com/minor</link>
-<pubDate>Thu, 03 Sep 2026 11:55:00 GMT</pubDate>
+<pubDate>Fri, 04 Sep 2026 00:55:00 GMT</pubDate>
 </item>
 </channel></rss>"""
 
@@ -49,12 +49,12 @@ def test_rss_parser_scores_important_market_headlines():
     minor = next(x for x in rows if "Minor" in x.title)
     assert important.score >= 10
     assert minor.score == 0
-    assert important.published_at == datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
+    assert important.published_at == datetime(2026, 9, 4, 1, 0, tzinfo=timezone.utc)
 
 
 def test_important_recent_news_filters_low_score_and_old_items():
     rows = svc.parse_rss(RSS, "FXStreet")
-    now = datetime(2026, 9, 3, 12, 30, tzinfo=timezone.utc)
+    now = datetime(2026, 9, 4, 1, 30, tzinfo=timezone.utc)
     selected = svc.important_recent_news(rows, now_utc=now, minimum_score=5, max_age_minutes=60)
     assert [x.link for x in selected] == ["https://example.com/cpi"]
 
