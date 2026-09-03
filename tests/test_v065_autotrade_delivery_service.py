@@ -5,8 +5,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import app.services.autotrade_delivery_service as delivery_module
-from app.services.autotrade_delivery_service import AutoTradeDeliveryError, deliver_mt5_package
-from app.services.message_lifecycle import DEFAULT_INFO_TTL_SECONDS
+from app.services.autotrade_delivery_service import (
+    AutoTradeDeliveryError,
+    PACKAGE_MESSAGE_TTL_SECONDS,
+    deliver_mt5_package,
+)
 
 
 class FakeBot:
@@ -66,7 +69,7 @@ def test_delivery_order_and_protection(tmp_path):
     assert bot.calls[1][1]["supports_streaming"] is True
 
 
-def test_successful_package_messages_expire_after_default_ttl(tmp_path, monkeypatch):
+def test_successful_package_messages_expire_after_one_minute(tmp_path, monkeypatch):
     ex5, guide = _assets(tmp_path)
     scheduled: list[dict] = []
 
@@ -107,7 +110,8 @@ def test_successful_package_messages_expire_after_default_ttl(tmp_path, monkeypa
     assert report.ex5_sent is True
     assert report.video_sent is True
     assert [(x["chat_id"], x["message_id"]) for x in scheduled] == [(123, 101), (123, 102)]
-    assert all(x["delay_seconds"] == DEFAULT_INFO_TTL_SECONDS == 30 for x in scheduled)
+    assert PACKAGE_MESSAGE_TTL_SECONDS == 60
+    assert all(x["delay_seconds"] == 60 for x in scheduled)
     assert [x["reason"] for x in scheduled] == [
         "autotrade_ex5_expired",
         "autotrade_guide_video_expired",
