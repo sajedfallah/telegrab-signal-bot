@@ -11,6 +11,7 @@ from app.services.pricing_admin_runtime import install as install_pricing_admin_
 from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
 from app.services.market_brief_service import install as install_market_brief_runtime
+from app.services.market_public_channel_runtime import install as install_market_public_channel_runtime
 
 
 # app.main must be fully imported before runtime lifecycle helpers are injected
@@ -22,6 +23,7 @@ install_pricing_admin_runtime(main_module)
 install_account_runtime(main_module)
 install_report_runtime(main_module)
 install_market_brief_runtime(main_module)
+install_market_public_channel_runtime(main_module)
 
 
 _LOCK_HANDLE = None
