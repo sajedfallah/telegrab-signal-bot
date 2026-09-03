@@ -2011,13 +2011,13 @@ string BuildReconcileItem(const string event_name,const NEXUSReconcilePosition &
    double exit_price=(event_name=="CLOSE" ? r.exit_price : 0.0);
    double profit=(event_name=="CLOSE" ? r.profit : 0.0);
    return StringFormat(
-      "{\"event\":\"%s\",\"ticket\":\"%I64u\",\"event_id\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"position_id\":\"%I64d\",\"deal_id\":\"%I64u\",\"event_time\":\"%s\",\"event_time_ms\":%I64d,\"destination\":\"BOTH\"}",
+      "{\"event\":\"%s\",\"ticket\":\"%I64u\",\"event_id\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"risk_cash\":%s,\"realized_r\":%s,\"position_id\":\"%I64d\",\"deal_id\":\"%I64u\",\"event_time\":\"%s\",\"event_time_ms\":%I64d,\"destination\":\"BOTH\"}",
       event_name,(ulong)anchor,NexusJsonEscape(event_id),NexusJsonEscape(r.signal_id),
       NexusJsonEscape(r.symbol),NexusJsonEscape(r.direction),DoubleToString(r.volume,8),
       DoubleToString(r.entry_price,8),DoubleToString(r.sl,8),DoubleToString(r.tp,8),
       DoubleToString(exit_price,8),DoubleToString(profit,8),DoubleToString(r.gross_profit,8),
       DoubleToString(r.commission,8),DoubleToString(r.swap,8),DoubleToString(r.risk_cash,8),
-      DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8),(long)r.identifier,(ulong)anchor,"",
+      DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8),(long)r.identifier,(ulong)anchor,ReconcileIsoEventTime(event_time),
       (long)event_time*1000);
   }
 
