@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
+import app.services.autotrade_delivery_service as delivery_module
 from app.services.autotrade_delivery_service import AutoTradeDeliveryError, deliver_mt5_package
+from app.services.message_lifecycle import DEFAULT_INFO_TTL_SECONDS
 
 
 class FakeBot:
@@ -61,6 +64,54 @@ def test_delivery_order_and_protection(tmp_path):
     assert bot.calls[0][1]["protect_content"] is True
     assert bot.calls[1][1]["protect_content"] is True
     assert bot.calls[1][1]["supports_streaming"] is True
+
+
+def test_successful_package_messages_expire_after_default_ttl(tmp_path, monkeypatch):
+    ex5, guide = _assets(tmp_path)
+    scheduled: list[dict] = []
+
+    class MessageBot(FakeBot):
+        async def send_document(self, chat_id, **kwargs):
+            self.calls.append(("document", {"chat_id": chat_id, **kwargs}))
+            return SimpleNamespace(message_id=101)
+
+        async def send_video(self, chat_id, **kwargs):
+            self.calls.append(("video", {"chat_id": chat_id, **kwargs}))
+            return SimpleNamespace(message_id=102)
+
+    def fake_schedule_delete(bot, chat_id, message_id, **kwargs):
+        scheduled.append(
+            {
+                "bot": bot,
+                "chat_id": chat_id,
+                "message_id": message_id,
+                **kwargs,
+            }
+        )
+        return object()
+
+    monkeypatch.setattr(delivery_module, "schedule_delete", fake_schedule_delete)
+    bot = MessageBot()
+
+    report = asyncio.run(
+        deliver_mt5_package(
+            bot,
+            123,
+            ex5_path=ex5,
+            guide_video_path=guide,
+            attempts=1,
+            base_delay_seconds=0,
+        )
+    )
+
+    assert report.ex5_sent is True
+    assert report.video_sent is True
+    assert [(x["chat_id"], x["message_id"]) for x in scheduled] == [(123, 101), (123, 102)]
+    assert all(x["delay_seconds"] == DEFAULT_INFO_TTL_SECONDS == 30 for x in scheduled)
+    assert [x["reason"] for x in scheduled] == [
+        "autotrade_ex5_expired",
+        "autotrade_guide_video_expired",
+    ]
 
 
 def test_transient_document_failure_is_retried_before_video(tmp_path):
