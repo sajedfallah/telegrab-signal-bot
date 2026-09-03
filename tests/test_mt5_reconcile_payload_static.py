@@ -6,11 +6,15 @@ def _ea_source() -> str:
     return (root / "mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
 
 
-def test_build_reconcile_item_serializes_risk_fields_before_identity_fields():
+def _build_reconcile_block() -> str:
     ea = _ea_source()
     start = ea.index("string BuildReconcileItem(")
     end = ea.index("\nvoid ReconcileMT5History()", start)
-    block = ea[start:end]
+    return ea[start:end]
+
+
+def test_build_reconcile_item_serializes_risk_fields_before_identity_fields():
+    block = _build_reconcile_block()
 
     assert '\\"risk_cash\\\":%s' in block
     assert '\\"realized_r\\\":%s' in block
@@ -19,10 +23,7 @@ def test_build_reconcile_item_serializes_risk_fields_before_identity_fields():
 
 
 def test_build_reconcile_item_emits_real_event_time_and_epoch_milliseconds():
-    ea = _ea_source()
-    start = ea.index("string BuildReconcileItem(")
-    end = ea.index("\nvoid ReconcileMT5History()", start)
-    block = ea[start:end]
+    block = _build_reconcile_block()
 
     assert "ReconcileIsoEventTime(event_time)" in block
     assert "(long)event_time*1000" in block
@@ -30,10 +31,13 @@ def test_build_reconcile_item_emits_real_event_time_and_epoch_milliseconds():
 
 
 def test_build_reconcile_item_keeps_placeholder_argument_alignment_contract():
-    ea = _ea_source()
-    start = ea.index("string BuildReconcileItem(")
-    end = ea.index("\nvoid ReconcileMT5History()", start)
-    block = ea[start:end]
+    block = _build_reconcile_block()
+
+    # Scope the ordering assertion to the payload StringFormat argument list.
+    # BuildReconcileItem also uses `anchor` earlier when constructing event_id;
+    # searching the whole function would incorrectly match that occurrence.
+    args_start = block.index('event_name,(ulong)anchor,NexusJsonEscape(event_id)')
+    args = block[args_start:]
 
     required_order = [
         'DoubleToString(r.commission,8)',
@@ -45,5 +49,5 @@ def test_build_reconcile_item_keeps_placeholder_argument_alignment_contract():
         'ReconcileIsoEventTime(event_time)',
         '(long)event_time*1000',
     ]
-    offsets = [block.index(token) for token in required_order]
+    offsets = [args.index(token) for token in required_order]
     assert offsets == sorted(offsets)
