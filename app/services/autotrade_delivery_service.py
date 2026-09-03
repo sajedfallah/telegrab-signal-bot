@@ -9,6 +9,8 @@ from typing import Awaitable, Callable, Iterable, TypeVar
 
 from aiogram.types import FSInputFile
 
+from .message_lifecycle import DEFAULT_INFO_TTL_SECONDS, schedule_delete
+
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
@@ -70,6 +72,32 @@ async def _alert_admins(bot, admin_ids: Iterable[int], *, user_id: int, stage: s
             log.warning("Could not alert admin %s about AutoTrade delivery failure: %s", admin_id, exc)
 
 
+def _expire_delivery_message(bot, user_id: int, message, *, stage: str) -> None:
+    """Expire a delivered private MT5 package message after the standard info TTL."""
+    message_id = getattr(message, "message_id", None)
+    if message_id is None:
+        log.warning(
+            "AutoTrade delivery message has no message_id; cleanup not scheduled: user_id=%s stage=%s",
+            user_id,
+            stage,
+        )
+        return
+    schedule_delete(
+        bot,
+        int(user_id),
+        int(message_id),
+        delay_seconds=DEFAULT_INFO_TTL_SECONDS,
+        reason=f"autotrade_{stage}_expired",
+    )
+    log.info(
+        "AutoTrade delivery cleanup scheduled: user_id=%s stage=%s message_id=%s ttl=%ss",
+        user_id,
+        stage,
+        message_id,
+        DEFAULT_INFO_TTL_SECONDS,
+    )
+
+
 async def deliver_mt5_package(
     bot,
     user_id: int,
@@ -83,8 +111,10 @@ async def deliver_mt5_package(
 ) -> DeliveryReport:
     """Deliver the customer MT5 package in strict EX5 -> guide-video order.
 
-    This function intentionally has no license/database side effects. A Telegram
-    delivery failure must never revoke or roll back an already-issued license.
+    Successful EX5 and installation-guide messages are deliberately transient:
+    each is deleted from the user's private chat after the standard 30-second
+    informational TTL. This function has no license/database side effects. A
+    Telegram delivery failure must never revoke or roll back an issued license.
     """
     uid = int(user_id)
     ex5 = Path(ex5_path)
@@ -109,7 +139,8 @@ async def deliver_mt5_package(
         )
 
     try:
-        await _retry("ex5", send_ex5, attempts=attempts, base_delay_seconds=base_delay_seconds)
+        ex5_message = await _retry("ex5", send_ex5, attempts=attempts, base_delay_seconds=base_delay_seconds)
+        _expire_delivery_message(bot, uid, ex5_message, stage="ex5")
     except Exception as exc:
         await _alert_admins(bot, admin_ids, user_id=uid, stage="ex5", error=exc)
         raise AutoTradeDeliveryError("ex5", str(exc)) from exc
@@ -134,7 +165,8 @@ async def deliver_mt5_package(
         )
 
     try:
-        await _retry("guide_video", send_video, attempts=attempts, base_delay_seconds=base_delay_seconds)
+        guide_message = await _retry("guide_video", send_video, attempts=attempts, base_delay_seconds=base_delay_seconds)
+        _expire_delivery_message(bot, uid, guide_message, stage="guide_video")
     except Exception as exc:
         await _alert_admins(bot, admin_ids, user_id=uid, stage="guide_video", error=exc)
         raise AutoTradeDeliveryError("guide_video", str(exc), ex5_sent=True) from exc
