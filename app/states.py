@@ -7,7 +7,10 @@ class Flow(StatesGroup):
     waiting_usdt_txid = State()
     waiting_promo = State()
 
-    # Auto Trade / MT5 account lifecycle
+    # Auto Trade exchange connection
+    exchange_api_key = State()
+    exchange_api_secret = State()
+    exchange_api_passphrase = State()
     autotrade_account_change = State()
     autotrade_initial_account = State()
 
