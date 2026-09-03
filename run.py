@@ -4,11 +4,13 @@ from pathlib import Path
 
 from app.main import main
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
+from app.autotrade.result_card_guard import install_result_card_formatter
 
 
-# app.main must be fully imported before the lifecycle helper is injected into
-# its module globals.  Calling this here is deterministic and idempotent.
+# app.main must be fully imported before runtime lifecycle helpers are injected
+# into its module globals. Calling these here is deterministic and idempotent.
 install_mt5_event_datetime_helper()
+install_result_card_formatter()
 
 
 _LOCK_HANDLE = None
