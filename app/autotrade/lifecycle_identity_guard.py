@@ -4,19 +4,19 @@ from __future__ import annotations
 
 The MT5 EA uses the human-facing canonical signal code (for example NX-0001)
 as the broker position/deal comment and sends that code back in lifecycle
-events.  The legacy backend resolver only compared that value with
-``publish_token``.  CLOSE/UPDATE events therefore became ``stale/unmatched``
+events. The legacy backend resolver only compared that value with
+``publish_token``. CLOSE/UPDATE events therefore became ``stale/unmatched``
 whenever the broker deal ticket differed from the original execution receipt
 (which is normal on hedging accounts).
 
 A second legacy path treated a broker-confirmed OPEN event for an already issued
-MARKET signal as a new manual signal.  If the broker event did not contain a
+MARKET signal as a new manual signal. If the broker event did not contain a
 positive TP, the synthetic fallback target equalled entry and repeatedly failed
 validation (notably: ``SHORT take-profit targets must be below entry``).
 
-This compatibility guard keeps the existing API surface intact while making
-canonical signal code the primary lifecycle identity and reusing an existing
-MT5-admin signal for broker OPEN events.
+The guard also records ``opened_at`` when that broker-confirmed OPEN reuses the
+already-issued MT5_ADMIN signal. Without this timestamp, CLOSE duration falls
+back to signal creation time and cannot represent the broker lifecycle cleanly.
 """
 
 import logging
@@ -103,6 +103,20 @@ def install_lifecycle_identity_guard() -> None:
         if signal_code and _is_broker_open_request(request_id):
             existing = db.get_signal_by_code(signal_code)
             if _same_admin_owner(existing, kwargs.get("admin_id"), kwargs.get("admin_account")):
+                # This call is reached from the authoritative broker OPEN path.
+                # Record a backend-UTC open timestamp once so duration is based
+                # on execution truth rather than the earlier issuance timestamp.
+                if not _row_value(existing, "opened_at", None):
+                    opened_at = db.now_iso()
+                    db.mark_signal_opened(int(_row_value(existing, "id")), opened_at)
+                    refreshed = db.get_signal(int(_row_value(existing, "id")))
+                    if refreshed is not None:
+                        existing = refreshed
+                    log.info(
+                        "[NEXUS][LIFECYCLE_ID][OPEN_TIME_RECORDED] signal=%s opened_at=%s",
+                        signal_code,
+                        opened_at,
+                    )
                 log.info(
                     "[NEXUS][LIFECYCLE_ID][OPEN_REUSE] signal=%s request_id=%s account=%s",
                     signal_code, request_id, kwargs.get("admin_account") or "",
