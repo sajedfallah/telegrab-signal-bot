@@ -21,7 +21,6 @@ from typing import Any
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
-import aiohttp
 import httpx
 
 
@@ -51,15 +50,22 @@ class _MetaParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.meta: dict[str, str] = {}
+        self.image_src: str = ""
 
     def handle_starttag(self, tag: str, attrs) -> None:
-        if tag.lower() != "meta":
-            return
         values = {str(k).lower(): str(v or "") for k, v in attrs}
-        key = (values.get("property") or values.get("name") or "").strip().lower()
-        value = values.get("content", "").strip()
-        if key and value and key not in self.meta:
-            self.meta[key] = value
+        lowered = tag.lower()
+        if lowered == "meta":
+            key = (values.get("property") or values.get("name") or "").strip().lower()
+            value = values.get("content", "").strip()
+            if key and value and key not in self.meta:
+                self.meta[key] = value
+            return
+        if lowered == "link" and not self.image_src:
+            rel = values.get("rel", "").strip().lower()
+            href = values.get("href", "").strip()
+            if href and ("image_src" in rel or ("preload" in rel and values.get("as", "").lower() == "image")):
+                self.image_src = href
 
 
 def _clean(value: str | None, *, limit: int = 1200) -> str:
@@ -98,7 +104,6 @@ def _cache_put(source: str, translated: str) -> None:
     if not source or not translated:
         return
     if len(_TRANSLATION_CACHE) >= _TRANSLATION_CACHE_MAX:
-        # Dict insertion order is stable; discard oldest cached translation.
         try:
             _TRANSLATION_CACHE.pop(next(iter(_TRANSLATION_CACHE)))
         except Exception:
@@ -121,8 +126,11 @@ def extract_article_meta(page_html: str, article_url: str) -> ArticleMeta:
     )
     raw_image = _clean(
         parser.meta.get("og:image")
+        or parser.meta.get("og:image:secure_url")
         or parser.meta.get("og:image:url")
         or parser.meta.get("twitter:image")
+        or parser.meta.get("twitter:image:src")
+        or parser.image_src
         or "",
         limit=1000,
     )
@@ -133,21 +141,37 @@ def extract_article_meta(page_html: str, article_url: str) -> ArticleMeta:
 
 
 async def fetch_article_meta(url: str, *, timeout_seconds: int = 10) -> ArticleMeta:
+    """Fetch article metadata with certifi-backed TLS and browser-like headers.
+
+    The VPS previously used aiohttp/system CA trust here. On this Windows host the
+    same trust-store gap that affected translation can silently make article
+    enrichment return an empty result. httpx keeps TLS verification enabled while
+    using its certifi-backed default trust path.
+    """
     if not str(url or "").startswith(("https://", "http://")):
         return ArticleMeta()
-    timeout = aiohttp.ClientTimeout(total=max(3, int(timeout_seconds)))
     headers = {
-        "Accept": "text/html,application/xhtml+xml",
-        "User-Agent": "Mozilla/5.0 (compatible; NEXUS/0.6.5; +market-editorial)",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/152.0.0.0 Safari/537.36"
+        ),
     }
+    timeout = httpx.Timeout(max(3.0, float(timeout_seconds)))
     try:
-        async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-            async with session.get(url, allow_redirects=True) as response:
-                response.raise_for_status()
-                body = await response.content.read(1_500_000)
-                charset = response.charset or "utf-8"
-                page = body.decode(charset, errors="replace")
-                return extract_article_meta(page, str(response.url))
+        async with httpx.AsyncClient(
+            timeout=timeout,
+            headers=headers,
+            follow_redirects=True,
+            trust_env=True,
+        ) as client:
+            response = await client.get(str(url))
+            response.raise_for_status()
+            page = response.text[:1_500_000]
+            return extract_article_meta(page, str(response.url))
     except Exception as exc:
         log.info("market article enrichment unavailable: url=%s error=%s", url, exc)
         return ArticleMeta()
@@ -278,13 +302,11 @@ async def prepare_persian_news_payload(item: Any, *, local_timezone: str) -> Per
     title_task = asyncio.create_task(translate_to_persian(str(getattr(item, "title", "") or "")))
     meta, fa_title = await asyncio.gather(meta_task, title_task)
 
-    # Fail closed: never leak an English headline to the public NEXUS channel.
     if not fa_title or not _has_persian(fa_title):
         return None
 
     fa_summary = ""
     if meta.description:
-        # Summary is optional and clipped for the free translation providers.
         source_summary = _fit_utf8(_clean(meta.description, limit=700), 480)
         translated_summary = await translate_to_persian(source_summary, attempts=2)
         if translated_summary and _has_persian(translated_summary):
