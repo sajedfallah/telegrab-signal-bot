@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 from app.services import market_editorial_service as editorial
@@ -17,6 +18,26 @@ def test_extract_article_meta_finds_description_and_related_image():
     meta = editorial.extract_article_meta(page, "https://example.com/news/gold")
     assert meta.description == "Gold rises before US jobs data"
     assert meta.image_url == "https://example.com/images/gold.jpg"
+
+
+def test_extract_article_meta_supports_image_src_fallback():
+    page = """
+    <html><head>
+      <link rel="image_src" href="/media/markets/gold-main.webp">
+    </head></html>
+    """
+    meta = editorial.extract_article_meta(page, "https://example.com/news/gold")
+    assert meta.image_url == "https://example.com/media/markets/gold-main.webp"
+
+
+def test_article_enrichment_uses_httpx_tls_transport():
+    source = Path("app/services/market_editorial_service.py").read_text(encoding="utf-8")
+    start = source.index("async def fetch_article_meta")
+    end = source.index("async def _translate_mymemory", start)
+    block = source[start:end]
+    assert "httpx.AsyncClient" in block
+    assert "aiohttp.ClientSession" not in block
+    assert "follow_redirects=True" in block
 
 
 def test_translate_to_persian_accepts_existing_persian_without_network(monkeypatch):
