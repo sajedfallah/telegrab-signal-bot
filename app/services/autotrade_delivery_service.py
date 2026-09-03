@@ -9,11 +9,12 @@ from typing import Awaitable, Callable, Iterable, TypeVar
 
 from aiogram.types import FSInputFile
 
-from .message_lifecycle import DEFAULT_INFO_TTL_SECONDS, schedule_delete
+from .message_lifecycle import schedule_delete
 
 
 log = logging.getLogger(__name__)
 T = TypeVar("T")
+PACKAGE_MESSAGE_TTL_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -73,7 +74,7 @@ async def _alert_admins(bot, admin_ids: Iterable[int], *, user_id: int, stage: s
 
 
 def _expire_delivery_message(bot, user_id: int, message, *, stage: str) -> None:
-    """Expire a delivered private MT5 package message after the standard info TTL."""
+    """Expire an EX5/guide delivery exactly one minute after successful send."""
     message_id = getattr(message, "message_id", None)
     if message_id is None:
         log.warning(
@@ -86,7 +87,7 @@ def _expire_delivery_message(bot, user_id: int, message, *, stage: str) -> None:
         bot,
         int(user_id),
         int(message_id),
-        delay_seconds=DEFAULT_INFO_TTL_SECONDS,
+        delay_seconds=PACKAGE_MESSAGE_TTL_SECONDS,
         reason=f"autotrade_{stage}_expired",
     )
     log.info(
@@ -94,7 +95,7 @@ def _expire_delivery_message(bot, user_id: int, message, *, stage: str) -> None:
         user_id,
         stage,
         message_id,
-        DEFAULT_INFO_TTL_SECONDS,
+        PACKAGE_MESSAGE_TTL_SECONDS,
     )
 
 
@@ -111,10 +112,10 @@ async def deliver_mt5_package(
 ) -> DeliveryReport:
     """Deliver the customer MT5 package in strict EX5 -> guide-video order.
 
-    Successful EX5 and installation-guide messages are deliberately transient:
-    each is deleted from the user's private chat after the standard 30-second
-    informational TTL. This function has no license/database side effects. A
-    Telegram delivery failure must never revoke or roll back an issued license.
+    Successful EX5 and installation-guide messages are transient and are deleted
+    from the user's private chat 60 seconds after each successful Telegram send.
+    This function has no license/database side effects. A Telegram delivery
+    failure must never revoke or roll back an issued license.
     """
     uid = int(user_id)
     ex5 = Path(ex5_path)
