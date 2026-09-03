@@ -15,6 +15,7 @@ from .message_lifecycle import schedule_delete
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 PACKAGE_MESSAGE_TTL_SECONDS = 60
+_DELIVERY_CLEANUP_TASKS: set[asyncio.Task] = set()
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,7 @@ def _expire_delivery_message(bot, user_id: int, message, *, stage: str) -> None:
         int(message_id),
         delay_seconds=PACKAGE_MESSAGE_TTL_SECONDS,
         reason=f"autotrade_{stage}_expired",
+        task_sink=_DELIVERY_CLEANUP_TASKS,
     )
     log.info(
         "AutoTrade delivery cleanup scheduled: user_id=%s stage=%s message_id=%s ttl=%ss",
@@ -114,8 +116,10 @@ async def deliver_mt5_package(
 
     Successful EX5 and installation-guide messages are transient and are deleted
     from the user's private chat 60 seconds after each successful Telegram send.
-    This function has no license/database side effects. A Telegram delivery
-    failure must never revoke or roll back an issued license.
+    Cleanup tasks are retained until completion so the timer cannot disappear
+    before Telegram deletion is attempted. This function has no license/database
+    side effects. A Telegram delivery failure must never revoke or roll back an
+    issued license.
     """
     uid = int(user_id)
     ex5 = Path(ex5_path)
