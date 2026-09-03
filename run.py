@@ -9,6 +9,7 @@ from app.autotrade.result_card_guard import install_result_card_formatter
 from app.ux_runtime_patch import install as install_user_ux_hardening
 from app.services.pricing_admin_runtime import install as install_pricing_admin_runtime
 from app.services.account_runtime import install as install_account_runtime
+from app.services.market_brief_service import install as install_market_brief_runtime
 
 
 # app.main must be fully imported before runtime lifecycle helpers are injected
@@ -18,6 +19,7 @@ install_result_card_formatter()
 install_user_ux_hardening(main_module)
 install_pricing_admin_runtime(main_module)
 install_account_runtime(main_module)
+install_market_brief_runtime(main_module)
 
 
 _LOCK_HANDLE = None
