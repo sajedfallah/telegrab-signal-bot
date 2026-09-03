@@ -64,7 +64,7 @@ def _seed_gold_close(main: FakeMain):
     con.execute(
         """INSERT INTO signals
            (id,code,market_type,destination,status,created_at,closed_at,result_value,free_message_id,vip_message_id)
-           VALUES(1,'NX-0001','GOLD','BOTH','CLOSED',?,?,?,?,1,2)""",
+           VALUES(1,'NX-0001','GOLD','BOTH','CLOSED',?,?,?,1,2)""",
         (
             "2026-09-03T05:42:00+00:00",
             "2026-09-03T06:28:16+00:00",
