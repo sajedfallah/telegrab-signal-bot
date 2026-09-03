@@ -2,15 +2,18 @@ import asyncio
 import os
 from pathlib import Path
 
+import app.main as main_module
 from app.main import main
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
 from app.autotrade.result_card_guard import install_result_card_formatter
+from app.ux_runtime_patch import install as install_user_ux_hardening
 
 
 # app.main must be fully imported before runtime lifecycle helpers are injected
 # into its module globals. Calling these here is deterministic and idempotent.
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
+install_user_ux_hardening(main_module)
 
 
 _LOCK_HANDLE = None
