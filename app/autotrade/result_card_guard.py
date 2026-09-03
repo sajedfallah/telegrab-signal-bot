@@ -7,8 +7,8 @@ from typing import Any
 
 log = logging.getLogger("nexus-result-card-guard")
 
-_HEADER = "<b>━━━━━━━━ NEXUS RESULT ━━━━━━━━</b>"
 _TAG_RE = re.compile(r"<[^>]+>")
+_CANONICAL_MARKER = "💰 Broker P/L:"
 
 
 def _row_get(row: Any, key: str, default: Any = "") -> Any:
@@ -71,14 +71,17 @@ def _build_card(
     exit_price: str = "",
     broker_pnl: str = "",
     result: str = "",
-    performance: str = "",
     duration: str = "",
     reason: str = "",
-    ticket: str = "",
 ) -> str:
+    """Render the intentionally minimal final-result flash card.
+
+    Product rule: final CLOSE replies must contain only the signal/result identity,
+    exit price, broker P/L, holding duration, exit reason and final status.  Symbol,
+    direction, entry, performance/pips and broker ticket belong to the original
+    signal or internal execution history and must not clutter the result reply.
+    """
     code = _esc(_row_get(row, "code", "—"))
-    symbol = _esc(str(_row_get(row, "symbol", "—")).upper())
-    direction = _esc(str(_row_get(row, "direction", "—")).upper())
     result = _normalize_result(result)
     badge = {
         "WIN": "🟢 WIN",
@@ -86,48 +89,35 @@ def _build_card(
         "BREAK EVEN": "⚪ BREAK EVEN",
     }.get(result, "⚪ CLOSED")
 
-    lines = [
-        _HEADER,
-        f"<b>{code}</b>  <b>{badge}</b>",
-        "",
-        f"📌 Symbol: <b>{symbol}</b>",
-        f"↕️ Direction: <b>{direction}</b>",
-        f"📍 Entry: {_price(_row_get(row, 'entry_price', ''))}",
-        f"🏁 Exit: {_price(exit_price)}",
-    ]
+    pnl = str(broker_pnl or "—").strip() or "—"
+    duration_text = str(duration or "—").strip() or "—"
+    reason_text = str(reason or "—").strip().upper() or "—"
 
-    detail_lines: list[str] = []
-    if broker_pnl:
-        detail_lines.append(f"💰 Broker P/L: <b>{_esc(broker_pnl)}</b>")
-    if performance:
-        detail_lines.append(f"📊 Performance: <b>{_esc(performance)}</b>")
-    if duration and duration != "—":
-        detail_lines.append(f"⏱ Duration: <b>{_esc(duration)}</b>")
-    if reason:
-        detail_lines.append(f"🚪 Exit Reason: <b>{_esc(reason.upper())}</b>")
-    if ticket:
-        detail_lines.append(f"🎫 Ticket: <code>{_esc(ticket)}</code>")
-
-    if detail_lines:
-        lines.append("")
-        lines.extend(detail_lines)
-    lines.append("📌 Status: <b>CLOSED</b>")
-    return "\n".join(lines)
+    return "\n".join(
+        [
+            f"<b>{code}</b>  <b>{badge}</b>",
+            "",
+            f"🏁 Exit: {_price(exit_price)}",
+            f"💰 Broker P/L: <b>{_esc(pnl)}</b>",
+            f"⏱️ Duration: <b>{_esc(duration_text)}</b>",
+            f"🚪 Exit Reason: <b>{_esc(reason_text)}</b>",
+            "📌 Status: <b>CLOSED</b>",
+        ]
+    )
 
 
 def format_result_card(row: Any, caption: str) -> str:
-    """Convert every final CLOSE caption to the canonical NEXUS result card.
+    """Convert every final CLOSE caption to the canonical minimal result card.
 
-    The function intentionally changes text formatting only.  Telegram delivery,
-    reply threading, broker truth and lifecycle screenshot policy stay untouched.
-    Unknown/non-result lifecycle captions pass through unchanged.
+    Telegram delivery, reply threading, broker truth and lifecycle screenshot
+    policy stay untouched. Unknown/non-result lifecycle captions pass through.
     """
-    if not caption or _HEADER in caption:
+    if not caption or (_CANONICAL_MARKER in caption and "📌 Status: <b>CLOSED</b>" in caption):
         return caption
 
     plain = _plain(caption)
 
-    # Broker-driven MT5 close currently arrives as one compact pipe-delimited line.
+    # Broker-driven MT5 CLOSE arrives as one compact pipe-delimited line.
     if plain.startswith("TRADE CLOSED |"):
         parts = [part.strip() for part in plain.split("|")]
         fields: dict[str, str] = {}
@@ -140,21 +130,21 @@ def format_result_card(row: Any, caption: str) -> str:
             exit_price=fields.get("exit", ""),
             broker_pnl=fields.get("pnl", ""),
             result=fields.get("result", ""),
-            performance=fields.get("performance", ""),
             duration=fields.get("duration", ""),
             reason=fields.get("reason", ""),
-            ticket=fields.get("ticket", ""),
         )
 
-    # Admin/manual close already uses a multiline card, but historically had a
-    # different Persian/English layout.  Normalize both variants to one LTR card.
+    # Admin/manual close does not have broker-confirmed P/L or duration in the
+    # legacy caption. Keep the required fields visible with an explicit dash
+    # instead of mis-labelling a pip/percent metric as Broker P/L.
     if "TRADE RESULT" in plain.upper() or "نتیجه معامله" in plain:
         return _build_card(
             row,
             exit_price=_line_value(plain, "Exit", "خروج"),
+            broker_pnl="—",
             result=_line_value(plain, "Result", "نتیجه"),
-            performance=_line_value(plain, "P/L", "سود/زیان"),
-            reason=_line_value(plain, "Exit type", "نوع خروج"),
+            duration="—",
+            reason=_line_value(plain, "Exit type", "نوع خروج") or "MANUAL CLOSE",
         )
 
     return caption
