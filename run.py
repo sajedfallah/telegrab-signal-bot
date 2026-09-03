@@ -3,6 +3,12 @@ import os
 from pathlib import Path
 
 from app.main import main
+from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
+
+
+# app.main must be fully imported before the lifecycle helper is injected into
+# its module globals.  Calling this here is deterministic and idempotent.
+install_mt5_event_datetime_helper()
 
 
 _LOCK_HANDLE = None
