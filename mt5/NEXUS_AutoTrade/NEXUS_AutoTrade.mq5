@@ -1053,6 +1053,13 @@ bool ProcessIncomingSignal(const NexusSignal &s)
        AdvanceSignalCursor(s.db_id); return true;
       }
     CompleteNexusSignalClaim(s.signal_id);
+
+    // Execution truth ordering:
+    // broker order -> authoritative live snapshot -> execution receipt.
+    // If the forced snapshot has a transient transport failure, the reliable
+    // receipt queue remains fail-closed and OnTimer retries only after LiveSync.
+    DoLiveSync(true);
+
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
@@ -1199,16 +1206,25 @@ string BuildLiveOrdersJson()
    return out;
   }
 
-void DoLiveSync()
+bool DoLiveSync(const bool force=false)
   {
    datetime now=TimeCurrent();
-   if(g_last_live_sync>0 && (now-g_last_live_sync)<MathMax(1,InpLiveSyncSeconds)) return;
-   g_last_live_sync=now;
+   if(!force && g_last_live_sync>0 &&
+      (now-g_last_live_sync)<MathMax(1,InpLiveSyncSeconds))
+      return true;
+
    string response;
    if(g_api.LiveState(BuildLivePositionsJson(),BuildLiveOrdersJson(),response))
-      Print("NEXUS LIVE SYNC OK: positions/orders snapshot delivered");
-   else
-      Print("NEXUS LIVE SYNC FAILED: ",g_api.LastError());
+     {
+      g_last_live_sync=now;
+      Print("NEXUS LIVE SYNC OK: positions/orders snapshot delivered",
+            (force?" [FORCED]":""));
+      return true;
+     }
+
+   Print("NEXUS LIVE SYNC FAILED: ",g_api.LastError(),
+         (force?" [FORCED]":""));
+   return false;
   }
 
 void DoHeartbeat()
@@ -2320,8 +2336,10 @@ void OnTimer()
   {
    if(g_setup_required) return;
    DoHeartbeat();
-   ProcessPendingReceipts();
+
+   // Refresh broker truth before retrying any queued execution receipt.
    DoLiveSync();
+   ProcessPendingReceipts();
    ReconcileMT5History();
    ProcessPendingOrders();
    ProcessPendingOpenTrades();
