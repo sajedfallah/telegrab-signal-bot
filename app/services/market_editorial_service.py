@@ -22,6 +22,7 @@ from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
 import aiohttp
+import httpx
 
 
 log = logging.getLogger(__name__)
@@ -153,21 +154,31 @@ async def fetch_article_meta(url: str, *, timeout_seconds: int = 10) -> ArticleM
 
 
 async def _translate_mymemory(text: str, *, timeout_seconds: int = 10) -> str:
-    """Translate with MyMemory. Its public GET API accepts at most 500 bytes."""
+    """Translate with MyMemory using httpx/certifi TLS trust.
+
+    The VPS Python/aiohttp system trust store can miss an issuer that certifi
+    contains. httpx uses its bundled certifi CA store by default, so we keep TLS
+    verification enabled while avoiding the Windows local-issuer failure.
+    """
     source = _fit_utf8(_clean(text, limit=1400), 480)
     if not source:
         return ""
-    timeout = aiohttp.ClientTimeout(total=max(3, int(timeout_seconds)))
     params = {
         "q": source,
         "langpair": "en|fa",
         "mt": "1",
     }
     headers = {"User-Agent": "NEXUS/0.6.5 market-editorial"}
-    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-        async with session.get(_MYMEMORY_URL, params=params) as response:
-            response.raise_for_status()
-            payload = await response.json(content_type=None)
+    timeout = httpx.Timeout(max(3.0, float(timeout_seconds)))
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        headers=headers,
+        follow_redirects=True,
+        trust_env=True,
+    ) as client:
+        response = await client.get(_MYMEMORY_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
     data = payload.get("responseData") if isinstance(payload, dict) else None
     translated = _clean(data.get("translatedText") if isinstance(data, dict) else "", limit=1400)
     if not translated or not _has_persian(translated):
@@ -176,7 +187,6 @@ async def _translate_mymemory(text: str, *, timeout_seconds: int = 10) -> str:
 
 
 async def _translate_google(text: str, *, timeout_seconds: int = 10) -> str:
-    timeout = aiohttp.ClientTimeout(total=max(3, int(timeout_seconds)))
     params = {
         "client": "gtx",
         "sl": "auto",
@@ -185,10 +195,16 @@ async def _translate_google(text: str, *, timeout_seconds: int = 10) -> str:
         "q": text,
     }
     headers = {"User-Agent": "NEXUS/0.6.5 market-editorial"}
-    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
-        async with session.get(_GOOGLE_TRANSLATE_URL, params=params) as response:
-            response.raise_for_status()
-            payload = await response.json(content_type=None)
+    timeout = httpx.Timeout(max(3.0, float(timeout_seconds)))
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        headers=headers,
+        follow_redirects=True,
+        trust_env=True,
+    ) as client:
+        response = await client.get(_GOOGLE_TRANSLATE_URL, params=params)
+        response.raise_for_status()
+        payload = response.json()
     parts = payload[0] if isinstance(payload, list) and payload else []
     translated = "".join(
         str(part[0])
