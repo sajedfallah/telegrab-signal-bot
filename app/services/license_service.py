@@ -16,33 +16,71 @@ class AccessSnapshot:
     source: str | None
     expires_at: str | None
     license_id: int | None
+    starts_at: str | None = None
+    vip_expires_at: str | None = None
+    autotrade_expires_at: str | None = None
+
+
+def _iso_or_none(value: Any) -> str | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value)).isoformat()
+    except Exception:
+        return None
 
 
 def snapshot(user_id: int) -> AccessSnapshot:
     lic = db.active_license(user_id)
     if not lic:
         return AccessSnapshot(False, False, False, None, None, None, None)
-    keys=set(lic.keys()); now=datetime.now(timezone.utc)
+
+    keys = set(lic.keys())
+    now = datetime.now(timezone.utc)
+
+    def raw_value(name: str) -> Any:
+        return lic[name] if name in keys else None
+
     def alive(name: str, fallback_flag: str) -> bool:
-        raw=lic[name] if name in keys else None
+        raw = raw_value(name)
         if not raw:
-            raw=lic["expires_at"] if bool(lic[fallback_flag]) else None
-        if not raw: return False
-        try: return datetime.fromisoformat(str(raw))>now
-        except Exception: return False
-    vip=alive("vip_expires_at","vip_access")
-    auto=alive("autotrade_expires_at","autotrade_access")
-    exp_candidates=[]
-    for k in ("vip_expires_at","autotrade_expires_at","expires_at"):
-        if k in keys and lic[k]:
-            try: exp_candidates.append(datetime.fromisoformat(str(lic[k])))
-            except Exception: pass
-    exp=max(exp_candidates).isoformat() if exp_candidates else None
+            raw = raw_value("expires_at") if bool(raw_value(fallback_flag)) else None
+        if not raw:
+            return False
+        try:
+            return datetime.fromisoformat(str(raw)) > now
+        except Exception:
+            return False
+
+    vip = alive("vip_expires_at", "vip_access")
+    auto = alive("autotrade_expires_at", "autotrade_access")
+
+    vip_exp = _iso_or_none(raw_value("vip_expires_at"))
+    auto_exp = _iso_or_none(raw_value("autotrade_expires_at"))
+    global_exp = _iso_or_none(raw_value("expires_at"))
+    starts_at = _iso_or_none(raw_value("starts_at"))
+
+    exp_candidates: list[datetime] = []
+    for raw in (vip_exp, auto_exp, global_exp):
+        if not raw:
+            continue
+        try:
+            exp_candidates.append(datetime.fromisoformat(raw))
+        except Exception:
+            pass
+    exp = max(exp_candidates).isoformat() if exp_candidates else None
+
     return AccessSnapshot(
-        bool(vip or auto), vip, auto,
-        str(lic["plan_code"]) if "plan_code" in keys and lic["plan_code"] else None,
-        str(lic["source"]) if "source" in keys and lic["source"] else None,
-        exp, int(lic["id"]),
+        active=bool(vip or auto),
+        vip=vip,
+        autotrade=auto,
+        plan_code=str(raw_value("plan_code")) if raw_value("plan_code") else None,
+        source=str(raw_value("source")) if raw_value("source") else None,
+        expires_at=exp,
+        license_id=int(raw_value("id")),
+        starts_at=starts_at,
+        vip_expires_at=vip_exp or (global_exp if bool(raw_value("vip_access")) else None),
+        autotrade_expires_at=auto_exp or (global_exp if bool(raw_value("autotrade_access")) else None),
     )
 
 
