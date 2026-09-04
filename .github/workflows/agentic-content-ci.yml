@@ -52,6 +52,6 @@ jobs:
         run: python -m compileall -q app run.py run_api.py
 
       - name: Run NEXUS regression tests
-        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py tests/test_public_content_topic_routing.py tests/test_customer_experience.py -q
+        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py tests/test_public_content_topic_routing.py tests/test_customer_experience.py tests/test_growth_risk_edge.py -q
 
 # This workflow intentionally uses dummy runtime configuration and never reads production secrets.
