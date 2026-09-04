@@ -2,10 +2,12 @@ import asyncio
 
 import app.main as core_main
 from app.portal_runtime import install_nexus_hub
+from app.autotrade_user_runtime import install_autotrade_user_experience
 from app.content.runner import main as content_main
 
 
 install_nexus_hub(core_main)
+install_autotrade_user_experience(core_main)
 bot_main = core_main.main
 
 
