@@ -11,7 +11,7 @@
 #include "Include/CommandManager.mqh"
 
 input group "NEXUS Technical Settings"
-input string InpApiBaseUrl="http://127.0.0.1:8080";
+input string InpApiBaseUrl="https://api.nexustrade.ir";
 input int    InpHttpTimeoutMs=5000;
 input int    InpPollSeconds=3;
 input int    InpHeartbeatSeconds=300;
