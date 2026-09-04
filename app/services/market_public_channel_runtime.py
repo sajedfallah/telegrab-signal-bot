@@ -3,29 +3,37 @@ from __future__ import annotations
 """Route NEXUS market editorial automation to the public NEXUS channel.
 
 Product policy:
-  * Morning Brief -> public NEXUS channel only.
-  * Important market/news alerts -> public NEXUS channel only.
-  * High-impact economic alerts -> public NEXUS channel only.
-  * Public market editorial is Persian-only.
-  * News is published as native Telegram text/caption, not as a clickable source headline.
-  * A related article image is attached when OpenGraph/Twitter metadata provides one.
-
-These channel posts are durable editorial content, so they are not scheduled for
-transient-message deletion and they do not refresh private user dashboards.
+  * Public editorial is Persian-only and durable.
+  * Standalone market news is limited to GOLD/XAU, Bitcoin/BTC and Dow Jones/DJIA.
+  * Source names/article links are not shown in public news copy.
+  * Morning publication is exactly an ordered three-part suite:
+      1) NEXUS Morning Brief
+      2) GOLD ICT analysis/scenarios
+      3) Bitcoin ICT analysis/scenarios
+  * High-impact economic alerts remain enabled as separate risk alerts.
+  * Related news imagery is best-effort when article metadata provides it.
 """
 
 import asyncio
 import html
 import logging
-from datetime import datetime
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.services import market_brief_service as market
 from app.services import market_editorial_service as editorial
+from app.services import market_ict_service as ict
 
 
 log = logging.getLogger(__name__)
+
+_FOCUS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("GOLD", re.compile(r"(?:\bgold\b|\bxau(?:usd|usdt)?\b|\bbullion\b)", re.I)),
+    ("BTC", re.compile(r"(?:\bbitcoin\b|\bbtc(?:usd|usdt)?\b)", re.I)),
+    ("DOW", re.compile(r"(?:\bdow\s+jones\b|\bdjia\b|\bdow\s+30\b|\bdow\s+industrials?\b)", re.I)),
+)
 
 
 def _public_target(main: Any) -> Any:
@@ -36,8 +44,58 @@ def _public_target(main: Any) -> Any:
 
 
 def _channel_lang(main: Any) -> str:
-    # Product requirement: public NEXUS market/news editorial is always Persian.
     return "fa"
+
+
+def _focus_score(title: str) -> int:
+    text = str(title or "")
+    score = 0
+    for _, pattern in _FOCUS_PATTERNS:
+        if pattern.search(text):
+            score = max(score, 8)
+    return score
+
+
+def _is_focus_news(item: market.NewsItem) -> bool:
+    return _focus_score(item.title) > 0
+
+
+def _focused_important_recent_news(
+    items: list[market.NewsItem],
+    *,
+    now_utc: datetime | None = None,
+    minimum_score: int = 5,
+    max_age_minutes: int = 180,
+) -> list[market.NewsItem]:
+    """Return only direct GOLD/BTC/Dow headlines, while preserving importance/age gates."""
+    now = now_utc or datetime.now(timezone.utc)
+    cutoff = now - timedelta(minutes=max(1, int(max_age_minutes)))
+    ranked: list[tuple[int, datetime, market.NewsItem]] = []
+    for item in items:
+        focus = _focus_score(item.title)
+        if focus <= 0:
+            continue
+        effective_score = max(int(item.score), focus)
+        if effective_score < max(1, int(minimum_score)):
+            continue
+        if item.published_at and item.published_at < cutoff:
+            continue
+        ranked.append((effective_score, item.published_at or now, item))
+    ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+    return [row[2] for row in ranked]
+
+
+def _strip_source_line(text: str) -> str:
+    """Never expose editorial source labels in public news messages/captions."""
+    lines = []
+    for line in str(text or "").splitlines():
+        compact = line.strip()
+        if compact.startswith("📰 منبع:") or compact.lower().startswith("source:"):
+            continue
+        lines.append(line)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines)
 
 
 async def _send_public(
@@ -49,9 +107,6 @@ async def _send_public(
     image_url: str = "",
 ) -> bool:
     target = _public_target(main)
-
-    # Prefer a real related image when the source article exposes one. If Telegram
-    # cannot fetch that image, fall back to the same Persian native-text post.
     if image_url:
         try:
             await bot.send_photo(
@@ -106,7 +161,7 @@ async def _render_persian_morning_brief(
         now_utc=now_utc,
         local_timezone=main.settings.timezone,
     )[:8]
-    headlines = market.important_recent_news(
+    headlines = _focused_important_recent_news(
         news,
         now_utc=now_utc,
         minimum_score=4,
@@ -144,21 +199,31 @@ async def _render_persian_morning_brief(
 
     lines += ["", "<b>📰 مهم‌ترین خبرهای بازار</b>"]
     written = 0
-    for item, fa_title in zip(headlines, headline_titles):
+    for _, fa_title in zip(headlines, headline_titles):
         if not fa_title:
             continue
-        lines.append(
-            f"• {html.escape(fa_title)} — <b>{html.escape(item.source or 'خبرگزاری')}</b>"
-        )
+        lines.append(f"• {html.escape(fa_title)}")
         written += 1
     if written == 0:
-        lines.append("• در حال حاضر خبر مهم تازه و قابل انتشار به فارسی دریافت نشده است.")
+        lines.append("• در حال حاضر خبر مهم تازه‌ای درباره طلا، بیت‌کوین یا داوجونز دریافت نشده است.")
 
     lines += [
         "",
         "⚠️ اطراف رویدادهای مهم اقتصادی احتمال افزایش نوسان، اسپرد و اسلیپیج وجود دارد.",
     ]
     return "\n".join(lines)
+
+
+def _component_key(component: str) -> str:
+    return f"market_public_morning_{component}_last_date"
+
+
+def _component_done(main: Any, component: str, today_key: str) -> bool:
+    return main.db.get_setting(_component_key(component), "").strip() == today_key
+
+
+def _mark_component(main: Any, component: str, today_key: str) -> None:
+    main.db.set_setting(_component_key(component), today_key)
 
 
 async def _broadcast_brief(
@@ -168,12 +233,54 @@ async def _broadcast_brief(
     news: list[market.NewsItem],
     now_utc: datetime,
 ) -> tuple[int, int]:
-    text = await _render_persian_morning_brief(main, events, news, now_utc)
-    ok = await _send_public(main, bot, text, reason="morning_brief")
-    return (1, 0) if ok else (0, 1)
+    """Publish the ordered 3-message morning suite with per-component retry safety."""
+    today_key = now_utc.astimezone(ZoneInfo(main.settings.timezone)).date().isoformat()
+
+    if not _component_done(main, "brief", today_key):
+        text = await _render_persian_morning_brief(main, events, news, now_utc)
+        if not await _send_public(main, bot, text, reason="morning_brief"):
+            return (0, 1)
+        _mark_component(main, "brief", today_key)
+
+    if not _component_done(main, "gold_ict", today_key):
+        try:
+            gold_text = await ict.build_daily_ict_message(
+                symbol="XAUUSDT",
+                asset_fa="طلای جهانی",
+                now_utc=now_utc,
+                local_timezone=main.settings.timezone,
+            )
+        except Exception as exc:
+            log.warning("morning GOLD ICT preparation failed: %s", exc)
+            return (0, 1)
+        if not await _send_public(main, bot, gold_text, reason="morning_gold_ict"):
+            return (0, 1)
+        _mark_component(main, "gold_ict", today_key)
+
+    if not _component_done(main, "btc_ict", today_key):
+        try:
+            btc_text = await ict.build_daily_ict_message(
+                symbol="BTCUSDT",
+                asset_fa="بیت‌کوین",
+                now_utc=now_utc,
+                local_timezone=main.settings.timezone,
+            )
+        except Exception as exc:
+            log.warning("morning BTC ICT preparation failed: %s", exc)
+            return (0, 1)
+        if not await _send_public(main, bot, btc_text, reason="morning_btc_ict"):
+            return (0, 1)
+        _mark_component(main, "btc_ict", today_key)
+
+    # The core worker marks morning_brief_last_date only when this suite is complete.
+    return (3, 0)
 
 
 async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tuple[int, int]:
+    if not _is_focus_news(item):
+        log.info("market news suppressed by GOLD/BTC/Dow focus policy: key=%s", item.key)
+        return (0, 0)
+
     payload = await editorial.prepare_persian_news_payload(
         item,
         local_timezone=main.settings.timezone,
@@ -189,7 +296,7 @@ async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tu
     ok = await _send_public(
         main,
         bot,
-        payload.text,
+        _strip_source_line(payload.text),
         reason="market_news",
         image_url=payload.image_url,
     )
@@ -221,11 +328,12 @@ async def _broadcast_event_alert(
 
 
 def install(main: Any) -> None:
-    """Replace private-user market broadcasts with Persian public-channel publication."""
+    """Replace private market broadcasts with focused Persian public editorial."""
+    market.important_recent_news = _focused_important_recent_news
     market._broadcast_brief = _broadcast_brief
     market._broadcast_news_item = _broadcast_news_item
     market._broadcast_event_alert = _broadcast_event_alert
     log.info(
-        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa native_text=true image_enrichment=true",
+        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa focus=GOLD,BTC,DOW morning_suite=3 native_text=true image_enrichment=true",
         getattr(main.settings, "public_channel_id", None),
     )
