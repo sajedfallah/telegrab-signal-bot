@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/content-editorial-taxonomy
+      - feature/v065-integrated-release
   pull_request:
     branches:
       - main
@@ -18,9 +19,14 @@ jobs:
       ADMIN_IDS: "123456789"
       PUBLIC_CHANNEL_ID: "-1001234567890"
       PUBLIC_CHANNEL_URL: "https://t.me/nexus_test_public"
+      PUBLIC_CONTENT_CHAT_ID: "-1003982028478"
+      PUBLIC_CONTENT_TOPIC_ID: "8"
+      PUBLIC_CONTENT_URL: "https://t.me/nexus_publik"
       FREE_CHANNEL_URL: "https://t.me/nexus_test_free"
+      FREE_SIGNAL_CHAT_ID: "-1003982028478"
+      FREE_SIGNAL_TOPIC_ID: "16"
       VIP_CHANNEL_ID: "-1003900670697"
-      NEXUS_FOLDER_URL: "https://t.me/+UZgLQ-uYwn5jNGE0"
+      NEXUS_FOLDER_URL: "https://t.me/nexus_publik"
       AUTOTRADE_PUBLIC_API_URL: "https://api.nexustrade.ir"
       SUPPORT_USERNAME: "https://t.me/nexus_support"
       PAYMENT_CARD: "0000000000000000"
@@ -46,6 +52,6 @@ jobs:
         run: python -m compileall -q app run.py run_api.py
 
       - name: Run NEXUS regression tests
-        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py tests/test_customer_experience.py -q
+        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py tests/test_public_content_topic_routing.py tests/test_customer_experience.py -q
 
 # This workflow intentionally uses dummy runtime configuration and never reads production secrets.
