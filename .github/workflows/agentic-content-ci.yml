@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/content-editorial-taxonomy
+      - feature/nexus-hub-academy-channel
   pull_request:
     branches:
       - main
@@ -40,10 +41,19 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
 
-      - name: Compile content package
-        run: python -m compileall -q app/content run.py
+      - name: Compile content, portal and AutoTrade user runtimes
+        run: python -m compileall -q app/content app/portal.py app/portal_runtime.py app/ecosystem.py app/autotrade_user_runtime.py app/autotrade_cleanup_runtime.py app/autotrade/live_event_runtime.py run.py run_api.py
 
       - name: Run agentic content tests
         run: python -m pytest tests/test_agentic_content_mvp.py -q
+
+      - name: Run NEXUS hub and Academy tests
+        run: python -m pytest tests/test_nexus_hub_academy.py -q
+
+      - name: Run AutoTrade user lifecycle tests
+        run: python -m pytest tests/test_autotrade_user_lifecycle.py tests/test_autotrade_cleanup_runtime.py -q
+
+      - name: Run core UI navigation regression
+        run: python -m pytest tests/test_v712_ui_navigation.py -q
 
 # This workflow intentionally uses dummy runtime configuration and never reads production secrets.

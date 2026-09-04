@@ -1,17 +1,15 @@
-# NEXUS v0.6.5 — Closed-position Telegram reply investigation
+# NEXUS v0.6.5 — Closed Position Telegram Reply Root Cause and Verification
 
-## Confirmed root cause
+A broker-confirmed CLOSE could be reconciled before the queued CLOSE reached the Telegram worker. Reconciliation marked the signal `CLOSED` without Telegram publication; the queued CLOSE handler then returned early because the signal was already `CLOSED`. This could consume a durable event without publishing the channel result reply.
 
-The broker history-reconciliation path can mark a signal `CLOSED` without creating a Telegram lifecycle reply. If the event-driven `CLOSE` is processed afterwards, the current handler sees the already-closed row and returns before attempting the channel reply.
+The P0 correction keeps undelivered broker close truth in retryable `CLOSING`, re-enqueues it through the durable MT5 event queue, and lets the ordinary CLOSE path own Telegram delivery and final `CLOSED`. Reconciliation is idempotent and does not requeue after a real CLOSE/MT5_CLOSE Telegram delivery exists.
 
-This creates an order-dependent race:
+The supplied deployment `.env` is tracked only on `fix/v065-close-reply-hardening` for the requested test period and has not been merged to `main`. With that configuration, Bot API identity, FREE/VIP channel resolution, administrator membership, `can_post_messages=True` on both signal channels, and Admin MT5 settings all passed. Secrets are not reproduced here.
 
-`broker CLOSE -> history reconcile -> signal CLOSED -> queued/event CLOSE -> early return -> no Telegram result reply`
+GitHub Actions `Close Reply Hardening` run #8 on runtime code commit `1849a311e1aab9ece70e9e97c36ec93838cbc35e` passed: runtime env validation, live Telegram permission checks, Python compileall, 4 focused CLOSE/reconciliation tests, and the full 230-test Python suite. One unrelated third-party deprecation warning remains. Later commits only adjust CI/docs and do not change the verified runtime/CLOSE code.
 
-Remediation is being implemented on `fix/v065-close-reply-hardening`: broker truth may be known first, but a close without a delivered Telegram result is kept in a retryable terminal state and routed through the durable MT5 trade-event queue before final `CLOSED` state.
+The remaining production gate is a controlled Windows/MT5 demo close observing:
 
-## Additional risks confirmed in current main
+`MT5 CLOSE -> trade-event/history truth -> durable queue -> Telegram reply to original signal -> DB CLOSED`
 
-- `BOTH` currently treats one successful channel reply as sufficient to finalize the signal, so a failure in the other channel is not guaranteed to retry.
-- Missing-anchor recovery is triggered only when both FREE and VIP anchors are absent; a single missing destination anchor can still fail independently.
-- Runtime Telegram credentials/channel permissions cannot be verified from repository contents because `.env` and runtime logs are intentionally not committed. Use the repository diagnostic utility from the hardening branch against the deployed environment.
+Additional delivery hardening remains recommended for `destination=BOTH`: require every required channel to succeed before final `CLOSED`, and recover missing signal anchors per channel rather than only when both anchors are absent.
