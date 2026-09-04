@@ -37,6 +37,9 @@ from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
 from app.customer_experience import install_customer_experience
 from app.customer_menu_runtime import install_customer_menu_runtime
 from app.admin_referral_invite_runtime import install as install_admin_referral_invite
+from app.growth_conversion_runtime import install as install_growth_conversion
+from app.edge_analytics_runtime import install as install_edge_analytics
+from app.risk_admin_runtime import install as install_risk_admin
 from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
 
@@ -59,6 +62,9 @@ install_autotrade_durable_cleanup(main_module)
 install_customer_experience(main_module)
 install_customer_menu_runtime(main_module)
 install_admin_referral_invite(main_module)
+install_growth_conversion(main_module)
+install_edge_analytics(main_module)
+install_risk_admin(main_module)
 
 
 def _restrict_core_catchall_to_private() -> None:
