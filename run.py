@@ -1,17 +1,15 @@
-import asyncio
+﻿import asyncio
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load the real VPS environment before importing app.config. The historical
-# PUBLIC_CHANNEL_* fields are still present in the legacy Settings schema, but
-# the channel itself is retired and no longer gates bot access. Safe inert
-# defaults let deployments remove those obsolete .env entries without breaking
-# process startup; open_access_runtime ensures they are never used for gating.
 load_dotenv(encoding="utf-8-sig")
 os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
 os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
+
+from app.telegram_topic_routing import install_free_topic_routing
+install_free_topic_routing()
 
 import app.main as main_module
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
@@ -29,12 +27,10 @@ from app.services.open_access_runtime import install as install_open_access_runt
 from app.portal_runtime import install_nexus_hub
 from app.autotrade_user_runtime import install_autotrade_user_experience
 from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
+from app.customer_experience import install_customer_experience
+from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
 
-
-# Preserve every production hardening layer first. The NEXUS customer hub is
-# installed last so the new central Telegram-folder UX becomes the final
-# customer-facing navigation surface without removing hardened services.
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
 install_user_ux_hardening(main_module)
@@ -51,11 +47,13 @@ install_nexus_hub(main_module)
 install_autotrade_user_experience(main_module)
 install_autotrade_durable_cleanup(main_module)
 
+install_customer_experience(main_module)
+main_module.router.include_router(topic_admin_router)
+
 bot_main = main_module.main
 
 
 async def _safe_content_runtime() -> None:
-    """Content agents must never be allowed to take the Telegram bot offline."""
     try:
         await content_main()
     except asyncio.CancelledError:
@@ -68,29 +66,38 @@ async def _safe_content_runtime() -> None:
 
 async def main() -> None:
     bot_task = asyncio.create_task(bot_main(), name="nexus-telegram-bot")
-    content_task = asyncio.create_task(_safe_content_runtime(), name="nexus-agentic-content")
+    content_task = asyncio.create_task(
+        _safe_content_runtime(),
+        name="nexus-agentic-content",
+    )
     try:
         await asyncio.gather(bot_task, content_task)
     finally:
         for task in (bot_task, content_task):
             if not task.done():
                 task.cancel()
-        await asyncio.gather(bot_task, content_task, return_exceptions=True)
+        await asyncio.gather(
+            bot_task,
+            content_task,
+            return_exceptions=True,
+        )
 
 
 _LOCK_HANDLE = None
 
 
 def _acquire_single_instance_lock():
-    """Allow only one NEXUS Telegram polling process per machine."""
     temp_root = Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
     lock_path = temp_root / "NEXUS_TelegramBot.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+
     handle = open(lock_path, "a+b")
     handle.seek(0, os.SEEK_END)
+
     if handle.tell() == 0:
         handle.write(b"0")
         handle.flush()
+
     handle.seek(0)
 
     try:
@@ -106,6 +113,7 @@ def _acquire_single_instance_lock():
             "[NEXUS] Telegram Bot is already running on this machine. "
             "Close the existing NEXUS bot process before starting another instance."
         ) from exc
+
     return handle
 
 
