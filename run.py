@@ -2,6 +2,17 @@ import asyncio
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+# Load the real VPS environment before importing app.config. The historical
+# PUBLIC_CHANNEL_* fields are still present in the legacy Settings schema, but
+# the channel itself is retired and no longer gates bot access. Safe inert
+# defaults let deployments remove those obsolete .env entries without breaking
+# process startup; open_access_runtime ensures they are never used for gating.
+load_dotenv(encoding="utf-8-sig")
+os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
+os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
+
 import app.main as main_module
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
 from app.autotrade.result_card_guard import install_result_card_formatter
