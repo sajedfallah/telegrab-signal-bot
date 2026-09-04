@@ -45,3 +45,5 @@ jobs:
 
       - name: Run agentic content tests
         run: python -m pytest tests/test_agentic_content_mvp.py -q
+
+# This workflow intentionally uses dummy runtime configuration and never reads production secrets.
