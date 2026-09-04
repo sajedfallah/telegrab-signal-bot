@@ -8,10 +8,17 @@ PRICING = Path("app/services/pricing_admin_runtime.py").read_text(encoding="utf-
 RUN = Path("run.py").read_text(encoding="utf-8")
 
 
-def test_account_screen_keeps_detailed_validity_outside_account_hub():
+def test_account_screen_is_compact_and_keeps_detailed_validity_outside_account_hub():
     assert '"account"' in ACCOUNT
-    assert "My License" in ACCOUNT
-    assert "مجوز من" in ACCOUNT
+
+    # Product rule: AutoTrade management and Buy/Renew are Home actions, not
+    # duplicate Account-menu buttons.
+    assert "client_autotrade_access" not in ACCOUNT
+    assert '("💎 خرید / تمدید اشتراک", "vip")' not in ACCOUNT
+    assert '("💎 Buy / Renew Subscription", "vip")' not in ACCOUNT
+
+    # Account may summarize entitlement state, but it must not expose detailed
+    # license validity/key internals.
     assert "autotrade_expires_at" not in ACCOUNT
     assert "remaining_duration" not in ACCOUNT
     assert "license_key" not in ACCOUNT
