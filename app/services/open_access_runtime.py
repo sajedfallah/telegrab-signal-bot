@@ -4,14 +4,15 @@ from __future__ import annotations
 
 The former Telegram join gate was a customer-onboarding requirement. The public
 channel has now been retired, so bot access must no longer depend on
-``get_chat_member`` or on ``PUBLIC_CHANNEL_ID``.  This runtime keeps old buttons
-safe: stale ``check_public`` callbacks simply return the user to the current
-NEXUS access center.
+``get_chat_member`` or on ``PUBLIC_CHANNEL_ID``. This runtime keeps legacy paths
+safe: stale membership callbacks and join-gate screens return users to the
+current NEXUS access center instead of referencing the deleted channel.
 """
 
 from typing import Any
 
 from aiogram import F
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 def _remove_named_handler(observer: Any, name: str) -> None:
@@ -32,13 +33,13 @@ def install(main: Any) -> None:
         main.db.upsert_user(user.id, user.username, user.first_name)
 
         # Keep the legacy DB onboarding flag satisfied for referral/account
-        # compatibility.  It no longer means Telegram-channel membership.
+        # compatibility. It no longer means Telegram-channel membership.
         try:
             main.db.mark_public_joined(user.id, True)
         except Exception:
             main.log.exception("could not mark open-access onboarding for %s", user.id)
 
-        # Referrals used to be rewarded after the public membership check.  With
+        # Referrals used to be rewarded after the public membership check. With
         # the gate retired, successful bot onboarding is the equivalent event.
         try:
             await main.maybe_reward_referral(bot, int(user.id))
@@ -55,6 +56,19 @@ def install(main: Any) -> None:
         await ensure_user_open(cb, bot)
         return True
 
+    def retired_join_gate(lang: str) -> InlineKeyboardMarkup:
+        """Never expose the deleted public-channel URL from a stale gate path."""
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=("🏠 ورود به NEXUS" if lang == "fa" else "🏠 Enter NEXUS"),
+                        callback_data="main",
+                    )
+                ]
+            ]
+        )
+
     async def show_gate_retired(bot: Any, user_id: int, chat_id: int) -> None:
         # Any stale code path that still asks for the old gate is redirected to
         # the entitlement-aware NEXUS home screen.
@@ -64,6 +78,7 @@ def install(main: Any) -> None:
     main.check_public_member = check_public_member_retired
     main.ensure_user = ensure_user_open
     main.gated = gated_open
+    main.join_gate = retired_join_gate
     main.show_gate = show_gate_retired
 
     # Old Telegram messages may still have the historical "check membership"
@@ -88,5 +103,5 @@ def install(main: Any) -> None:
     main.router.callback_query.register(retired_check_public, F.data == "check_public")
     main._NEXUS_OPEN_ACCESS_INSTALLED = True
     main.log.info(
-        "[NEXUS][OPEN_ACCESS][INSTALLED] mandatory-public-membership=false legacy-check-public=redirect"
+        "[NEXUS][OPEN_ACCESS][INSTALLED] mandatory-public-membership=false legacy-gate=retired legacy-check-public=redirect"
     )
