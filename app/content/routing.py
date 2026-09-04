@@ -6,13 +6,10 @@ from urllib.parse import urlparse
 from ..ecosystem import ecosystem_settings
 
 
+# Only explicit educational lessons belong to Academy.
+# All other editorial categories publish to the NEXUS Public channel.
 ACADEMY_CATEGORY_KEYS = frozenset({
     "ict_education",
-    "quick_tip",
-    "tools",
-    "risk",
-    "trade_review",
-    "mindset",
 })
 
 
