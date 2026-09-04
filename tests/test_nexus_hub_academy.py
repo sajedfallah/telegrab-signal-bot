@@ -55,6 +55,12 @@ def test_autotrade_user_gets_direct_autotrade_control_only():
     assert not any("سیگنال عمومی" in text or "سیگنال VIP" in text for text in labels)
 
 
+def test_legacy_signal_chooser_is_not_exposed_by_new_hub():
+    for has_autotrade in (False, True):
+        callbacks = _callbacks(build_nexus_main_menu("fa", has_autotrade=has_autotrade))
+        assert "client_signals" not in callbacks
+
+
 def test_qr_generator_returns_nontrivial_png():
     data = build_nexus_folder_qr(DEFAULT_NEXUS_FOLDER_URL)
     assert data.startswith(b"\x89PNG\r\n\x1a\n")
