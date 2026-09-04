@@ -19,7 +19,9 @@ jobs:
       PUBLIC_CHANNEL_ID: "-1001234567890"
       PUBLIC_CHANNEL_URL: "https://t.me/nexus_test_public"
       FREE_CHANNEL_URL: "https://t.me/nexus_test_free"
-      VIP_CHANNEL_ID: "-1009876543210"
+      VIP_CHANNEL_ID: "-1003900670697"
+      NEXUS_FOLDER_URL: "https://t.me/+UZgLQ-uYwn5jNGE0"
+      AUTOTRADE_PUBLIC_API_URL: "https://api.nexustrade.ir"
       SUPPORT_USERNAME: "https://t.me/nexus_support"
       PAYMENT_CARD: "0000000000000000"
       PAYMENT_OWNER: "NEXUS"
@@ -43,7 +45,7 @@ jobs:
       - name: Compile NEXUS Python sources
         run: python -m compileall -q app run.py run_api.py
 
-      - name: Run agentic content and FREE topic routing tests
-        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py -q
+      - name: Run NEXUS regression tests
+        run: python -m pytest tests/test_agentic_content_mvp.py tests/test_free_signal_topic_routing.py tests/test_customer_experience.py -q
 
 # This workflow intentionally uses dummy runtime configuration and never reads production secrets.
