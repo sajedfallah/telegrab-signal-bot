@@ -702,17 +702,71 @@ public:
       double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
       if(before<=0 || minv<=0) { m_last_error="invalid broker position volume metadata"; return false; }
       if(step<=0) step=minv;
-      close_volume=MathFloor(close_volume/step+1e-9)*step;
-      close_volume=NormalizeDouble(close_volume,8);
-      if(close_volume<minv) { m_last_error=StringFormat("partial close below minimum volume: requested=%.8f min=%.8f step=%.8f",close_volume,minv,step); return false; }
-      if(close_volume>before) close_volume=before;
-      double remain=before-close_volume;
+
+      // Broker-volume-grid aware partial close.
+      // Example: 0.02 position, 30% requested = 0.006 while broker step/min
+      // is 0.01. The old floor-to-step policy produced 0.00 forever.
+      // Select the nearest executable broker volume while preserving at least
+      // one valid minimum-volume runner whenever this is a partial target.
+      double requested_close=close_volume;
       double eps=MathMax(step*0.1,1e-8);
-      if(close_volume<before && remain+eps<minv)
+      bool full_close_requested=(requested_close>=before-eps);
+
+      if(full_close_requested)
         {
-         m_last_error=StringFormat("partial close would leave invalid residual volume: before=%.8f close=%.8f remain=%.8f min=%.8f step=%.8f",before,close_volume,remain,minv,step);
-         return false;
+         close_volume=before;
         }
+      else
+        {
+         double max_partial=before-minv;
+
+         // There is no legal way to split a one-minimum-lot position.
+         if(max_partial+eps<minv)
+           {
+            m_last_error=StringFormat(
+               "partial close unavailable on broker volume grid: before=%.8f requested=%.8f min=%.8f step=%.8f",
+               before,requested_close,minv,step
+            );
+            return false;
+           }
+
+         double units=MathRound(requested_close/step);
+         close_volume=NormalizeDouble(units*step,8);
+
+         if(close_volume<minv)
+            close_volume=minv;
+
+         if(close_volume>max_partial)
+            close_volume=MathFloor(max_partial/step+1e-9)*step;
+
+         close_volume=NormalizeDouble(close_volume,8);
+
+         double adaptive_remain=before-close_volume;
+
+         if(close_volume<minv || adaptive_remain+eps<minv)
+           {
+            m_last_error=StringFormat(
+               "partial close has no executable broker-grid volume: before=%.8f requested=%.8f adapted=%.8f remain=%.8f min=%.8f step=%.8f",
+               before,requested_close,close_volume,adaptive_remain,minv,step
+            );
+            return false;
+           }
+
+         if(MathAbs(close_volume-requested_close)>eps)
+           {
+            Print(
+               "NEXUS PARTIAL ADAPTIVE VOLUME | ticket=",(string)ticket,
+               " symbol=",symbol,
+               " before=",DoubleToString(before,8),
+               " requested=",DoubleToString(requested_close,8),
+               " adapted=",DoubleToString(close_volume,8),
+               " min=",DoubleToString(minv,8),
+               " step=",DoubleToString(step,8)
+            );
+           }
+        }
+
+      double remain=before-close_volume;
 
       // Final-target/full-close path. Never mark success until MT5 confirms
       // that the position ticket is actually gone.
