@@ -1,7 +1,17 @@
 import asyncio
 
-from app.main import main as bot_main
+from app.telegram_topic_routing import install_free_topic_routing
+
+# Install the logical FREE -> community topic mapping before app.main imports
+# and constructs any aiogram Bot instances.
+install_free_topic_routing()
+
+from app.main import main as bot_main, router as bot_router
+from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
+
+# Admin-only /topicid and /setfreetopic diagnostics.
+bot_router.include_router(topic_admin_router)
 
 
 async def main() -> None:
