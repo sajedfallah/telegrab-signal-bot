@@ -7,10 +7,11 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.types import BufferedInputFile
 
-from ..config import settings
+from ..config import settings as core_settings
 from . import repository
 from .agents import BrandGuardianAgent, ResearchAgent, TopicPlannerAgent, WriterAgent
 from .ai_client import OpenAICompatibleTextClient
+from .settings import content_settings
 from .visuals import render_post_card
 
 log = logging.getLogger("nexus-content-pipeline")
@@ -19,10 +20,10 @@ log = logging.getLogger("nexus-content-pipeline")
 class ContentPipeline:
     def __init__(self):
         ai = OpenAICompatibleTextClient(
-            settings.content_ai_api_key,
-            settings.content_text_model,
-            settings.content_ai_base_url,
-            settings.content_ai_provider,
+            content_settings.ai_api_key,
+            content_settings.text_model,
+            content_settings.ai_base_url,
+            content_settings.ai_provider,
         )
         self.planner = TopicPlannerAgent()
         self.researcher = ResearchAgent()
@@ -55,9 +56,9 @@ class ContentPipeline:
                 str(image_path),
             )
 
-            if settings.content_approval_mode:
+            if content_settings.approval_mode:
                 preview_message_id: int | None = None
-                for admin_id in settings.admin_ids:
+                for admin_id in core_settings.admin_ids:
                     photo = BufferedInputFile(image_bytes, filename=image_path.name)
                     message = await bot.send_photo(
                         admin_id,
@@ -73,11 +74,11 @@ class ContentPipeline:
 
             photo = BufferedInputFile(image_bytes, filename=image_path.name)
             message = await bot.send_photo(
-                settings.public_channel_id,
+                core_settings.public_channel_id,
                 photo=photo,
                 caption=caption,
                 parse_mode=ParseMode.HTML,
-                protect_content=settings.content_protect_content,
+                protect_content=content_settings.protect_content,
             )
             repository.mark_published(scheduled_date, int(message.message_id))
             return True
