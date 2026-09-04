@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-"""Destructive-but-scoped reset for the final NEXUS trading E2E test.
+"""Destructive-but-scoped reset for the final NEXUS trading baseline.
 
-This utility resets the *trading/signal* runtime to a clean factory-test state
-without deleting users, licenses, payments, channel configuration, or MT5
+This utility resets the *trading/signal* runtime to a clean production-start
+state without deleting users, licenses, payments, channel configuration, or MT5
 account authorization. It is intended to be run only while the Telegram bot,
 FastAPI process, and MT5 AutoTrade EA are stopped/detached.
 
@@ -11,6 +11,7 @@ What it resets:
 - all signals and tables that reference signals;
 - signal numbering (SQLite AUTOINCREMENT -> next id/code is NX-0001);
 - MT5 notification/execution/session/live-state caches;
+- signal-report delivery/dedup history so reports start from the new zero point;
 - recorded Telegram signal/result message pointers;
 - best-effort deletion of recorded FREE/VIP Telegram signal lifecycle messages;
 - generated AutoTrade chart cache files;
@@ -54,6 +55,7 @@ EXPLICIT_RUNTIME_TABLES = {
     "mt5_signal_publication_assets",
     "mt5_live_state",
     "mt5_heartbeats_v060",
+    "report_dispatches",
 }
 
 
@@ -79,7 +81,7 @@ def _signal_related_tables(con: sqlite3.Connection) -> set[str]:
     related = {"signals"} if "signals" in all_tables else set()
 
     # Follow declared FK dependencies transitively so new signal-owned tables
-    # added by future migrations are automatically included in the test reset.
+    # added by future migrations are automatically included in the reset.
     changed = True
     while changed:
         changed = False
@@ -92,7 +94,7 @@ def _signal_related_tables(con: sqlite3.Connection) -> set[str]:
                 related.add(table)
                 changed = True
 
-    # Compatibility/migration tables may intentionally lack FKs.
+    # Compatibility/migration/runtime tables may intentionally lack FKs.
     related.update(t for t in all_tables if t.startswith("signal_") or t in EXPLICIT_RUNTIME_TABLES)
     return related & all_tables
 
@@ -282,7 +284,7 @@ def _verify_reset(con: sqlite3.Connection, related_tables: set[str]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Reset NEXUS trading state for final E2E test")
+    parser = argparse.ArgumentParser(description="Reset NEXUS trading state for final production baseline")
     parser.add_argument("--confirm", required=True, help=f"must equal {CONFIRM_TEXT}")
     parser.add_argument(
         "--skip-telegram-delete",
@@ -343,8 +345,9 @@ def main() -> int:
         print(f"Rows removed: {sum(prior_counts.values())}")
         print(f"AutoTrade asset files removed: {removed_assets}")
         print("Signal sequence: RESET (next inserted signal id/code will be 1 / NX-0001)")
+        print("Signal report baseline: RESET (old report dispatch/dedup history removed)")
         print("Commercial state preserved: users/licenses/payments/account bindings/config")
-        print("IMPORTANT: restart/re-attach the MT5 EA before testing so its in-memory after_id counters return to 0.")
+        print("IMPORTANT: restart/re-attach the MT5 EA before trading so its in-memory after_id counters return to 0.")
         return 0
     finally:
         con.close()
