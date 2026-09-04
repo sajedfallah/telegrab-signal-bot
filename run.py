@@ -3,7 +3,6 @@ import os
 from pathlib import Path
 
 import app.main as main_module
-from app.main import main
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
 from app.autotrade.result_card_guard import install_result_card_formatter
 from app.ux_runtime_patch import install as install_user_ux_hardening
@@ -14,10 +13,15 @@ from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
 from app.services.market_brief_service import install as install_market_brief_runtime
 from app.services.market_public_channel_runtime import install as install_market_public_channel_runtime
+from app.portal_runtime import install_nexus_hub
+from app.autotrade_user_runtime import install_autotrade_user_experience
+from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
+from app.content.runner import main as content_main
 
 
-# app.main must be fully imported before runtime lifecycle helpers are injected
-# into its module globals. Calling these here is deterministic and idempotent.
+# Preserve every production hardening layer first. The NEXUS customer hub is
+# installed last so the new central Telegram-folder UX becomes the final
+# customer-facing navigation surface without removing hardened services.
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
 install_user_ux_hardening(main_module)
@@ -28,18 +32,42 @@ install_account_runtime(main_module)
 install_report_runtime(main_module)
 install_market_brief_runtime(main_module)
 install_market_public_channel_runtime(main_module)
+install_nexus_hub(main_module)
+install_autotrade_user_experience(main_module)
+install_autotrade_durable_cleanup(main_module)
+
+bot_main = main_module.main
+
+
+async def _safe_content_runtime() -> None:
+    """Content agents must never be allowed to take the Telegram bot offline."""
+    try:
+        await content_main()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        main_module.log.exception(
+            "[NEXUS] Agentic content runtime failed; Telegram bot remains online"
+        )
+
+
+async def main() -> None:
+    bot_task = asyncio.create_task(bot_main(), name="nexus-telegram-bot")
+    content_task = asyncio.create_task(_safe_content_runtime(), name="nexus-agentic-content")
+    try:
+        await asyncio.gather(bot_task, content_task)
+    finally:
+        for task in (bot_task, content_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(bot_task, content_task, return_exceptions=True)
 
 
 _LOCK_HANDLE = None
 
 
 def _acquire_single_instance_lock():
-    """Allow only one NEXUS Telegram polling process per machine.
-
-    Telegram permits only one long-polling getUpdates consumer per bot token.
-    Using the OS temp directory makes the lock common to old/new project
-    checkouts instead of tying it to a particular repository folder.
-    """
+    """Allow only one NEXUS Telegram polling process per machine."""
     temp_root = Path(os.environ.get("TEMP") or os.environ.get("TMP") or ".")
     lock_path = temp_root / "NEXUS_TelegramBot.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
