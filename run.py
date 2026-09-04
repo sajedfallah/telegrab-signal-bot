@@ -15,6 +15,9 @@ repair_payment_owner_env()
 from app.telegram_topic_routing import install_free_topic_routing
 install_free_topic_routing()
 
+from app.signal_code_runtime import install_two_digit_signal_codes
+install_two_digit_signal_codes()
+
 import app.main as main_module
 from app.autotrade.event_time_guard import install_mt5_event_datetime_helper
 from app.autotrade.result_card_guard import install_result_card_formatter
