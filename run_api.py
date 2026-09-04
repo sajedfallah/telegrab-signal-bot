@@ -2,7 +2,14 @@ import os
 from dotenv import load_dotenv
 import uvicorn
 
+from app.telegram_topic_routing import install_free_topic_routing
+
 load_dotenv(encoding="utf-8-sig")
+
+# MT5-admin publication is performed inside app.autotrade.api with aiogram Bot.
+# Install the same logical FREE -> community topic route used by run.py before
+# uvicorn imports app.autotrade.api from the application string below.
+install_free_topic_routing()
 
 if __name__ == "__main__":
     uvicorn.run(
