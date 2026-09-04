@@ -160,7 +160,12 @@ def test_runtime_installation_and_config_contracts_are_wired():
     env = (ROOT / ".env.example").read_text(encoding="utf-8")
     source = (ROOT / "app" / "autotrade_user_runtime.py").read_text(encoding="utf-8")
 
-    assert "install_autotrade_user_experience(core_main)" in run_py
+    # The integrated production runtime uses ``main_module`` while the earlier
+    # feature branch used ``core_main``. Verify the installation semantically
+    # instead of coupling the test to a local import alias.
+    assert "install_autotrade_user_experience(" in run_py
+    assert "install_autotrade_durable_cleanup(" in run_py
+    assert "install_nexus_hub(" in run_py
     assert "install_live_snapshot_event_bridge()" in run_api
     assert "AUTOTRADE_NOTIFICATION_TTL_SECONDS" in env
     assert "AUTOTRADE_NOTIFICATION_POLL_SECONDS=0.5" in env
