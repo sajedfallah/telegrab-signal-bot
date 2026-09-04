@@ -6,10 +6,23 @@ from urllib.parse import urlparse
 from ..ecosystem import ecosystem_settings
 
 
-# Only explicit educational lessons belong to Academy.
-# All other editorial categories publish to the NEXUS Public channel.
+# Public is intentionally strict: only these five editorial categories may
+# publish to the general NEXUS channel. Everything educational is routed to
+# Academy. Unknown/new categories fail closed until explicitly classified.
+PUBLIC_CATEGORY_KEYS = frozenset({
+    "daily_analysis",
+    "quick_tip",
+    "market_news",
+    "important_news",
+    "news_alert",
+})
+
 ACADEMY_CATEGORY_KEYS = frozenset({
     "ict_education",
+    "tools",
+    "risk",
+    "trade_review",
+    "mindset",
 })
 
 
@@ -22,11 +35,17 @@ class ChannelDestination:
 
 
 def route_key_for_category(category_key: str) -> str:
-    return "academy" if str(category_key or "").strip() in ACADEMY_CATEGORY_KEYS else "public"
+    key = str(category_key or "").strip()
+    if key in PUBLIC_CATEGORY_KEYS:
+        return "public"
+    if key in ACADEMY_CATEGORY_KEYS:
+        return "academy"
+    raise ValueError(f"unclassified content category: {key or '<empty>'}")
 
 
 def route_label_fa(category_key: str) -> str:
-    return "NEXUS Academy" if route_key_for_category(category_key) == "academy" else "کانال عمومی NEXUS"
+    route = route_key_for_category(category_key)
+    return "NEXUS Academy" if route == "academy" else "کانال عمومی NEXUS"
 
 
 def _public_username_target(url: str) -> str | None:
