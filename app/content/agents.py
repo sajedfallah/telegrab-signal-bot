@@ -6,7 +6,14 @@ from dataclasses import replace
 from . import repository
 from .ai_client import OpenAICompatibleTextClient, extract_json_object
 from .catalog import ICT_SYLLABUS, TEMPLATES
-from .models import ContentDraft, Topic
+from .models import ContentDraft, Topic, VisualBrief
+from .taxonomy import (
+    build_hashtags,
+    category,
+    category_for_template,
+    make_post_id,
+    tracking_hashtag,
+)
 
 
 class TopicPlannerAgent:
@@ -35,8 +42,13 @@ class WriterAgent:
     def __init__(self, ai: OpenAICompatibleTextClient | None = None):
         self.ai = ai
 
-    async def write(self, scheduled_date: str, topic: Topic) -> ContentDraft:
-        base = ContentDraft(
+    def _base(self, scheduled_date: str, topic: Topic) -> ContentDraft:
+        cat = category_for_template(topic.template_key)
+        post_id = make_post_id(cat.key, scheduled_date, topic.slug)
+        combined = " ".join((topic.title_fa, topic.definition_fa, *topic.key_points_fa, topic.example_fa))
+        hashtags = build_hashtags(cat.key, topic.slug, combined)
+        hashtags.append(tracking_hashtag(post_id))
+        return ContentDraft(
             scheduled_date=scheduled_date,
             template_key=topic.template_key,
             topic_slug=topic.slug,
@@ -46,8 +58,14 @@ class WriterAgent:
             key_points=list(topic.key_points_fa),
             example=topic.example_fa,
             cta="این آموزش برای یادگیری است، نه توصیه مالی. قبل از ورود، Context و مدیریت ریسک را بررسی کن.",
-            hashtags=["#NEXUS", "#ICT", "#آموزش_ترید"],
+            hashtags=hashtags,
+            category_key=cat.key,
+            post_id=post_id,
+            priority=max(50, cat.min_priority),
         )
+
+    async def write(self, scheduled_date: str, topic: Topic) -> ContentDraft:
+        base = self._base(scheduled_date, topic)
         if not self.ai or not self.ai.enabled:
             return base
 
@@ -74,7 +92,7 @@ class WriterAgent:
             points = [str(item).strip() for item in obj.get("key_points", []) if str(item).strip()][:4]
             if len(points) < 3:
                 points = base.key_points
-            return replace(
+            draft = replace(
                 base,
                 title=str(obj.get("title") or base.title).strip()[:80],
                 definition=str(obj.get("definition") or base.definition).strip()[:420],
@@ -82,12 +100,51 @@ class WriterAgent:
                 example=str(obj.get("example") or base.example).strip()[:360],
                 cta=str(obj.get("cta") or base.cta).strip()[:220],
             )
+            combined = " ".join((draft.title, draft.definition, *draft.key_points, draft.example))
+            draft.hashtags = build_hashtags(draft.category_key, draft.topic_slug, combined)
+            draft.hashtags.append(tracking_hashtag(draft.post_id))
+            return draft
         except Exception:
             return base
 
 
+class CreativeDirectorAgent:
+    """Create a topic-aware visual direction while keeping the NEXUS frame fixed."""
+
+    _MOTIFS = {
+        "fvg": "clean three-candle imbalance with a luminous fair-value-gap zone",
+        "order_block": "institutional order-block zone before a strong displacement move",
+        "liquidity": "equal highs and equal lows with liquidity pools and a sweep",
+        "mss": "clear market-structure shift after a liquidity sweep",
+        "displacement": "powerful directional displacement candles leaving imbalance",
+        "premium_discount": "dealing range split into premium and discount halves",
+        "ote": "retracement area with subtle Fibonacci geometry and confluence",
+        "breaker": "failed order block turning into a breaker on retest",
+        "pdh_pdl": "previous-day high and low as clean intraday liquidity landmarks",
+        "session_liquidity": "Asia, London and New York session liquidity ranges",
+    }
+
+    def direct(self, draft: ContentDraft) -> VisualBrief:
+        cat = category(draft.category_key)
+        motif = self._MOTIFS.get(draft.topic_slug, "premium institutional trading market structure")
+        prompt = (
+            "Create a premium editorial trading visual for NEXUS. "
+            "Dark navy and charcoal palette, refined cyan and warm gold accents, cinematic depth, "
+            "professional fintech art direction, sophisticated and realistic, no logos, no readable text, "
+            "no watermarks, no people, no fake news screenshots. "
+            f"The educational concept is: {motif}. "
+            f"Content category: {cat.label_fa}. "
+            "Leave clean negative space near the top and lower third because the NEXUS compositor will overlay typography. "
+            "Vertical 4:5 composition, high contrast, premium Telegram editorial artwork."
+        )
+        draft.metadata["visual_prompt"] = prompt
+        draft.metadata["visual_motif"] = motif
+        draft.metadata["category_label"] = cat.label_fa
+        return VisualBrief(prompt=prompt, motif=motif)
+
+
 class BrandGuardianAgent:
-    """Hard quality gate for language, safety and NEXUS brand consistency."""
+    """Hard quality gate for language, sourcing and NEXUS brand consistency."""
 
     BLOCKED = (
         "سود تضمینی",
@@ -116,4 +173,11 @@ class BrandGuardianAgent:
             errors.append("not enough key points")
         if draft.template_key not in TEMPLATES:
             errors.append("unknown visual template")
+        if not draft.post_id:
+            errors.append("missing tracking post id")
+        if not any(tag.startswith("#NX_") for tag in draft.hashtags):
+            errors.append("missing tracking hashtag")
+        cat = category(draft.category_key)
+        if cat.requires_source and not draft.source_urls:
+            errors.append(f"source URL required for {cat.key}")
         return not errors, errors
