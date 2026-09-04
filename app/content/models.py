@@ -49,6 +49,13 @@ class ContentDraft:
         value = " ".join(str(value or "").split())
         return value if len(value) <= limit else value[: max(1, limit - 1)].rstrip() + "…"
 
+    def _caption_tags(self) -> str:
+        tracking = next((tag for tag in self.hashtags if tag.startswith("#NX_")), "")
+        regular = [tag for tag in self.hashtags if tag != tracking][:7]
+        if tracking:
+            regular.append(tracking)
+        return " ".join(regular[:8])
+
     def caption(self, permalink: str | None = None) -> str:
         cat = category(self.category_key)
         title = escape(self._clip(self.title, 76))
@@ -56,19 +63,15 @@ class ContentDraft:
         points = [escape(self._clip(item, 82)) for item in self.key_points[:4]]
         example = escape(self._clip(self.example, 145)) if self.example else ""
         cta = escape(self._clip(self.cta, 105)) if self.cta else ""
-        tags = " ".join(self.hashtags[:8])
+        tags = self._caption_tags()
 
-        blocks: list[str] = [
+        required: list[str] = [
             f"<b>{cat.emoji} NEXUS | {escape(cat.label_fa)}</b>",
             f"<b>{title}</b>",
             definition,
         ]
         if points:
-            blocks.append("\n".join(f"• {point}" for point in points))
-        if example:
-            blocks.append(f"<b>مثال:</b> {example}")
-        if cta:
-            blocks.append(cta)
+            required.append("\n".join(f"• {point}" for point in points))
 
         source_urls = safe_source_urls(self.source_urls)
         if source_urls:
@@ -76,7 +79,13 @@ class ContentDraft:
                 f'<a href="{escape(url, quote=True)}">منبع {index}</a>'
                 for index, url in enumerate(source_urls[:2], start=1)
             )
-            blocks.append(f"🔗 {source_links}")
+            required.append(f"🔗 {source_links}")
+
+        optional: list[str] = []
+        if example:
+            optional.append(f"<b>مثال:</b> {example}")
+        if cta:
+            optional.append(cta)
 
         related = []
         for label, url in self.related_links[:2]:
@@ -84,27 +93,46 @@ class ContentDraft:
             if safe_urls:
                 related.append(f'<a href="{escape(safe_urls[0], quote=True)}">{escape(self._clip(label, 42))}</a>')
         if related:
-            blocks.append("📚 مرتبط: " + " | ".join(related))
+            optional.append("📚 مرتبط: " + " | ".join(related))
 
         if tags:
-            blocks.append(tags)
+            required.append(tags)
         if self.post_id:
-            blocks.append(f"🆔 <code>{escape(self.post_id)}</code>")
+            required.append(f"🆔 <code>{escape(self.post_id)}</code>")
         if permalink:
             valid = safe_source_urls([permalink])
             if valid:
-                blocks.append(f'🔗 <a href="{escape(valid[0], quote=True)}">لینک مستقیم پست</a>')
+                required.append(f'🔗 <a href="{escape(valid[0], quote=True)}">لینک مستقیم پست</a>')
 
+        blocks = required[:4] + optional + required[4:]
         caption = "\n\n".join(block for block in blocks if block).strip()
         if len(caption) <= 1010:
             return caption
 
-        # Preserve valid HTML if the complete caption is too long. Drop the
-        # least important prose blocks instead of slicing through HTML tags.
-        for optional in (f"<b>مثال:</b> {example}" if example else "", cta):
-            if optional and optional in blocks:
-                blocks.remove(optional)
-                caption = "\n\n".join(block for block in blocks if block).strip()
-                if len(caption) <= 1010:
-                    return caption
-        return "\n\n".join(block for block in blocks if block).strip()[:1010]
+        # Remove optional prose first, preserving sources, tags, post ID and link.
+        blocks = required
+        caption = "\n\n".join(block for block in blocks if block).strip()
+        if len(caption) <= 1010:
+            return caption
+
+        # Compact form: clip text before escaping, never slice serialized HTML.
+        compact_definition = escape(self._clip(self.definition, 150))
+        compact_points = [escape(self._clip(item, 60)) for item in self.key_points[:3]]
+        compact: list[str] = [
+            f"<b>{cat.emoji} NEXUS | {escape(cat.label_fa)}</b>",
+            f"<b>{escape(self._clip(self.title, 60))}</b>",
+            compact_definition,
+        ]
+        if compact_points:
+            compact.append("\n".join(f"• {point}" for point in compact_points))
+        if source_urls:
+            compact.append(required[4] if len(required) > 4 and required[4].startswith("🔗") else f"🔗 {source_links}")
+        if tags:
+            compact.append(tags)
+        if self.post_id:
+            compact.append(f"🆔 <code>{escape(self.post_id)}</code>")
+        if permalink:
+            valid = safe_source_urls([permalink])
+            if valid:
+                compact.append(f'🔗 <a href="{escape(valid[0], quote=True)}">لینک مستقیم پست</a>')
+        return "\n\n".join(block for block in compact if block).strip()
