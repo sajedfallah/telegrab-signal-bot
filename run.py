@@ -1,7 +1,12 @@
 import asyncio
 
-from app.main import main as bot_main
+import app.main as core_main
+from app.portal_runtime import install_nexus_hub
 from app.content.runner import main as content_main
+
+
+install_nexus_hub(core_main)
+bot_main = core_main.main
 
 
 async def main() -> None:
