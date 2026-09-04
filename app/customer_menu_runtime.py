@@ -6,6 +6,7 @@ Product decisions implemented here:
 - «ورود به نکسوس / Enter NEXUS» is the first home-menu entry.
 - The generic Signals menu is removed from the customer home screen.
 - Only the entitlement-gated VIP Signal Channel remains as the signal entry.
+- AutoTrade status is visible directly below VIP access.
 - FAQ is no longer a top-level item; it lives inside Support.
 
 The existing customer_experience module remains authoritative for VIP access,
@@ -20,6 +21,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from . import customer_experience as cx
 from .config import settings
+from .services import license_service
 
 router = Router(name="nexus-customer-menu-runtime")
 
@@ -31,6 +33,7 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
         rows = [
             [InlineKeyboardButton(text="🚪 ورود به نکسوس", url=cx.NEXUS_FOLDER_URL)],
             [InlineKeyboardButton(text=f"{vip_icon} کانال سیگنال VIP", callback_data="vip_channel_access")],
+            [InlineKeyboardButton(text="⚙️ وضعیت AutoTrade", callback_data="customer_autotrade_status")],
             [
                 InlineKeyboardButton(text="💎 خرید اشتراک", callback_data="vip"),
                 InlineKeyboardButton(text="👤 حساب من", callback_data="account"),
@@ -47,6 +50,7 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
         rows = [
             [InlineKeyboardButton(text="🚪 Enter NEXUS", url=cx.NEXUS_FOLDER_URL)],
             [InlineKeyboardButton(text=f"{vip_icon} VIP Signal Channel", callback_data="vip_channel_access")],
+            [InlineKeyboardButton(text="⚙️ AutoTrade Status", callback_data="customer_autotrade_status")],
             [
                 InlineKeyboardButton(text="💎 Buy Subscription", callback_data="vip"),
                 InlineKeyboardButton(text="👤 My Account", callback_data="account"),
@@ -107,6 +111,58 @@ def faq_menu(lang: str) -> InlineKeyboardMarkup:
             ]
         )
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+@router.callback_query(lambda cb: cb.data == "customer_autotrade_status")
+async def customer_autotrade_status(cb: CallbackQuery, bot: Bot) -> None:
+    from . import main as core
+
+    if not await core.gated(cb, bot):
+        return
+
+    lang = core.get_lang(cb.from_user.id)
+    access = license_service.snapshot(cb.from_user.id)
+    active = bool(access.autotrade)
+    await cb.answer()
+
+    if lang == "fa":
+        status = "🟢 فعال" if active else "🔴 غیرفعال"
+        text = (
+            "<b>⚙️ وضعیت AutoTrade</b>\n\n"
+            f"وضعیت سرویس: <b>{status}</b>\n\n"
+            + (
+                "برای مشاهده حساب متصل، معاملات و تنظیمات AutoTrade روی دکمه مدیریت بزنید."
+                if active
+                else "برای فعال‌سازی AutoTrade از منوی اصلی «خرید اشتراک» استفاده کنید."
+            )
+        )
+        rows = []
+        if active:
+            rows.append([InlineKeyboardButton(text="⚙️ مدیریت AutoTrade", callback_data="client_autotrade_access")])
+        rows.append([InlineKeyboardButton(text="🏠 منوی اصلی", callback_data="main")])
+    else:
+        status = "🟢 Active" if active else "🔴 Inactive"
+        text = (
+            "<b>⚙️ AutoTrade Status</b>\n\n"
+            f"Service status: <b>{status}</b>\n\n"
+            + (
+                "Open AutoTrade management to view the connected account, trades and settings."
+                if active
+                else "Use “Buy Subscription” on the main menu to activate AutoTrade."
+            )
+        )
+        rows = []
+        if active:
+            rows.append([InlineKeyboardButton(text="⚙️ Manage AutoTrade", callback_data="client_autotrade_access")])
+        rows.append([InlineKeyboardButton(text="🏠 Main Menu", callback_data="main")])
+
+    await core.screen(
+        bot,
+        cb.from_user.id,
+        cb.message.chat.id,
+        text,
+        InlineKeyboardMarkup(inline_keyboard=rows),
+    )
 
 
 @router.callback_query(lambda cb: cb.data == "customer_support")
