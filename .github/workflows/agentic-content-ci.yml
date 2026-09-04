@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/content-editorial-taxonomy
+      - feature/nexus-hub-academy-channel
   pull_request:
     branches:
       - main
@@ -23,6 +24,7 @@ jobs:
       SUPPORT_USERNAME: "https://t.me/nexus_support"
       PAYMENT_CARD: "0000000000000000"
       PAYMENT_OWNER: "NEXUS"
+      NEXUS_FOLDER_URL: "https://t.me/addlist/ASXi4-91edg2YzA8"
       CONTENT_AGENTS_ENABLED: "false"
     steps:
       - name: Checkout
@@ -40,10 +42,16 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
 
-      - name: Compile content package
-        run: python -m compileall -q app/content run.py
+      - name: Compile content and portal runtime
+        run: python -m compileall -q app/content app/ecosystem.py app/portal.py app/portal_runtime.py run.py
 
       - name: Run agentic content tests
         run: python -m pytest tests/test_agentic_content_mvp.py -q
+
+      - name: Run NEXUS hub and Academy tests
+        run: python -m pytest tests/test_nexus_hub_academy.py -q
+
+      - name: Run core UI navigation regression
+        run: python -m pytest tests/test_v712_ui_navigation.py -q
 
 # This workflow intentionally uses dummy runtime configuration and never reads production secrets.
