@@ -6,7 +6,7 @@ from app.services import market_ict_service as ict
 
 
 def _candles(start: datetime, count: int, minutes: int, base: float, step: float) -> list[ict.Candle]:
-    rows = []
+    rows: list[ict.Candle] = []
     price = base
     for i in range(count):
         open_price = price
@@ -15,7 +15,7 @@ def _candles(start: datetime, count: int, minutes: int, base: float, step: float
         low = min(open_price, close) - abs(step) * 0.5 - 1
         rows.append(
             ict.Candle(
-                time=start + timedelta(minutes=minutes * i),
+                opened_at=start + timedelta(minutes=minutes * i),
                 open=open_price,
                 high=high,
                 low=low,
@@ -26,18 +26,41 @@ def _candles(start: datetime, count: int, minutes: int, base: float, step: float
     return rows
 
 
-def test_parse_bitunix_kline_payload_sorts_and_parses_milliseconds():
+def test_parse_ohlc_payload_keeps_only_closed_bars_and_sorts():
     payload = {
-        "code": 0,
-        "data": [
-            {"time": 1725429600000, "open": "102", "high": "104", "low": "101", "close": "103"},
-            {"time": 1725426000000, "open": "100", "high": "103", "low": "99", "close": "102"},
-        ] * 5,
+        "bars": [
+            {
+                "openTime": "2026-09-04T02:00:00Z",
+                "open": 102,
+                "high": 104,
+                "low": 101,
+                "close": 103,
+                "isOpen": False,
+            },
+            {
+                "openTime": "2026-09-04T01:00:00Z",
+                "open": 100,
+                "high": 103,
+                "low": 99,
+                "close": 102,
+                "isOpen": False,
+            },
+        ] * 10
+        + [
+            {
+                "openTime": "2026-09-04T03:00:00Z",
+                "open": 103,
+                "high": 105,
+                "low": 102,
+                "close": 104,
+                "isOpen": True,
+            }
+        ]
     }
-    rows = ict.parse_kline_payload(payload)
-    assert len(rows) == 10
-    assert rows[0].time <= rows[-1].time
-    assert rows[-1].close in {102.0, 103.0}
+    rows = ict.parse_ohlc_payload(payload)
+    assert len(rows) == 20
+    assert rows[0].opened_at <= rows[-1].opened_at
+    assert all(x.opened_at.hour != 3 for x in rows)
 
 
 def test_snapshot_and_render_include_1h_15m_5m_ict_contract():
@@ -48,7 +71,7 @@ def test_snapshot_and_render_include_1h_15m_5m_ict_contract():
     m5 = _candles(now - timedelta(hours=16), 192, 5, 4460.0, 0.05)
 
     snap = ict.build_snapshot(
-        "XAUUSDT",
+        "XAUUSD",
         h1,
         m15,
         m5,
@@ -57,44 +80,51 @@ def test_snapshot_and_render_include_1h_15m_5m_ict_contract():
     )
     text = ict.render_persian_ict(
         snap,
-        asset_fa="طلای جهانی",
+        asset_fa="طلای جهانی (XAU/USD)",
         now_utc=now,
         local_timezone="Asia/Tehran",
     )
 
-    assert snap.pdh > snap.pdl
+    assert snap.pdh is not None and snap.pdl is not None and snap.pdh > snap.pdl
     assert snap.current == m5[-1].close
     assert "تحلیل و سناریوی روزانه طلای جهانی" in text
     assert "Bias ساختار 1H" in text
-    assert "Bullish FVG 15M" in text
-    assert "Bearish FVG 15M" in text
-    assert "Trigger ورود 5M" in text
-    assert "Liquidity Sweep" in text
-    assert "MSS/CHOCH" in text
-    assert "ورود فوری" in text
+    assert "Liquidity Pools" in text
+    assert "Bullish FVG" in text
+    assert "Bearish FVG" in text
+    assert "Bullish OB" in text
+    assert "Bearish OB" in text
+    assert "5M — Entry Trigger" in text
+    assert "سناریوی اصلی" in text
+    assert "سناریوی جایگزین" in text
+    assert len(text) < 4096
 
 
-def test_render_keeps_long_and_short_scenarios_even_when_bias_is_bullish():
+def test_render_keeps_primary_and_alternative_scenarios_for_bitcoin():
     now = datetime(2026, 9, 4, 4, 30, tzinfo=timezone.utc)
     snap = ict.IctSnapshot(
-        symbol="BTCUSDT",
+        symbol="BTCUSD",
         current=80000.0,
         bias="BULLISH",
+        structure_note="ساختار 1H صعودی است.",
         pdh=81000.0,
         pdl=77000.0,
-        equilibrium=79000.0,
-        swing_high=80500.0,
-        swing_low=78500.0,
+        buy_liquidity=80500.0,
+        sell_liquidity=78500.0,
         bullish_fvg=ict.Zone(78600.0, 78900.0),
         bearish_fvg=ict.Zone(80300.0, 80600.0),
+        bullish_ob=ict.Zone(78700.0, 79000.0),
+        bearish_ob=ict.Zone(80200.0, 80500.0),
+        trigger_state="در 5M فعلاً Sweep + MSS معتبر همزمان دیده نمی‌شود.",
     )
     text = ict.render_persian_ict(
         snap,
-        asset_fa="بیت‌کوین",
+        asset_fa="بیت‌کوین (BTC/USD)",
         now_utc=now,
         local_timezone="Asia/Tehran",
     )
     assert "صعودی" in text
-    assert "سناریوی Long" in text
-    assert "سناریوی Short" in text
+    assert "سناریوی اصلی" in text
+    assert "سناریوی جایگزین" in text
     assert "PDH" in text and "PDL" in text
+    assert "BTC/USD" in text
