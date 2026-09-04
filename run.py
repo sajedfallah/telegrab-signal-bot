@@ -9,6 +9,9 @@ load_dotenv(encoding="utf-8-sig")
 os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
 os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
 
+from app.payment_display_sanitizer import repair_payment_owner_env
+repair_payment_owner_env()
+
 from app.telegram_topic_routing import install_free_topic_routing
 install_free_topic_routing()
 
