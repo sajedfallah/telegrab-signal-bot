@@ -14,6 +14,7 @@ from app.services.report_runtime import install as install_report_runtime
 from app.services.market_brief_service import install as install_market_brief_runtime
 from app.services.market_public_channel_runtime import install as install_market_public_channel_runtime
 from app.services.market_content_route_runtime import install as install_market_content_route_runtime
+from app.services.open_access_runtime import install as install_open_access_runtime
 from app.portal_runtime import install_nexus_hub
 from app.autotrade_user_runtime import install_autotrade_user_experience
 from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
@@ -34,6 +35,7 @@ install_report_runtime(main_module)
 install_market_brief_runtime(main_module)
 install_market_public_channel_runtime(main_module)
 install_market_content_route_runtime(main_module)
+install_open_access_runtime(main_module)
 install_nexus_hub(main_module)
 install_autotrade_user_experience(main_module)
 install_autotrade_durable_cleanup(main_module)
