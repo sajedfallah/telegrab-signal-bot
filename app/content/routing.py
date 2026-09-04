@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
@@ -7,7 +8,7 @@ from ..ecosystem import ecosystem_settings
 
 
 # Public is intentionally strict: only these five editorial categories may
-# publish to the general NEXUS channel. Everything educational is routed to
+# publish to the general NEXUS destination. Everything educational is routed to
 # Academy. Unknown/new categories fail closed until explicitly classified.
 PUBLIC_CATEGORY_KEYS = frozenset({
     "daily_analysis",
@@ -32,6 +33,7 @@ class ChannelDestination:
     label_fa: str
     chat_id: int | str
     channel_url: str
+    message_thread_id: int | None = None
 
 
 def route_key_for_category(category_key: str) -> str:
@@ -64,14 +66,53 @@ def _public_username_target(url: str) -> str | None:
         return None
 
 
+def _parse_target(raw: str) -> int | str:
+    value = str(raw or "").strip()
+    if not value:
+        raise ValueError("empty Telegram target")
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
+
+def _public_topic_id() -> int | None:
+    raw = (
+        os.getenv("PUBLIC_CONTENT_TOPIC_ID", "").strip()
+        or os.getenv("MARKET_CONTENT_TOPIC_ID", "").strip()
+    )
+    if not raw:
+        return None
+    try:
+        topic_id = int(raw)
+    except ValueError as exc:
+        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be an integer") from exc
+    if topic_id <= 0:
+        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be greater than zero")
+    return topic_id
+
+
 def resolve_channel_destination(core_settings, category_key: str) -> ChannelDestination:
     route = route_key_for_category(category_key)
     if route == "public":
+        # v0.6.5+: public editorial may live in a Telegram forum topic instead
+        # of a standalone channel. PUBLIC_CONTENT_* is canonical; the older
+        # MARKET_CONTENT_CHANNEL_ID remains a backward-compatible target.
+        raw_chat = (
+            os.getenv("PUBLIC_CONTENT_CHAT_ID", "").strip()
+            or os.getenv("MARKET_CONTENT_CHANNEL_ID", "").strip()
+        )
+        chat_id: int | str = _parse_target(raw_chat) if raw_chat else core_settings.public_channel_id
+        channel_url = (
+            os.getenv("PUBLIC_CONTENT_URL", "").strip()
+            or core_settings.public_channel_url
+        )
         return ChannelDestination(
             key="public",
             label_fa="کانال عمومی NEXUS",
-            chat_id=core_settings.public_channel_id,
-            channel_url=core_settings.public_channel_url,
+            chat_id=chat_id,
+            channel_url=channel_url,
+            message_thread_id=_public_topic_id(),
         )
 
     raw_id = ecosystem_settings.academy_channel_id
@@ -97,4 +138,5 @@ def resolve_channel_destination(core_settings, category_key: str) -> ChannelDest
         label_fa="NEXUS Academy",
         chat_id=target,
         channel_url=url,
+        message_thread_id=None,
     )
