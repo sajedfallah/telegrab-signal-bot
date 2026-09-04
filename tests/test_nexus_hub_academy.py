@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from app.content.routing import ACADEMY_CATEGORY_KEYS, route_key_for_category, resolve_channel_destination
+import pytest
+
+from app.content.routing import (
+    ACADEMY_CATEGORY_KEYS,
+    PUBLIC_CATEGORY_KEYS,
+    resolve_channel_destination,
+    route_key_for_category,
+)
+from app.content.taxonomy import CATEGORIES
 from app.ecosystem import (
     DEFAULT_ACADEMY_CHANNEL_ID,
     DEFAULT_ACADEMY_CHANNEL_URL,
@@ -79,24 +87,38 @@ def test_qr_generator_returns_nontrivial_png():
     assert len(data) > 10_000
 
 
-def test_only_explicit_education_routes_to_academy():
-    assert ACADEMY_CATEGORY_KEYS == frozenset({"ict_education"})
-    assert route_key_for_category("ict_education") == "academy"
-
-
-def test_every_other_content_category_routes_to_public():
-    for key in (
+def test_public_channel_has_exactly_five_allowed_categories():
+    assert PUBLIC_CATEGORY_KEYS == frozenset({
         "daily_analysis",
         "quick_tip",
         "market_news",
         "important_news",
         "news_alert",
+    })
+    for key in PUBLIC_CATEGORY_KEYS:
+        assert route_key_for_category(key) == "public"
+
+
+def test_educational_categories_route_to_academy():
+    assert ACADEMY_CATEGORY_KEYS == frozenset({
+        "ict_education",
         "tools",
         "risk",
         "trade_review",
         "mindset",
-    ):
-        assert route_key_for_category(key) == "public"
+    })
+    for key in ACADEMY_CATEGORY_KEYS:
+        assert route_key_for_category(key) == "academy"
+
+
+def test_all_known_categories_are_explicitly_classified_once():
+    assert PUBLIC_CATEGORY_KEYS.isdisjoint(ACADEMY_CATEGORY_KEYS)
+    assert PUBLIC_CATEGORY_KEYS | ACADEMY_CATEGORY_KEYS == frozenset(CATEGORIES)
+
+
+def test_unknown_category_fails_closed_instead_of_polluting_public():
+    with pytest.raises(ValueError, match="unclassified content category"):
+        route_key_for_category("future_unreviewed_category")
 
 
 def test_academy_destination_uses_official_channel():
@@ -110,7 +132,7 @@ def test_academy_destination_uses_official_channel():
     assert destination.channel_url == "https://t.me/nexus_ict_learning"
 
 
-def test_noneducation_destination_stays_public():
+def test_quick_tip_destination_stays_public():
     class CoreSettings:
         public_channel_id = -1001111111111
         public_channel_url = "https://t.me/nexus_test_public"
