@@ -34,7 +34,13 @@ def test_vip_button_unlocks_when_subscription_is_active():
     unlocked = _buttons(menu_runtime.customer_main_menu("fa", is_admin=False, has_vip=True))
     assert any(b.text == "🔒 کانال سیگنال VIP" for b in locked)
     assert any(b.text == "🔓 کانال سیگنال VIP" for b in unlocked)
-    assert any(b.callback_data == "vip_channel_access" for b in unlocked)
+    # Home opens the approved VIP service hub; direct VIP entry and AutoTrade
+    # status live inside that submenu.
+    assert any(b.callback_data == "customer_vip_hub" for b in unlocked)
+
+    hub = _buttons(menu_runtime.vip_hub_menu("fa", has_vip=True, has_autotrade=True))
+    assert any(b.callback_data == "vip_channel_access" for b in hub)
+    assert any(b.callback_data == "customer_autotrade_status" for b in hub)
 
 
 def test_faq_lives_inside_support_submenu():
