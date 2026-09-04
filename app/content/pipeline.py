@@ -146,12 +146,16 @@ class ContentPipeline:
 
             destination = resolve_channel_destination(core_settings, draft.category_key)
             photo = BufferedInputFile(image_bytes, filename=image_path.name)
+            send_kwargs = {}
+            if destination.message_thread_id is not None:
+                send_kwargs["message_thread_id"] = destination.message_thread_id
             message = await bot.send_photo(
                 destination.chat_id,
                 photo=photo,
                 caption=caption,
                 parse_mode=ParseMode.HTML,
                 protect_content=content_settings.protect_content,
+                **send_kwargs,
             )
             message_id = int(message.message_id)
             permalink = public_post_link(destination.channel_url, message_id)
@@ -171,10 +175,11 @@ class ContentPipeline:
             repository.mark_published(scheduled_date, message_id)
             repository.registry_mark_published(draft.post_id, message_id, permalink)
             log.info(
-                "content published post_id=%s route=%s chat=%s",
+                "content published post_id=%s route=%s chat=%s topic=%s",
                 draft.post_id,
                 destination.key,
                 destination.chat_id,
+                destination.message_thread_id,
             )
             return True
         except Exception as exc:
