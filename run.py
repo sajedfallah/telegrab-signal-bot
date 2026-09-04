@@ -29,6 +29,7 @@ from app.portal_runtime import install_nexus_hub
 from app.autotrade_user_runtime import install_autotrade_user_experience
 from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
 from app.customer_experience import install_customer_experience
+from app.customer_menu_runtime import install_customer_menu_runtime
 from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
 
@@ -49,6 +50,7 @@ install_autotrade_user_experience(main_module)
 install_autotrade_durable_cleanup(main_module)
 
 install_customer_experience(main_module)
+install_customer_menu_runtime(main_module)
 
 
 def _restrict_core_catchall_to_private() -> None:
