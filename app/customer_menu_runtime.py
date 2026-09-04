@@ -6,7 +6,7 @@ Product decisions implemented here:
 - «ورود به نکسوس / Enter NEXUS» is the first home-menu entry.
 - The generic Signals menu is removed from the customer home screen.
 - Only the entitlement-gated VIP Signal Channel remains as the signal entry.
-- AutoTrade status is visible directly below VIP access.
+- AutoTrade status is nested inside the VIP Signal Channel submenu.
 - FAQ is no longer a top-level item; it lives inside Support.
 
 The existing customer_experience module remains authoritative for VIP access,
@@ -32,8 +32,7 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
     if lang == "fa":
         rows = [
             [InlineKeyboardButton(text="🚪 ورود به نکسوس", url=cx.NEXUS_FOLDER_URL)],
-            [InlineKeyboardButton(text=f"{vip_icon} کانال سیگنال VIP", callback_data="vip_channel_access")],
-            [InlineKeyboardButton(text="⚙️ وضعیت AutoTrade", callback_data="customer_autotrade_status")],
+            [InlineKeyboardButton(text=f"{vip_icon} کانال سیگنال VIP", callback_data="customer_vip_hub")],
             [
                 InlineKeyboardButton(text="💎 خرید اشتراک", callback_data="vip"),
                 InlineKeyboardButton(text="👤 حساب من", callback_data="account"),
@@ -49,8 +48,7 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
     else:
         rows = [
             [InlineKeyboardButton(text="🚪 Enter NEXUS", url=cx.NEXUS_FOLDER_URL)],
-            [InlineKeyboardButton(text=f"{vip_icon} VIP Signal Channel", callback_data="vip_channel_access")],
-            [InlineKeyboardButton(text="⚙️ AutoTrade Status", callback_data="customer_autotrade_status")],
+            [InlineKeyboardButton(text=f"{vip_icon} VIP Signal Channel", callback_data="customer_vip_hub")],
             [
                 InlineKeyboardButton(text="💎 Buy Subscription", callback_data="vip"),
                 InlineKeyboardButton(text="👤 My Account", callback_data="account"),
@@ -63,6 +61,32 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
         ]
         if is_admin:
             rows.append([InlineKeyboardButton(text="🛠 Admin Panel", callback_data="admin")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def vip_hub_menu(lang: str, *, has_vip: bool, has_autotrade: bool) -> InlineKeyboardMarkup:
+    vip_icon = "🔓" if has_vip else "🔒"
+    auto_icon = "🟢" if has_autotrade else "🔴"
+
+    if lang == "fa":
+        rows = [
+            [InlineKeyboardButton(text=f"{vip_icon} ورود به کانال سیگنال VIP", callback_data="vip_channel_access")],
+            [InlineKeyboardButton(text=f"{auto_icon} وضعیت AutoTrade", callback_data="customer_autotrade_status")],
+            [
+                InlineKeyboardButton(text="⬅️ بازگشت", callback_data="main"),
+                InlineKeyboardButton(text="🏠 منوی اصلی", callback_data="main"),
+            ],
+        ]
+    else:
+        rows = [
+            [InlineKeyboardButton(text=f"{vip_icon} Enter VIP Signal Channel", callback_data="vip_channel_access")],
+            [InlineKeyboardButton(text=f"{auto_icon} AutoTrade Status", callback_data="customer_autotrade_status")],
+            [
+                InlineKeyboardButton(text="⬅️ Back", callback_data="main"),
+                InlineKeyboardButton(text="🏠 Main Menu", callback_data="main"),
+            ],
+        ]
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -113,6 +137,37 @@ def faq_menu(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+@router.callback_query(lambda cb: cb.data == "customer_vip_hub")
+async def customer_vip_hub(cb: CallbackQuery, bot: Bot) -> None:
+    from . import main as core
+
+    if not await core.gated(cb, bot):
+        return
+
+    lang = core.get_lang(cb.from_user.id)
+    access = license_service.snapshot(cb.from_user.id)
+    await cb.answer()
+
+    if lang == "fa":
+        text = (
+            "<b>📡 سرویس سیگنال VIP</b>\n\n"
+            "از این بخش می‌توانید وارد کانال سیگنال VIP شوید یا وضعیت AutoTrade خود را بررسی کنید."
+        )
+    else:
+        text = (
+            "<b>📡 VIP Signal Service</b>\n\n"
+            "Enter the VIP signal channel or review your AutoTrade status from this submenu."
+        )
+
+    await core.screen(
+        bot,
+        cb.from_user.id,
+        cb.message.chat.id,
+        text,
+        vip_hub_menu(lang, has_vip=bool(access.vip), has_autotrade=bool(access.autotrade)),
+    )
+
+
 @router.callback_query(lambda cb: cb.data == "customer_autotrade_status")
 async def customer_autotrade_status(cb: CallbackQuery, bot: Bot) -> None:
     from . import main as core
@@ -139,6 +194,7 @@ async def customer_autotrade_status(cb: CallbackQuery, bot: Bot) -> None:
         rows = []
         if active:
             rows.append([InlineKeyboardButton(text="⚙️ مدیریت AutoTrade", callback_data="client_autotrade_access")])
+        rows.append([InlineKeyboardButton(text="⬅️ سرویس VIP", callback_data="customer_vip_hub")])
         rows.append([InlineKeyboardButton(text="🏠 منوی اصلی", callback_data="main")])
     else:
         status = "🟢 Active" if active else "🔴 Inactive"
@@ -154,6 +210,7 @@ async def customer_autotrade_status(cb: CallbackQuery, bot: Bot) -> None:
         rows = []
         if active:
             rows.append([InlineKeyboardButton(text="⚙️ Manage AutoTrade", callback_data="client_autotrade_access")])
+        rows.append([InlineKeyboardButton(text="⬅️ VIP Service", callback_data="customer_vip_hub")])
         rows.append([InlineKeyboardButton(text="🏠 Main Menu", callback_data="main")])
 
     await core.screen(
