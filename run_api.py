@@ -14,6 +14,9 @@ install_free_topic_routing()
 from app.signal_code_runtime import install_two_digit_signal_codes
 install_two_digit_signal_codes()
 
+from app.autotrade.risk_firewall import install_risk_firewall
+install_risk_firewall()
+
 from app.autotrade.live_event_runtime import install_live_snapshot_event_bridge
 install_live_snapshot_event_bridge()
 
