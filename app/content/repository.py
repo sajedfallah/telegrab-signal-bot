@@ -132,6 +132,14 @@ def mark_failed(scheduled_date: str, error: str) -> None:
         )
 
 
+def mark_skipped(scheduled_date: str, reason: str) -> None:
+    with db.conn() as con:
+        con.execute(
+            "UPDATE content_posts SET status='skipped', error=?, updated_at=? WHERE scheduled_date=?",
+            (str(reason)[:1500], _now(), scheduled_date),
+        )
+
+
 def recent_topic_slugs(limit: int = 12) -> list[str]:
     ensure_schema()
     with db.conn() as con:
@@ -231,6 +239,15 @@ def registry_mark_failed(post_id: str, error: str) -> None:
         con.execute(
             "UPDATE content_registry SET status='failed', error=?, updated_at=? WHERE post_id=?",
             (str(error)[:1500], _now(), post_id),
+        )
+
+
+def registry_mark_skipped(post_id: str, reason: str) -> None:
+    ensure_schema()
+    with db.conn() as con:
+        con.execute(
+            "UPDATE content_registry SET status='skipped', error=?, updated_at=? WHERE post_id=?",
+            (str(reason)[:1500], _now(), post_id),
         )
 
 
