@@ -499,6 +499,7 @@ public:
       SaveDouble(s.signal_id,"tp9",s.tp9); SaveDouble(s.signal_id,"has_tp9",s.has_tp9?1:0);
       SaveDouble(s.signal_id,"tp10",s.tp10); SaveDouble(s.signal_id,"has_tp10",s.has_tp10?1:0);
       SaveDouble(s.signal_id,"be_done",0); for(int tp_i=1;tp_i<=10;tp_i++) SaveDouble(s.signal_id,"tp"+IntegerToString(tp_i)+"_done",0);
+      SaveDouble(s.signal_id,"trail_last_sec",0);
       SaveDouble(s.signal_id,"initial_volume",volume);
       SaveDouble(s.signal_id,"break_even_r",s.break_even_r);
       SaveDouble(s.signal_id,"trail_step_r",s.trail_step_r);

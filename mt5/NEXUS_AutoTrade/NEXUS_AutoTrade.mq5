@@ -987,6 +987,12 @@ void CompleteNexusSignalClaim(const string signal_id)
    ReleaseNexusSignalClaim(signal_id);
   }
 
+bool NexusSignalExecutionDone(const string signal_id)
+  {
+   string key=NexusSignalDoneKey(signal_id);
+   return GlobalVariableCheck(key) && GlobalVariableGet(key)>0.5;
+  }
+
 bool IsPendingSignalType(const string order_type)
   {
    return order_type=="LIMIT" || order_type=="BUY_LIMIT" || order_type=="SELL_LIMIT" ||
@@ -1038,9 +1044,30 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    SetExecutionStatus("ENTRY CHECK PASS",s,symbol);
    if(!ClaimNexusSignal(s.signal_id))
      {
-      string duplicate="duplicate signal execution blocked by NEXUS idempotency lock";
-      SendSignalReceiptReliable(s.db_id,"rejected","",duplicate);
-      SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
+      // A permanent DONE marker means another NEXUS instance already
+      // completed this canonical signal. Never publish a false rejection.
+      if(NexusSignalExecutionDone(s.signal_id))
+        {
+         SetExecutionStatus(
+            "ALREADY CLAIMED",
+            s,
+            symbol,
+            "execution already completed by another NEXUS instance"
+         );
+         AdvanceSignalCursor(s.db_id);
+         return true;
+        }
+
+      // A live claim is temporary ownership by another EA instance.
+      // Do not reject and do not advance the cursor; shared cursor sync
+      // or the next poll will observe the authoritative execution result.
+      SetExecutionStatus(
+         "CLAIM BUSY",
+         s,
+         symbol,
+         "another NEXUS instance is processing this signal"
+      );
+      return false;
      }
    ulong ticket=0;
     if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
@@ -1073,6 +1100,16 @@ void PollSignals(const long after_id=-1,const int limit=50,const bool force_admi
      { Print("NEXUS SIGNAL POLL BLOCKED: InpAllowNewTrades=false"); return; }
    if(!force_admin && !g_allow_new)
      { Print("NEXUS SIGNAL POLL BLOCKED: allow_new=false"); return; }
+   // Every EA chart shares the account-level cursor. Refresh the local
+   // copy before requesting signals so secondary instances do not replay
+   // work already completed by another chart.
+   if(after_id<0 && GlobalVariableCheck(CursorKey("signal")))
+     {
+      long shared_signal_cursor=(long)GlobalVariableGet(CursorKey("signal"));
+      if(shared_signal_cursor>g_last_signal_id)
+         g_last_signal_id=shared_signal_cursor;
+     }
+
    long effective_after=(after_id<0 ? g_last_signal_id : after_id);
    int effective_limit=MathMax(1,MathMin(limit,100));
    Print("NEXUS SIGNAL POLL: after_id=",effective_after," limit=",effective_limit," force_admin=",(force_admin?"YES":"NO"));
@@ -1086,6 +1123,14 @@ void PollSignals(const long after_id=-1,const int limit=50,const bool force_admi
 void PollCommands()
   {
    if(!g_allow_manage || !InpManageExistingTrades) return;
+
+   if(GlobalVariableCheck(CursorKey("command")))
+     {
+      long shared_command_cursor=(long)GlobalVariableGet(CursorKey("command"));
+      if(shared_command_cursor>g_last_command_id)
+         g_last_command_id=shared_command_cursor;
+     }
+
    string response;
    if(!g_api.GetCommands(g_last_command_id,100,response)) { Print("NEXUS commands: ",g_api.LastError()); return; }
    NexusCommand commands[];

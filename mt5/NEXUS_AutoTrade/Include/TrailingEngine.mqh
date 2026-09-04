@@ -24,6 +24,27 @@ void NexusTrailSet(const string sig,const string field,const double v)
    GlobalVariableSet(NexusTrailPrefix(sig)+field,v);
   }
 
+bool NexusTrailClaimManageSecond(const string sig,const datetime now)
+  {
+   string key=NexusTrailPrefix(sig)+"trail_last_sec";
+
+   if(!GlobalVariableCheck(key))
+      GlobalVariableSet(key,0.0);
+
+   double previous=GlobalVariableGet(key);
+
+   if((double)now<=previous)
+      return false;
+
+   // Atomic CAS: with multiple EA charts only one instance may manage
+   // this signal during the current terminal second.
+   return GlobalVariableSetOnCondition(
+      key,
+      (double)now,
+      previous
+   );
+  }
+
 // Hardened profile-based trailing engine.
 // NEXUS positions use the immutable signal snapshot.
 // Manual positions are managed only with explicit EA opt-in and use
@@ -261,6 +282,7 @@ private:
       ManualProfile(sig,code); int m=(int)NexusTrailGet(sig,"profile_mode",7);
       NexusTrailSet(sig,"initialized",1);NexusTrailSet(sig,"manual",1);NexusTrailSet(sig,"identifier",(double)identifier);NexusTrailSet(sig,"mode",m);NexusTrailSet(sig,"initial_sl",sl);NexusTrailSet(sig,"signal_entry",e);NexusTrailSet(sig,"final_tp",tp);NexusTrailSet(sig,"initial_volume",v);
       NexusTrailSet(sig,"be_done",0);NexusTrailSet(sig,"tp1_done",0);NexusTrailSet(sig,"tp2_done",0);NexusTrailSet(sig,"has_tp1",0);NexusTrailSet(sig,"has_tp2",0);
+      NexusTrailSet(sig,"trail_last_sec",0);
       NexusTrailSet(sig,"break_even_r",NexusTrailGet(sig,"profile_be",1));NexusTrailSet(sig,"trail_step_r",NexusTrailGet(sig,"profile_step",.35));NexusTrailSet(sig,"lock_step_r",NexusTrailGet(sig,"profile_lock",.25));
       NexusTrailSet(sig,"activation_r",NexusTrailGet(sig,"profile_activation",1));NexusTrailSet(sig,"atr_period",NexusTrailGet(sig,"profile_atr_period",14));NexusTrailSet(sig,"atr_multiplier",NexusTrailGet(sig,"profile_atr_multiplier",2));
       NexusTrailSet(sig,"swing_left",NexusTrailGet(sig,"profile_swing_left",2));NexusTrailSet(sig,"swing_right",NexusTrailGet(sig,"profile_swing_right",2));NexusTrailSet(sig,"tp1_close_pct",NexusTrailGet(sig,"profile_tp1_pct",30));NexusTrailSet(sig,"tp2_close_pct",NexusTrailGet(sig,"profile_tp2_pct",30));
@@ -283,8 +305,11 @@ public:
          m_tf=SignalTF(sig);
          string symbol=PositionGetString(POSITION_SYMBOL); ENUM_POSITION_TYPE pt=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE); double entry=PositionGetDouble(POSITION_PRICE_OPEN);
          datetime now=TimeCurrent();
-         if(now<=NexusTrailGet(sig,"trail_last_sec",0)) continue;
-         NexusTrailSet(sig,"trail_last_sec",(double)now);
+
+         // Multi-chart safe ownership. Only one EA instance can execute
+         // TP/partial/SL management for this signal in this terminal second.
+         if(!NexusTrailClaimManageSecond(sig,now))
+            continue;
          double risk=MathAbs(entry-NexusTrailGet(sig,"initial_sl",PositionGetDouble(POSITION_SL))); if(risk<=0)continue; double pr=R(pt,Price(symbol,pt),entry,risk);
          if(mode==1)
             Step(ticket,sig,pt,entry,risk,pr,NexusTrailGet(sig,"break_even_r",1),NexusTrailGet(sig,"trail_step_r",.5),NexusTrailGet(sig,"lock_step_r",.3));
