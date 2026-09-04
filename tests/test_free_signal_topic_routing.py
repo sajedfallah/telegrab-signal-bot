@@ -20,7 +20,18 @@ def test_bot_and_autotrade_api_install_same_topic_router_before_runtime():
     bot_runner = _text("run.py")
     api_runner = _text("run_api.py")
     assert "install_free_topic_routing()" in bot_runner
-    assert bot_runner.index("install_free_topic_routing()") < bot_runner.index("from app.main import")
+
+    # v0.6.5 imports the core module as `import app.main as main_module`, while
+    # older releases used `from app.main import ...`. Either form is valid; the
+    # invariant is that FREE topic routing is installed before app.main loads.
+    core_import_positions = [
+        pos
+        for marker in ("import app.main as main_module", "from app.main import")
+        if (pos := bot_runner.find(marker)) >= 0
+    ]
+    assert core_import_positions
+    assert bot_runner.index("install_free_topic_routing()") < min(core_import_positions)
+
     assert "install_free_topic_routing()" in api_runner
     assert api_runner.index("install_free_topic_routing()") < api_runner.index('"app.autotrade.api:app"')
 
