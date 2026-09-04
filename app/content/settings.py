@@ -14,6 +14,10 @@ class ContentSettings:
     catchup_enabled: bool = os.getenv("CONTENT_CATCHUP_ENABLED", "true").strip().lower() in _TRUE
     approval_mode: bool = os.getenv("CONTENT_APPROVAL_MODE", "true").strip().lower() in _TRUE
     protect_content: bool = os.getenv("CONTENT_PROTECT_CONTENT", "false").strip().lower() in _TRUE
+
+    editorial_enabled: bool = os.getenv("CONTENT_EDITORIAL_ENABLED", "true").strip().lower() in _TRUE
+    max_posts_per_day: int = max(1, min(12, int(os.getenv("CONTENT_MAX_POSTS_PER_DAY", "4"))))
+
     ai_provider: str = os.getenv("CONTENT_AI_PROVIDER", "gemini").strip().lower() or "gemini"
     ai_api_key: str = os.getenv(
         "CONTENT_AI_API_KEY",
@@ -24,6 +28,9 @@ class ContentSettings:
         "https://generativelanguage.googleapis.com/v1beta/openai/",
     ).strip()
     text_model: str = os.getenv("CONTENT_TEXT_MODEL", "gemini-3.8-flash").strip()
+
+    image_ai_enabled: bool = os.getenv("CONTENT_IMAGE_AI_ENABLED", "false").strip().lower() in _TRUE
+    image_model: str = os.getenv("CONTENT_IMAGE_MODEL", "gemini-3.1-flash-image").strip()
 
 
 content_settings = ContentSettings()
