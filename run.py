@@ -6,9 +6,15 @@ from app.telegram_topic_routing import install_free_topic_routing
 # and constructs any aiogram Bot instances.
 install_free_topic_routing()
 
+from app import main as core
 from app.main import main as bot_main, router as bot_router
+from app.customer_experience import install_customer_experience
 from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
+
+# Customer FAQ, NEXUS folder entry, VIP entitlement gate and post-purchase
+# AutoTrade delivery are attached to the canonical core router.
+install_customer_experience(core)
 
 # Admin-only /topicid and /setfreetopic diagnostics.
 bot_router.include_router(topic_admin_router)
