@@ -1,6 +1,7 @@
 param(
     [string]$DailyTime = "12:00",
-    [switch]$PublishDirectly
+    [switch]$PublishDirectly,
+    [switch]$EnablePaidImageAI
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,10 +68,14 @@ Set-EnvValue "CONTENT_DAILY_TIME" $DailyTime
 Set-EnvValue "CONTENT_CATCHUP_ENABLED" "true"
 Set-EnvValue "CONTENT_APPROVAL_MODE" ($(if ($PublishDirectly) { "false" } else { "true" }))
 Set-EnvValue "CONTENT_PROTECT_CONTENT" "false"
+Set-EnvValue "CONTENT_EDITORIAL_ENABLED" "true"
+Set-EnvValue "CONTENT_MAX_POSTS_PER_DAY" "4"
 Set-EnvValue "CONTENT_AI_PROVIDER" "gemini"
 Set-EnvValue "CONTENT_AI_API_KEY" $geminiKey
 Set-EnvValue "CONTENT_AI_BASE_URL" "https://generativelanguage.googleapis.com/v1beta/openai/"
 Set-EnvValue "CONTENT_TEXT_MODEL" "gemini-3.8-flash"
+Set-EnvValue "CONTENT_IMAGE_AI_ENABLED" ($(if ($EnablePaidImageAI) { "true" } else { "false" }))
+Set-EnvValue "CONTENT_IMAGE_MODEL" "gemini-3.1-flash-image"
 Set-EnvValue "CONTENT_FONT_PATH" "C:\Windows\Fonts\arial.ttf"
 Set-EnvValue "CONTENT_FONT_BOLD_PATH" "C:\Windows\Fonts\arialbd.ttf"
 
@@ -80,4 +85,10 @@ $secureKey = $null
 Write-Host "[NEXUS] Agentic content environment configured."
 Write-Host "[NEXUS] Daily time: $DailyTime"
 Write-Host "[NEXUS] Approval mode: $(-not $PublishDirectly.IsPresent)"
+Write-Host "[NEXUS] Editorial daily cap: 4 non-urgent posts"
+if ($EnablePaidImageAI) {
+    Write-Warning "Gemini image generation is enabled and may create API charges."
+} else {
+    Write-Host "[NEXUS] Paid image AI: disabled (local NEXUS visual fallback is active)"
+}
 Write-Host "[NEXUS] API key was written only to local .env and was not committed to GitHub."
