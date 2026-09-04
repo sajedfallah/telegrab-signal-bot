@@ -1,7 +1,8 @@
-﻿import asyncio
+import asyncio
 import os
 from pathlib import Path
 
+from aiogram import F
 from dotenv import load_dotenv
 
 load_dotenv(encoding="utf-8-sig")
@@ -48,6 +49,39 @@ install_autotrade_user_experience(main_module)
 install_autotrade_durable_cleanup(main_module)
 
 install_customer_experience(main_module)
+
+
+def _restrict_core_catchall_to_private() -> None:
+    """Keep the legacy unhandled-message cleanup private-chat only.
+
+    app.main registers clean_unhandled_message as an unfiltered parent-router
+    handler. Even though its callback returns immediately for groups, aiogram
+    still considers the update handled and therefore never propagates forum
+    commands to child routers. Re-registering that handler with an explicit
+    private-chat filter preserves chat hygiene while allowing /topicid and
+    /setfreetopic to reach the forum admin router.
+    """
+    handlers = main_module.router.message.handlers
+    found = any(
+        getattr(handler.callback, "__name__", "") == "clean_unhandled_message"
+        for handler in handlers
+    )
+    if not found:
+        return
+
+    handlers[:] = [
+        handler
+        for handler in handlers
+        if getattr(handler.callback, "__name__", "") != "clean_unhandled_message"
+    ]
+
+    async def _private_unhandled_message(message, bot):
+        await main_module.clean_unhandled_message(message, bot)
+
+    main_module.router.message(F.chat.type == "private")(_private_unhandled_message)
+
+
+_restrict_core_catchall_to_private()
 main_module.router.include_router(topic_admin_router)
 
 bot_main = main_module.main
