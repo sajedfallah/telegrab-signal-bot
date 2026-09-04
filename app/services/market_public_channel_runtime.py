@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-"""Route NEXUS market editorial automation to the public NEXUS channel.
+"""Focused NEXUS market editorial for the public channel.
 
 Product policy:
   * Public editorial is Persian-only and durable.
-  * Standalone market news is limited to GOLD/XAU, Bitcoin/BTC and Dow Jones/DJIA.
-  * Source names/article links are not shown in public news copy.
-  * Morning publication is exactly an ordered three-part suite:
+  * Market news is strictly limited to GOLD/XAU, Bitcoin/BTC and Dow Jones/DJI/US30.
+  * Source names/article links are never shown in public copy.
+  * Every morning is one ordered, retry-safe three-message suite:
       1) NEXUS Morning Brief
-      2) GOLD ICT analysis/scenarios
-      3) Bitcoin ICT analysis/scenarios
-  * High-impact economic alerts remain enabled as separate risk alerts.
+      2) XAU/USD ICT analysis/scenarios
+      3) BTC/USD ICT analysis/scenarios
+  * Routine standalone news/economic alerts are quiet during the morning window;
+    only extraordinary focused breaking news can bypass that quiet window.
   * Related news imagery is best-effort when article metadata provides it.
 """
 
@@ -30,9 +31,31 @@ from app.services import market_ict_service as ict
 log = logging.getLogger(__name__)
 
 _FOCUS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("GOLD", re.compile(r"(?:\bgold\b|\bxau(?:usd|usdt)?\b|\bbullion\b)", re.I)),
-    ("BTC", re.compile(r"(?:\bbitcoin\b|\bbtc(?:usd|usdt)?\b)", re.I)),
-    ("DOW", re.compile(r"(?:\bdow\s+jones\b|\bdjia\b|\bdow\s+30\b|\bdow\s+industrials?\b)", re.I)),
+    ("GOLD", re.compile(r"(?:\bgold\b|\bxau(?:[/_-]?usd|usd|usdt)?\b|\bbullion\b)", re.I)),
+    ("BTC", re.compile(r"(?:\bbitcoin\b|\bbtc(?:[/_-]?usd|usd|usdt)?\b)", re.I)),
+    (
+        "DOW",
+        re.compile(
+            r"(?:\bdow\s+jones\b|\bdow\s*30\b|\bdjia\b|\bdji\b|\bus30\b|\bwall\s+street\s+30\b|\bdow\s+industrials?\b)",
+            re.I,
+        ),
+    ),
+)
+_EXTRAORDINARY_RE = re.compile(
+    r"(?:\bbreaking\b|\burgent\b|\bflash\b|\bemergency\b|\bcrash\w*\b|\bplung\w*\b|"
+    r"\bsurg\w*\b|\bspik\w*\b|\battack\w*\b|\bwar\b|\bintervention\b|\bhalt\w*\b|"
+    r"\brecord\s+high\b|\brecord\s+low\b)",
+    re.I,
+)
+_KNOWN_SOURCE_NAMES = (
+    "FXStreet",
+    "CoinDesk",
+    "Reuters",
+    "Bloomberg",
+    "CNBC",
+    "Associated Press",
+    "Wall Street Journal",
+    "WSJ",
 )
 
 
@@ -49,11 +72,7 @@ def _channel_lang(main: Any) -> str:
 
 def _focus_score(title: str) -> int:
     text = str(title or "")
-    score = 0
-    for _, pattern in _FOCUS_PATTERNS:
-        if pattern.search(text):
-            score = max(score, 8)
-    return score
+    return 8 if any(pattern.search(text) for _, pattern in _FOCUS_PATTERNS) else 0
 
 
 def _is_focus_news(item: market.NewsItem) -> bool:
@@ -67,7 +86,7 @@ def _focused_important_recent_news(
     minimum_score: int = 5,
     max_age_minutes: int = 180,
 ) -> list[market.NewsItem]:
-    """Return only direct GOLD/BTC/Dow headlines, while preserving importance/age gates."""
+    """Return only direct GOLD/BTC/Dow headlines while preserving freshness gates."""
     now = now_utc or datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=max(1, int(max_age_minutes)))
     ranked: list[tuple[int, datetime, market.NewsItem]] = []
@@ -85,14 +104,32 @@ def _focused_important_recent_news(
     return [row[2] for row in ranked]
 
 
-def _strip_source_line(text: str) -> str:
-    """Never expose editorial source labels in public news messages/captions."""
-    lines = []
+def _morning_quiet(main: Any, now_utc: datetime | None = None) -> bool:
+    now = now_utc or datetime.now(timezone.utc)
+    local = now.astimezone(ZoneInfo(main.settings.timezone))
+    return 0 <= local.hour < 12
+
+
+def _extraordinary_focus_news(item: market.NewsItem) -> bool:
+    return _is_focus_news(item) and bool(_EXTRAORDINARY_RE.search(str(item.title or ""))) and max(
+        int(item.score), _focus_score(item.title)
+    ) >= 8
+
+
+def _sanitize_public_news_text(text: str, item: market.NewsItem) -> str:
+    """Remove source labels/names from public Telegram news copy."""
+    source_names = [str(getattr(item, "source", "") or "").strip(), *_KNOWN_SOURCE_NAMES]
+    lines: list[str] = []
     for line in str(text or "").splitlines():
-        compact = line.strip()
-        if compact.startswith("📰 منبع:") or compact.lower().startswith("source:"):
+        compact = re.sub(r"<[^>]+>", "", line).strip().lower()
+        if compact.startswith("📰 منبع:") or compact.startswith("منبع:") or compact.startswith("source:"):
             continue
-        lines.append(line)
+        cleaned = line
+        for name in source_names:
+            if name:
+                cleaned = re.sub(re.escape(name), "", cleaned, flags=re.I)
+        cleaned = re.sub(r"\s{2,}", " ", cleaned).rstrip()
+        lines.append(cleaned)
     while lines and not lines[-1].strip():
         lines.pop()
     return "\n".join(lines)
@@ -199,10 +236,13 @@ async def _render_persian_morning_brief(
 
     lines += ["", "<b>📰 مهم‌ترین خبرهای بازار</b>"]
     written = 0
-    for _, fa_title in zip(headlines, headline_titles):
+    for item, fa_title in zip(headlines, headline_titles):
         if not fa_title:
             continue
-        lines.append(f"• {html.escape(fa_title)}")
+        clean_title = _sanitize_public_news_text(str(fa_title), item).strip()
+        if not clean_title:
+            continue
+        lines.append(f"• {html.escape(clean_title)}")
         written += 1
     if written == 0:
         lines.append("• در حال حاضر خبر مهم تازه‌ای درباره طلا، بیت‌کوین یا داوجونز دریافت نشده است.")
@@ -219,7 +259,7 @@ def _component_key(component: str) -> str:
 
 
 def _component_done(main: Any, component: str, today_key: str) -> bool:
-    return main.db.get_setting(_component_key(component), "").strip() == today_key
+    return str(main.db.get_setting(_component_key(component), "") or "").strip() == today_key
 
 
 def _mark_component(main: Any, component: str, today_key: str) -> None:
@@ -236,49 +276,62 @@ async def _broadcast_brief(
     """Publish the ordered 3-message morning suite with per-component retry safety."""
     today_key = now_utc.astimezone(ZoneInfo(main.settings.timezone)).date().isoformat()
 
-    if not _component_done(main, "brief", today_key):
-        text = await _render_persian_morning_brief(main, events, news, now_utc)
-        if not await _send_public(main, bot, text, reason="morning_brief"):
-            return (0, 1)
-        _mark_component(main, "brief", today_key)
-
-    if not _component_done(main, "gold_ict", today_key):
-        try:
-            gold_text = await ict.build_daily_ict_message(
-                symbol="XAUUSDT",
-                asset_fa="طلای جهانی",
+    # Prepare all content before the first Telegram send. A temporary market-data
+    # failure therefore cannot intentionally produce a one-message morning pack.
+    try:
+        brief_task = asyncio.create_task(_render_persian_morning_brief(main, events, news, now_utc))
+        gold_task = asyncio.create_task(
+            ict.build_daily_ict_message(
+                symbol="XAUUSD",
+                asset_fa="طلای جهانی (XAU/USD)",
                 now_utc=now_utc,
                 local_timezone=main.settings.timezone,
             )
-        except Exception as exc:
-            log.warning("morning GOLD ICT preparation failed: %s", exc)
-            return (0, 1)
-        if not await _send_public(main, bot, gold_text, reason="morning_gold_ict"):
-            return (0, 1)
-        _mark_component(main, "gold_ict", today_key)
-
-    if not _component_done(main, "btc_ict", today_key):
-        try:
-            btc_text = await ict.build_daily_ict_message(
-                symbol="BTCUSDT",
-                asset_fa="بیت‌کوین",
+        )
+        btc_task = asyncio.create_task(
+            ict.build_daily_ict_message(
+                symbol="BTCUSD",
+                asset_fa="بیت‌کوین (BTC/USD)",
                 now_utc=now_utc,
                 local_timezone=main.settings.timezone,
             )
-        except Exception as exc:
-            log.warning("morning BTC ICT preparation failed: %s", exc)
-            return (0, 1)
-        if not await _send_public(main, bot, btc_text, reason="morning_btc_ict"):
-            return (0, 1)
-        _mark_component(main, "btc_ict", today_key)
+        )
+        brief_text, gold_text, btc_text = await asyncio.gather(brief_task, gold_task, btc_task)
+    except Exception as exc:
+        log.warning("morning 3-message suite preparation failed: %s", exc)
+        return (0, 1)
 
-    # The core worker marks morning_brief_last_date only when this suite is complete.
-    return (3, 0)
+    messages = (
+        ("brief", brief_text, "morning_brief"),
+        ("gold_ict", gold_text, "morning_gold_ict"),
+        ("btc_ict", btc_text, "morning_btc_ict"),
+    )
+    failed = 0
+    for component, text, reason in messages:
+        if _component_done(main, component, today_key):
+            continue
+        if await _send_public(main, bot, text, reason=reason):
+            _mark_component(main, component, today_key)
+        else:
+            failed += 1
+            break
+
+    complete = all(_component_done(main, component, today_key) for component, _, _ in messages)
+    if complete:
+        # The core worker can now safely set morning_brief_last_date.
+        return (3, 0)
+    # Returning sent=0 prevents the legacy worker from falsely marking the suite
+    # complete when one Telegram send succeeded but a later component failed.
+    return (0, max(1, failed))
 
 
 async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tuple[int, int]:
     if not _is_focus_news(item):
         log.info("market news suppressed by GOLD/BTC/Dow focus policy: key=%s", item.key)
+        return (0, 0)
+
+    if _morning_quiet(main) and not _extraordinary_focus_news(item):
+        log.info("routine focused news suppressed during morning quiet window: key=%s", item.key)
         return (0, 0)
 
     payload = await editorial.prepare_persian_news_payload(
@@ -293,11 +346,12 @@ async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tu
         )
         return (0, 1)
 
+    public_text = _sanitize_public_news_text(payload.text, item)
     ok = await _send_public(
         main,
         bot,
-        _strip_source_line(payload.text),
-        reason="market_news",
+        public_text,
+        reason="market_news_extraordinary" if _morning_quiet(main) else "market_news",
         image_url=payload.image_url,
     )
     return (1, 0) if ok else (0, 1)
@@ -309,6 +363,11 @@ async def _broadcast_event_alert(
     event: market.CalendarEvent,
     minutes_left: int,
 ) -> tuple[int, int]:
+    # Morning high-impact events are already consolidated into message #1.
+    if _morning_quiet(main):
+        log.info("routine economic alert suppressed during morning quiet window: event=%s", event.key)
+        return (0, 0)
+
     tz = ZoneInfo(main.settings.timezone)
     fa_title = await editorial.translate_event_title(event.title, country=event.country)
     when = market._event_time_text(event, tz)
@@ -329,11 +388,13 @@ async def _broadcast_event_alert(
 
 def install(main: Any) -> None:
     """Replace private market broadcasts with focused Persian public editorial."""
+    # The worker calls market.important_recent_news before dispatching items. Patch
+    # that selector too, so unrelated assets are discarded before publication.
     market.important_recent_news = _focused_important_recent_news
     market._broadcast_brief = _broadcast_brief
     market._broadcast_news_item = _broadcast_news_item
     market._broadcast_event_alert = _broadcast_event_alert
     log.info(
-        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa focus=GOLD,BTC,DOW morning_suite=3 native_text=true image_enrichment=true",
+        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa focus=GOLD,BTC,DOW morning_suite=3 morning_quiet=true source_hidden=true image_enrichment=true",
         getattr(main.settings, "public_channel_id", None),
     )
