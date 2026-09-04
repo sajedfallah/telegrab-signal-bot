@@ -31,8 +31,34 @@ def _plan_title(plan, plan_code: str | None, lang: str) -> str:
 
 
 def install(main) -> None:
-    """Keep Account as a high-level hub; detailed AutoTrade validity lives in My License."""
+    """Keep Account as a compact profile/payments hub without duplicate actions."""
     _remove_named_handler(main.router.callback_query, "account")
+
+    def compact_account_menu(lang: str, has_license: bool, has_autotrade: bool = False):
+        # AutoTrade management and Buy/Renew already live on the Home screen.
+        # Keep Account focused on profile, VIP status, payments and referrals.
+        if lang == "fa":
+            rows = [
+                [("📊 وضعیت VIP", "client_vip_access")],
+                [("💳 پرداخت‌های من", "my_payments"), ("🎁 دعوت دوستان", "referral")],
+            ]
+            if has_license:
+                rows.append([("🔐 لینک دسترسی VIP", "new_vip_link")])
+            rows.append([("🌐 تغییر زبان", "change_language")])
+        else:
+            rows = [
+                [("📊 VIP Status", "client_vip_access")],
+                [("💳 My Payments", "my_payments"), ("🎁 Invite Friends", "referral")],
+            ]
+            if has_license:
+                rows.append([("🔐 VIP Access Link", "new_vip_link")])
+            rows.append([("🌐 Change Language", "change_language")])
+        rows += main.nav(lang, "main")
+        return main.kb(rows)
+
+    # Existing account handler and any other account rendering now use the same
+    # compact menu. Keep the legacy signature for compatibility.
+    main.account_menu = compact_account_menu
 
     async def account(cb, bot):
         if not await main.gated(cb, bot):
@@ -51,7 +77,7 @@ def install(main) -> None:
                 f"📦 پلن فعلی: <b>{plan_title}</b>\n"
                 f"💎 دسترسی VIP: <b>{'فعال' if access.vip else 'غیرفعال'}</b>\n"
                 f"🤖 AutoTrade: <b>{'فعال' if access.autotrade else 'غیرفعال'}</b>\n\n"
-                "🔑 جزئیات لایسنس AutoTrade شامل کلید، تاریخ شروع/پایان و زمان باقی‌مانده فقط از بخش «مجوز من» نمایش داده می‌شود."
+                "مدیریت AutoTrade و خرید/تمدید اشتراک از صفحه اصلی انجام می‌شود."
             )
         else:
             text = (
@@ -60,7 +86,7 @@ def install(main) -> None:
                 f"📦 Current plan: <b>{plan_title}</b>\n"
                 f"💎 VIP access: <b>{'ACTIVE' if access.vip else 'INACTIVE'}</b>\n"
                 f"🤖 AutoTrade: <b>{'ACTIVE' if access.autotrade else 'INACTIVE'}</b>\n\n"
-                "🔑 AutoTrade license key, start/expiry and remaining validity are shown only under “My License”."
+                "AutoTrade management and subscription purchase/renewal are available from Home."
             )
 
         await main.screen(
@@ -68,7 +94,7 @@ def install(main) -> None:
             uid,
             cb.message.chat.id,
             text,
-            main.account_menu(lang, access.active, access.autotrade),
+            compact_account_menu(lang, access.active, access.autotrade),
         )
 
     main.router.callback_query.register(account, F.data == "account")
