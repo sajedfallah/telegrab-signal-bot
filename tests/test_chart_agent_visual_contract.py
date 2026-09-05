@@ -16,13 +16,14 @@ def test_chart_agent_uses_approved_template_and_sync_barrier():
     assert "CHART_TEMPLATE_SYNC_FAILED_" in src
     assert "ChartGetInteger(chart_id,CHART_COLOR_BACKGROUND" in src
     assert "ChartGetInteger(chart_id,CHART_SHOW_GRID" in src
-    assert 'NEXUS_CHART_VISUAL_PROFILE "approved-right-ray-v1"' in src
+    assert 'NEXUS_CHART_VISUAL_PROFILE "approved-inline-level-v2"' in src
 
 
 def test_trade_levels_start_at_last_candle_edge_and_extend_right_only():
     src = _src()
     assert "LastCandleRightEdge" in src
     assert "datetime level_start=LastCandleRightEdge(broker_symbol,tf);" in src
+    assert "datetime label_reference=level_start;" in src
     assert "OBJ_TREND" in src
     assert "OBJPROP_RAY_LEFT,false" in src
     assert "OBJPROP_RAY_RIGHT,true" in src
@@ -32,22 +33,37 @@ def test_trade_levels_start_at_last_candle_edge_and_extend_right_only():
     assert 'level_start,tf,targets[i]' in src
 
 
-def test_approved_visual_profile_has_compact_right_side_labels():
+def test_approved_visual_profile_has_compact_inline_labels():
     src = _src()
     assert "InpLabelFontSize = 8" in src
-    assert "InpLabelNameWidth = 82" in src
+    assert "InpLabelNameWidth = 46" in src
     assert "InpLabelPriceWidth = 64" in src
     assert "InpLabelHeight = 18" in src
     assert "InpLabelRightMargin = 72" in src
     assert "OBJ_RECTANGLE_LABEL" in src
     assert "CORNER_RIGHT_UPPER" in src
-    assert '"Entry Zone"' in src
-    assert '"Stop Loss"' in src
-    assert '"Exit Zone "+IntegerToString(i+1)' in src
+    assert 'entry_color,"Entry",digits' in src
+    assert 'sl_color,"SL",digits' in src
+    assert 'string caption="TP"+IntegerToString(i+1);' in src
+    assert '"Entry Zone"' not in src
+    assert '"Stop Loss"' not in src
+    assert '"Exit Zone "' not in src
     assert "STYLE_DASH,InpExitLineWidth" in src
     assert "C'0,174,255'" in src
     assert "C'255,68,84'" in src
     assert "C'44,214,85'" in src
+
+
+def test_inline_tags_are_pixel_centered_on_their_price_lines():
+    src = _src()
+    assert "int center_y=y;" in src
+    assert "int top=center_y-height/2;" in src
+    assert "if(top<1 || top+height>(int)chart_height-1)" in src
+    assert src.count("OBJPROP_ANCHOR,ANCHOR_CENTER") >= 2
+    assert src.count("OBJPROP_YDISTANCE,center_y") >= 2
+    assert "OBJPROP_YDISTANCE,top+1" not in src
+    assert "ANCHOR_RIGHT_UPPER" not in src
+    assert "OBJPROP_COLOR,tag_background" in src
 
 
 def test_chart_agent_remains_screenshot_only():
