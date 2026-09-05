@@ -1,5 +1,5 @@
 #property strict
-#property version   "0.65"
+#property version   "1.000"
 #property description "NEXUS Web Signal Chart Screenshot Agent"
 
 input string InpApiBaseUrl = "https://api.nexustrade.ir";
@@ -292,18 +292,22 @@ bool ReadFileBytes(const string filename,uchar &raw[])
 {
    int handle=FileOpen(filename,FILE_READ|FILE_BIN);
    if(handle==INVALID_HANDLE) return false;
-   long size=FileSize(handle);
-   if(size<=0 || size>5000000)
+
+   ulong file_size=FileSize(handle);
+   if(file_size==0 || file_size>5000000)
    {
       FileClose(handle);
       return false;
    }
-   ArrayResize(raw,(int)size);
-   int read=FileReadArray(handle,raw,0,(int)size);
-   FileClose(handle);
-   return read==(int)size;
-}
 
+   int byte_count=(int)file_size;
+   ArrayResize(raw,byte_count);
+
+   uint bytes_read=FileReadArray(handle,raw,0,byte_count);
+   FileClose(handle);
+
+   return bytes_read==(uint)byte_count;
+}
 bool CaptureJob(const long job_id,const long signal_db_id,const string signal_code,const string requested_symbol,
                 const string tf_text,const string direction,const double entry,const double sl,const double &targets[],
                 string &broker_symbol,string &image_b64,string &sha256,string &error_text)
