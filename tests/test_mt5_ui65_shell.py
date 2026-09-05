@@ -2,12 +2,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-UI = (ROOT / "mt5/NEXUS_AutoTrade/NEXUS_AutoTrade_UI65.mq5").read_text(encoding="utf-8")
+UI = (ROOT / "mt5/NEXUS_AutoTrade_UI65/NEXUS_AutoTrade_UI65.mq5").read_text(encoding="utf-8")
 CORE = (ROOT / "mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+SHIM = (ROOT / "mt5/NEXUS_AutoTrade_UI65/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
 
 
 def test_ui65_wraps_exact_hardened_core_instead_of_copying_trade_logic():
     assert '#include "NEXUS_AutoTrade.mq5"' in UI
+    assert '#include "../NEXUS_AutoTrade/NEXUS_AutoTrade.mq5"' in SHIM
     assert '#define OnInit                 NEXUSCore_OnInit' in UI
     assert '#define OnTradeTransaction     NEXUSCore_OnTradeTransaction' in UI
     assert "g_trade.OpenSignal" not in UI
@@ -66,10 +68,11 @@ def test_ui_theme_is_dark_and_uses_segoe_without_second_minimize_button():
 
 def test_tick_path_only_delegates_to_hardened_core():
     block = UI[UI.index("void OnTick()"):UI.index("void OnTradeTransaction", UI.index("void OnTick()"))]
-    assert "NEXUSCore_OnTick();" in block
-    assert "WebRequest" not in block
-    assert "ChartScreenShot" not in block
-    assert "UI65PaintStatusPanel" not in block
+    executable = "\n".join(line for line in block.splitlines() if not line.strip().startswith("//"))
+    assert "NEXUSCore_OnTick();" in executable
+    assert "WebRequest" not in executable
+    assert "ChartScreenShot" not in executable
+    assert "UI65PaintStatusPanel" not in executable
 
 
 def test_web_chart_agent_stays_separate_from_trading_ui_shell():
