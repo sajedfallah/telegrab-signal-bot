@@ -4,9 +4,10 @@
 
 // The UI65 shell repaints visual controls after delegated core events/timers.
 // MT5 OBJ_EDIT loses native keyboard focus if SELECTED is forced false during
-// that repaint. Setup also rebuilds its chrome, so the focused License/Admin
-// edit must not be deleted. These wrappers are defined *after* the production
-// core include, therefore hardened trading/runtime code is never intercepted.
+// that repaint, and re-setting identical text can move the caret. Setup also
+// rebuilds its chrome, so the focused License/Admin edit must not be deleted.
+// These wrappers are defined *after* the production core include, therefore
+// hardened trading/runtime code is never intercepted.
 bool UI65IsFocusedEdit(const long chart_id,const string name)
   {
    if(StringFind(name,NXS_UI_PREFIX)!=0) return false;
@@ -37,5 +38,18 @@ bool UI65ObjectSetIntegerCompat(const long chart_id,const string name,
    return ObjectSetInteger(chart_id,name,property_id,value);
   }
 
+bool UI65ObjectSetStringCompat(const long chart_id,const string name,
+                               const ENUM_OBJECT_PROPERTY_STRING property_id,
+                               const string value)
+  {
+   if(property_id==OBJPROP_TEXT && UI65IsFocusedEdit(chart_id,name))
+     {
+      string current=ObjectGetString(chart_id,name,property_id);
+      if(current==value) return true;
+     }
+   return ObjectSetString(chart_id,name,property_id,value);
+  }
+
 #define ObjectDelete      UI65ObjectDeleteCompat
 #define ObjectSetInteger  UI65ObjectSetIntegerCompat
+#define ObjectSetString   UI65ObjectSetStringCompat
