@@ -9,8 +9,19 @@ input int    InpHttpTimeoutMs = 8000;
 input int    InpChartLoadTimeoutMs = 5000;
 input int    InpScreenshotWidth = 1280;
 input int    InpScreenshotHeight = 720;
+input string InpChartTemplate = "NEXUS_Screenshot.tpl";
+input int    InpTemplateLoadDelayMs = 500;
+input double InpChartShiftPercent = 27.0;
+input int    InpTradeLineWidth = 2;
+input int    InpExitLineWidth = 1;
+input int    InpLabelFontSize = 8;
+input int    InpLabelNameWidth = 82;
+input int    InpLabelPriceWidth = 64;
+input int    InpLabelHeight = 18;
+input int    InpLabelRightMargin = 72;
 
 #define NEXUS_CHART_AGENT_VERSION "0.6.5-chart-agent"
+#define NEXUS_CHART_VISUAL_PROFILE "approved-right-ray-v1"
 
 string g_account = "";
 
@@ -238,6 +249,25 @@ bool WaitChartReady(const string symbol,const ENUM_TIMEFRAMES tf)
    return false;
 }
 
+bool WaitChartInstanceReady(const long chart_id,const string symbol,const ENUM_TIMEFRAMES tf)
+{
+   ulong start=GetTickCount64();
+   ulong timeout=(ulong)MathMax(3000,InpChartLoadTimeoutMs);
+
+   while(GetTickCount64()-start < timeout)
+   {
+      long width=0;
+      if(ChartSymbol(chart_id)==symbol &&
+         ChartPeriod(chart_id)==tf &&
+         ChartGetInteger(chart_id,CHART_WIDTH_IN_PIXELS,0,width) &&
+         width>0)
+         return true;
+
+      Sleep(100);
+   }
+   return false;
+}
+
 void DeleteShotObjects(const long chart_id,const string prefix)
 {
    int total=ObjectsTotal(chart_id,-1,-1);
@@ -250,17 +280,129 @@ void DeleteShotObjects(const long chart_id,const string prefix)
    ChartRedraw(chart_id);
 }
 
-bool DrawLevel(const long chart_id,const string name,const double price,const color clr,const ENUM_LINE_STYLE style,const string label)
+datetime LastCandleRightEdge(const string symbol,const ENUM_TIMEFRAMES tf)
 {
-   if(price<=0) return false;
-   if(!ObjectCreate(chart_id,name,OBJ_HLINE,0,0,price)) return false;
-   ObjectSetDouble(chart_id,name,OBJPROP_PRICE,price);
+   datetime open_time=iTime(symbol,tf,0);
+   int seconds=PeriodSeconds(tf);
+   if(seconds<=0) seconds=60;
+   if(open_time<=0) open_time=TimeCurrent();
+   return open_time+(datetime)seconds;
+}
+
+bool DrawTradeRay(const long chart_id,const string name,const datetime start_time,
+                  const ENUM_TIMEFRAMES tf,const double price,const color clr,
+                  const ENUM_LINE_STYLE style,const int width)
+{
+   if(price<=0 || start_time<=0) return false;
+
+   int seconds=PeriodSeconds(tf);
+   if(seconds<=0) seconds=60;
+   datetime second_time=start_time+(datetime)seconds;
+
+   if(!ObjectCreate(chart_id,name,OBJ_TREND,0,start_time,price,second_time,price))
+      return false;
+
    ObjectSetInteger(chart_id,name,OBJPROP_COLOR,clr);
    ObjectSetInteger(chart_id,name,OBJPROP_STYLE,style);
-   ObjectSetInteger(chart_id,name,OBJPROP_WIDTH,1);
+   ObjectSetInteger(chart_id,name,OBJPROP_WIDTH,MathMax(1,width));
+   ObjectSetInteger(chart_id,name,OBJPROP_RAY_LEFT,false);
+   ObjectSetInteger(chart_id,name,OBJPROP_RAY_RIGHT,true);
+   ObjectSetInteger(chart_id,name,OBJPROP_BACK,false);
    ObjectSetInteger(chart_id,name,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,name,OBJPROP_SELECTED,false);
    ObjectSetInteger(chart_id,name,OBJPROP_HIDDEN,true);
-   ObjectSetString(chart_id,name,OBJPROP_TEXT,label);
+   return true;
+}
+
+bool DrawCompactTag(const long chart_id,const string prefix,const string key,
+                    const datetime reference_time,const double price,
+                    const color accent_color,const string caption,
+                    const int digits)
+{
+   int x=0,y=0;
+   if(!ChartTimePriceToXY(chart_id,0,reference_time,price,x,y))
+      return false;
+
+   long chart_height=0;
+   if(!ChartGetInteger(chart_id,CHART_HEIGHT_IN_PIXELS,0,chart_height) || chart_height<=0)
+      return false;
+
+   int height=MathMax(14,InpLabelHeight);
+   int name_width=MathMax(64,InpLabelNameWidth);
+   int price_width=MathMax(54,InpLabelPriceWidth);
+   int top=y-height/2;
+   int max_top=(int)chart_height-height-2;
+   if(top<2) top=2;
+   if(top>max_top) top=max_top;
+
+   int margin=MathMax(4,InpLabelRightMargin);
+   string name_box=prefix+key+".NAME.BOX";
+   string price_box=prefix+key+".PRICE.BOX";
+   string name_text=prefix+key+".NAME.TEXT";
+   string price_text=prefix+key+".PRICE.TEXT";
+
+   if(!ObjectCreate(chart_id,price_box,OBJ_RECTANGLE_LABEL,0,0,0))
+      return false;
+   ObjectSetInteger(chart_id,price_box,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_XDISTANCE,margin);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_YDISTANCE,top);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_XSIZE,price_width);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_YSIZE,height);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_BGCOLOR,accent_color);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_COLOR,accent_color);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_BORDER_TYPE,BORDER_FLAT);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_WIDTH,1);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_BACK,false);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_SELECTED,false);
+   ObjectSetInteger(chart_id,price_box,OBJPROP_HIDDEN,true);
+
+   if(!ObjectCreate(chart_id,name_box,OBJ_RECTANGLE_LABEL,0,0,0))
+      return false;
+   ObjectSetInteger(chart_id,name_box,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_XDISTANCE,margin+price_width);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_YDISTANCE,top);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_XSIZE,name_width);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_YSIZE,height);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_BGCOLOR,C'15,21,31');
+   ObjectSetInteger(chart_id,name_box,OBJPROP_COLOR,accent_color);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_BORDER_TYPE,BORDER_FLAT);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_WIDTH,1);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_BACK,false);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_SELECTED,false);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_HIDDEN,true);
+
+   if(!ObjectCreate(chart_id,name_text,OBJ_LABEL,0,0,0))
+      return false;
+   ObjectSetInteger(chart_id,name_text,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_XDISTANCE,margin+price_width+5);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_YDISTANCE,top+1);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_COLOR,clrWhite);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_FONTSIZE,MathMax(7,InpLabelFontSize));
+   ObjectSetInteger(chart_id,name_text,OBJPROP_BACK,false);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_SELECTED,false);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_HIDDEN,true);
+   ObjectSetString(chart_id,name_text,OBJPROP_FONT,"Arial");
+   ObjectSetString(chart_id,name_text,OBJPROP_TEXT,caption);
+
+   if(!ObjectCreate(chart_id,price_text,OBJ_LABEL,0,0,0))
+      return false;
+   ObjectSetInteger(chart_id,price_text,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_XDISTANCE,margin+5);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_YDISTANCE,top+1);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_COLOR,clrWhite);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_FONTSIZE,MathMax(7,InpLabelFontSize));
+   ObjectSetInteger(chart_id,price_text,OBJPROP_BACK,false);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_SELECTABLE,false);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_SELECTED,false);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_HIDDEN,true);
+   ObjectSetString(chart_id,price_text,OBJPROP_FONT,"Arial");
+   ObjectSetString(chart_id,price_text,OBJPROP_TEXT,
+                   DoubleToString(price,MathMax(0,digits)));
    return true;
 }
 
@@ -308,6 +450,7 @@ bool ReadFileBytes(const string filename,uchar &raw[])
 
    return bytes_read==(uint)byte_count;
 }
+
 bool CaptureJob(const long job_id,const long signal_db_id,const string signal_code,const string requested_symbol,
                 const string tf_text,const string direction,const double entry,const double sl,const double &targets[],
                 string &broker_symbol,string &image_b64,string &sha256,string &error_text)
@@ -332,41 +475,171 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
       return false;
    }
 
+   if(!WaitChartInstanceReady(chart_id,broker_symbol,tf))
+   {
+      error_text="CHART_INSTANCE_NOT_READY";
+      ChartClose(chart_id);
+      return false;
+   }
+
+   if(StringLen(Trim(InpChartTemplate))>0)
+   {
+      ResetLastError();
+
+      if(!ChartApplyTemplate(chart_id,InpChartTemplate))
+      {
+         int template_error=GetLastError();
+         error_text="CHART_TEMPLATE_APPLY_FAILED_"+IntegerToString(template_error);
+         ChartClose(chart_id);
+         return false;
+      }
+
+      long template_background=0;
+      long template_grid=0;
+
+      ResetLastError();
+      if(!ChartGetInteger(chart_id,CHART_COLOR_BACKGROUND,0,template_background))
+      {
+         int sync_error=GetLastError();
+         error_text="CHART_TEMPLATE_SYNC_FAILED_"+IntegerToString(sync_error);
+         ChartClose(chart_id);
+         return false;
+      }
+
+      if(!ChartGetInteger(chart_id,CHART_SHOW_GRID,0,template_grid))
+      {
+         int grid_error=GetLastError();
+         error_text="CHART_TEMPLATE_GRID_READ_FAILED_"+IntegerToString(grid_error);
+         ChartClose(chart_id);
+         return false;
+      }
+
+      ChartRedraw(chart_id);
+      Sleep(MathMax(100,InpTemplateLoadDelayMs));
+
+      Print("[NEXUS ChartAgent] Template synchronized. chart=",chart_id,
+            " template=",InpChartTemplate,
+            " background=",template_background,
+            " grid=",template_grid);
+   }
+
+   if(!WaitChartReady(broker_symbol,tf))
+   {
+      error_text="CHART_DATA_TIMEOUT";
+      ChartClose(chart_id);
+      return false;
+   }
+
+   ChartSetInteger(chart_id,CHART_AUTOSCROLL,false);
+   ChartSetInteger(chart_id,CHART_SHIFT,true);
+   double shift=MathMax(10.0,MathMin(45.0,InpChartShiftPercent));
+   ChartSetDouble(chart_id,CHART_SHIFT_SIZE,shift);
+   ChartNavigate(chart_id,CHART_END,0);
+   ChartRedraw(chart_id);
+   Sleep(100);
+
    bool ok=false;
    string prefix="NXS.SHOT."+IntegerToString((int)job_id)+".";
    string filename="NEXUS_SHOT_"+IntegerToString((int)job_id)+"_"+signal_code+".png";
 
    do
    {
-      if(!WaitChartReady(broker_symbol,tf))
+      DeleteShotObjects(chart_id,prefix);
+
+      datetime level_start=LastCandleRightEdge(broker_symbol,tf);
+      datetime label_reference=iTime(broker_symbol,tf,0);
+      if(level_start<=0 || label_reference<=0)
       {
-         error_text="CHART_DATA_TIMEOUT";
+         error_text="LAST_CANDLE_TIME_UNAVAILABLE";
          break;
       }
 
-      DeleteShotObjects(chart_id,prefix);
-      color entry_color=clrDodgerBlue;
-      color sl_color=clrTomato;
-      color tp_color=clrLimeGreen;
-      DrawLevel(chart_id,prefix+"ENTRY",entry,entry_color,STYLE_SOLID,"ENTRY");
-      DrawLevel(chart_id,prefix+"SL",sl,sl_color,STYLE_SOLID,"SL");
+      color entry_color=C'0,174,255';
+      color sl_color=C'255,68,84';
+      color tp_color=C'44,214,85';
+
+      if(!DrawTradeRay(chart_id,prefix+"ENTRY.RAY",level_start,tf,entry,
+                       entry_color,STYLE_SOLID,InpTradeLineWidth))
+      {
+         error_text="ENTRY_RAY_DRAW_FAILED";
+         break;
+      }
+
+      if(!DrawTradeRay(chart_id,prefix+"SL.RAY",level_start,tf,sl,
+                       sl_color,STYLE_SOLID,InpTradeLineWidth))
+      {
+         error_text="SL_RAY_DRAW_FAILED";
+         break;
+      }
+
       for(int i=0;i<ArraySize(targets);i++)
-         DrawLevel(chart_id,prefix+"TP"+IntegerToString(i+1),targets[i],tp_color,STYLE_DASH,"TP"+IntegerToString(i+1));
+      {
+         if(!DrawTradeRay(chart_id,prefix+"TP"+IntegerToString(i+1)+".RAY",
+                          level_start,tf,targets[i],tp_color,STYLE_DASH,InpExitLineWidth))
+         {
+            error_text="TP_RAY_DRAW_FAILED_"+IntegerToString(i+1);
+            break;
+         }
+      }
+      if(StringLen(error_text)>0) break;
+
+      ChartRedraw(chart_id);
+      Sleep(100);
+
+      int digits=(int)SymbolInfoInteger(broker_symbol,SYMBOL_DIGITS);
+      if(digits<0) digits=2;
+
+      if(!DrawCompactTag(chart_id,prefix,"ENTRY.TAG",label_reference,entry,
+                         entry_color,"Entry Zone",digits))
+      {
+         error_text="ENTRY_TAG_DRAW_FAILED";
+         break;
+      }
+
+      if(!DrawCompactTag(chart_id,prefix,"SL.TAG",label_reference,sl,
+                         sl_color,"Stop Loss",digits))
+      {
+         error_text="SL_TAG_DRAW_FAILED";
+         break;
+      }
+
+      for(int i=0;i<ArraySize(targets);i++)
+      {
+         string caption="Exit Zone "+IntegerToString(i+1);
+         if(!DrawCompactTag(chart_id,prefix,
+                            "TP"+IntegerToString(i+1)+".TAG",
+                            label_reference,targets[i],tp_color,caption,digits))
+         {
+            error_text="TP_TAG_DRAW_FAILED_"+IntegerToString(i+1);
+            break;
+         }
+      }
+      if(StringLen(error_text)>0) break;
 
       string title=prefix+"TITLE";
       if(ObjectCreate(chart_id,title,OBJ_LABEL,0,0,0))
       {
          ObjectSetInteger(chart_id,title,OBJPROP_CORNER,CORNER_LEFT_UPPER);
-         ObjectSetInteger(chart_id,title,OBJPROP_XDISTANCE,18);
-         ObjectSetInteger(chart_id,title,OBJPROP_YDISTANCE,18);
+         ObjectSetInteger(chart_id,title,OBJPROP_XDISTANCE,16);
+         ObjectSetInteger(chart_id,title,OBJPROP_YDISTANCE,16);
          ObjectSetInteger(chart_id,title,OBJPROP_COLOR,clrWhite);
-         ObjectSetInteger(chart_id,title,OBJPROP_FONTSIZE,12);
+         ObjectSetInteger(chart_id,title,OBJPROP_FONTSIZE,10);
          ObjectSetInteger(chart_id,title,OBJPROP_SELECTABLE,false);
+         ObjectSetInteger(chart_id,title,OBJPROP_SELECTED,false);
          ObjectSetInteger(chart_id,title,OBJPROP_HIDDEN,true);
-         ObjectSetString(chart_id,title,OBJPROP_TEXT,signal_code+"  "+Upper(requested_symbol)+"  "+Upper(direction)+"  "+Upper(tf_text));
+         ObjectSetString(chart_id,title,OBJPROP_FONT,"Arial");
+         ObjectSetString(chart_id,title,OBJPROP_TEXT,
+                         signal_code+"  "+Upper(requested_symbol)+"  "+
+                         Upper(direction)+"  "+Upper(tf_text));
       }
+
       ChartRedraw(chart_id);
       Sleep(250);
+
+      Print("[NEXUS ChartAgent] Visual profile=",NEXUS_CHART_VISUAL_PROFILE,
+            " start=",TimeToString(level_start,TIME_DATE|TIME_MINUTES),
+            " label_font=",InpLabelFontSize,
+            " shift=",DoubleToString(shift,1));
 
       FileDelete(filename);
       ResetLastError();
@@ -479,7 +752,8 @@ int OnInit()
    int seconds=MathMax(1,InpPollSeconds);
    EventSetTimer(seconds);
    Print("[NEXUS ChartAgent] Started account=",g_account," api=",InpApiBaseUrl,
-         " interval=",seconds,"s. This EA is screenshot-only and never trades.");
+         " interval=",seconds,"s visual=",NEXUS_CHART_VISUAL_PROFILE,
+         ". This EA is screenshot-only and never trades.");
    return INIT_SUCCEEDED;
 }
 
