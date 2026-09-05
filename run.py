@@ -36,6 +36,7 @@ from app.autotrade_user_runtime import install_autotrade_user_experience
 from app.autotrade_cleanup_runtime import install_autotrade_durable_cleanup
 from app.customer_experience import install_customer_experience
 from app.customer_menu_runtime import install_customer_menu_runtime
+from app.miniapp_bot_runtime import install_miniapp_bot_runtime
 from app.admin_referral_invite_runtime import install as install_admin_referral_invite
 from app.growth_conversion_runtime import install as install_growth_conversion
 from app.edge_analytics_runtime import install as install_edge_analytics
@@ -61,6 +62,7 @@ install_autotrade_durable_cleanup(main_module)
 
 install_customer_experience(main_module)
 install_customer_menu_runtime(main_module)
+install_miniapp_bot_runtime(main_module)
 install_admin_referral_invite(main_module)
 install_growth_conversion(main_module)
 install_edge_analytics(main_module)
