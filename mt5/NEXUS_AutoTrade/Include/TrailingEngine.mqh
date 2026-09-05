@@ -43,7 +43,7 @@ bool NexusTrailClaimManageSecond(const string sig,const datetime now)
       (double)now,
       previous
    );
-  }
+   }
 
 // Hardened profile-based trailing engine.
 // NEXUS positions use the immutable signal snapshot.
@@ -299,7 +299,7 @@ public:
         {
          ulong ticket=PositionGetTicket(i); if(ticket==0||!PositionSelectByTicket(ticket))continue;
          long magic=(long)PositionGetInteger(POSITION_MAGIC); bool nexus=magic==m_magic; bool manual=!nexus&&manage_manual; if(!nexus&&!manual)continue;
-         string sig=PositionGetString(POSITION_COMMENT); long id=(long)PositionGetInteger(POSITION_IDENTIFIER);
+          string sig=NexusTrailRecoverSignal(ticket,PositionGetString(POSITION_COMMENT)); long id=(long)PositionGetInteger(POSITION_IDENTIFIER);
          if(manual){sig="MANUAL."+(string)id;InitManual(ticket,id,sig,manual_profile);} else if(sig=="")continue;
          int mode=(int)NexusTrailGet(sig,"mode",0); if(mode<1||mode>7)continue;
          m_tf=SignalTF(sig);

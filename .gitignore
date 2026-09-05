@@ -19,3 +19,8 @@ mt5/**/Files/NEXUS_Shots/
 test-results/
 dist/
 build/
+admin-web/node_modules/
+admin-web/dist/
+admin-web/*.tsbuildinfo
+admin-web/vite.config.js
+admin-web/vite.config.d.ts

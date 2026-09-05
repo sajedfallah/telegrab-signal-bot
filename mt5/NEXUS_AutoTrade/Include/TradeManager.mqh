@@ -703,7 +703,6 @@ public:
       double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
       if(before<=0 || minv<=0) { m_last_error="invalid broker position volume metadata"; return false; }
       if(step<=0) step=minv;
-
       // Broker-volume-grid aware partial close.
       // Example: 0.02 position, 30% requested = 0.006 while broker step/min
       // is 0.01. The old floor-to-step policy produced 0.00 forever.
