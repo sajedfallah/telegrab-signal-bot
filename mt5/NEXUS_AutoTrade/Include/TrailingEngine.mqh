@@ -24,6 +24,31 @@ void NexusTrailSet(const string sig,const string field,const double v)
    GlobalVariableSet(NexusTrailPrefix(sig)+field,v);
   }
 
+// A broker may clear or rewrite POSITION_COMMENT after a partial close.  The
+// signal-to-ticket mapping is persisted when the trade is opened, so trailing
+// must use that immutable mapping instead of abandoning an otherwise managed
+// position when its mutable broker comment becomes empty.
+string NexusTrailRecoverSignal(const ulong ticket,const string broker_comment)
+  {
+   string sig=broker_comment;
+   StringTrimLeft(sig); StringTrimRight(sig); StringReplace(sig," ","_");
+   if(StringFind(sig,"NX-")==0 || StringFind(sig,"MANUAL.")==0) return sig;
+
+   string prefix="NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+".";
+   string suffix=".ticket";
+   int total=GlobalVariablesTotal();
+   for(int i=0;i<total;i++)
+     {
+      string key=GlobalVariableName(i);
+      if(StringFind(key,prefix)!=0) continue;
+      int suffix_pos=StringLen(key)-StringLen(suffix);
+      if(suffix_pos<=StringLen(prefix) || StringSubstr(key,suffix_pos)!=suffix) continue;
+      if((ulong)MathRound(GlobalVariableGet(key))!=ticket) continue;
+      return StringSubstr(key,StringLen(prefix),suffix_pos-StringLen(prefix));
+     }
+   return "";
+  }
+
 // Hardened profile-based trailing engine.
 // NEXUS positions use the immutable signal snapshot.
 // Manual positions are managed only with explicit EA opt-in and use
@@ -277,7 +302,7 @@ public:
         {
          ulong ticket=PositionGetTicket(i); if(ticket==0||!PositionSelectByTicket(ticket))continue;
          long magic=(long)PositionGetInteger(POSITION_MAGIC); bool nexus=magic==m_magic; bool manual=!nexus&&manage_manual; if(!nexus&&!manual)continue;
-         string sig=PositionGetString(POSITION_COMMENT); long id=(long)PositionGetInteger(POSITION_IDENTIFIER);
+          string sig=NexusTrailRecoverSignal(ticket,PositionGetString(POSITION_COMMENT)); long id=(long)PositionGetInteger(POSITION_IDENTIFIER);
          if(manual){sig="MANUAL."+(string)id;InitManual(ticket,id,sig,manual_profile);} else if(sig=="")continue;
          int mode=(int)NexusTrailGet(sig,"mode",0); if(mode<1||mode>7)continue;
          m_tf=SignalTF(sig);

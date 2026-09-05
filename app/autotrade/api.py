@@ -11,6 +11,7 @@ import hmac
 from io import BytesIO
 from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from .. import db
@@ -24,9 +25,39 @@ API_VERSION = "0.6.5"
 @asynccontextmanager
 async def lifespan(_app):
     db.init_db()
+    from ..admin_api import init_admin_schema
+    init_admin_schema()
     yield
 
 app = FastAPI(title="NEXUS Auto Trade API", version=API_VERSION, lifespan=lifespan)
+
+# Browser access is deliberately allow-listed. For local development the Vite
+# origin is enabled; production origins can be supplied as a comma-separated
+# ADMIN_WEB_ORIGINS value.
+import os
+_admin_origins = [x.strip() for x in os.getenv("ADMIN_WEB_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173").split(",") if x.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_admin_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+)
+
+@app.middleware("http")
+async def admin_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.path.startswith("/admin"):
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss:"
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+from ..admin_api import router as admin_router
+app.include_router(admin_router)
 
 RECEIPT_STATUSES = "^(?:executed|activated|rejected|failed|failed_retryable|closed|pending|ignored)$"
 
@@ -721,6 +752,8 @@ def get_signals(
     x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
 ):
     key, account, _, _, _ = _ea_auth_headers(x_license_key, x_mt5_account)
+    if db.get_setting("web_control_KILL_SWITCH", "0") == "1" or db.get_setting("web_control_NEW_ENTRIES", "0") == "1":
+        return {"license_status": "PAUSED", "signals": [], "trading_paused": True}
     admin = _admin_auth(x_admin_mode, x_admin_token, account)
     if admin:
         rows = db.autotrade_active_signals(after_id, limit)
@@ -1056,3 +1089,12 @@ def command_receipt(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"ok": True}
+
+
+# A production build of the React console can be served by the same process,
+# keeping the browser and API on one trusted origin. API routes above retain
+# priority over the static mount.
+_admin_dist = Path(__file__).resolve().parents[2] / "admin-web" / "dist"
+if _admin_dist.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/admin", StaticFiles(directory=_admin_dist, html=True), name="admin-web")

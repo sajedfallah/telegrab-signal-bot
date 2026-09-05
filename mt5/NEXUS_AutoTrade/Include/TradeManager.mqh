@@ -702,8 +702,21 @@ public:
       double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
       if(before<=0 || minv<=0) { m_last_error="invalid broker position volume metadata"; return false; }
       if(step<=0) step=minv;
-      close_volume=MathFloor(close_volume/step+1e-9)*step;
-      close_volume=NormalizeDouble(close_volume,8);
+       // Select the closest executable step. Always flooring used to turn
+       // 30% of small positions (for example 0.006 of a 0.02 lot position)
+       // into zero even though closing the broker minimum 0.01 was possible.
+       double requested=close_volume;
+       double floor_volume=MathFloor(requested/step+1e-9)*step;
+       double ceil_volume=MathCeil(requested/step-1e-9)*step;
+       double max_partial=MathFloor((before-minv)/step+1e-9)*step;
+       bool floor_valid=(floor_volume>=minv && floor_volume<=max_partial+1e-9);
+       bool ceil_valid=(ceil_volume>=minv && ceil_volume<=max_partial+1e-9);
+       if(floor_valid && ceil_valid)
+          close_volume=(MathAbs(requested-floor_volume)<=MathAbs(ceil_volume-requested)?floor_volume:ceil_volume);
+       else if(floor_valid) close_volume=floor_volume;
+       else if(ceil_valid) close_volume=ceil_volume;
+       else close_volume=MathFloor(requested/step+1e-9)*step;
+       close_volume=NormalizeDouble(close_volume,8);
       if(close_volume<minv) { m_last_error=StringFormat("partial close below minimum volume: requested=%.8f min=%.8f step=%.8f",close_volume,minv,step); return false; }
       if(close_volume>before) close_volume=before;
       double remain=before-close_volume;

@@ -14,6 +14,18 @@ def test_partial_close_checks_trade_retcode_and_live_volume():
     assert "PositionClosePartial(ticket,close_volume)" in TM
 
 
+def test_trailing_recovers_signal_identity_when_broker_clears_comment():
+    assert "NexusTrailRecoverSignal" in TRAIL
+    assert 'NexusTrailRecoverSignal(ticket,PositionGetString(POSITION_COMMENT))' in TRAIL
+    assert 'suffix=".ticket"' in TRAIL
+
+
+def test_small_partial_uses_closest_valid_broker_volume_step():
+    assert "double ceil_volume=MathCeil" in TM
+    assert "double max_partial=" in TM
+    assert "floor_valid" in TM and "ceil_valid" in TM
+
+
 def test_full_close_requires_position_disappearance():
     assert "full close not confirmed" in TM
     assert "PositionSelectByTicket(ticket)" in TM
