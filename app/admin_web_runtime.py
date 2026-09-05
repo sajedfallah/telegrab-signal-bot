@@ -20,12 +20,15 @@ def install_admin_web_runtime() -> None:
         return
 
     from .admin_api import init_admin_schema, router
+    from .admin_signal_runtime import router as signal_router
     from .autotrade.api import app
 
     init_admin_schema()
 
-    if not any(getattr(route, "path", "").startswith("/api/v1/admin-web") for route in app.routes):
+    if not any(getattr(route, "path", "").startswith("/api/v1/admin-web/auth") for route in app.routes):
         app.include_router(router)
+    if not any(getattr(route, "path", "").startswith("/api/v1/admin-web/signals/issue") for route in app.routes):
+        app.include_router(signal_router)
 
     origins = [
         item.strip()
