@@ -15,13 +15,13 @@ input double InpChartShiftPercent = 27.0;
 input int    InpTradeLineWidth = 2;
 input int    InpExitLineWidth = 1;
 input int    InpLabelFontSize = 8;
-input int    InpLabelNameWidth = 82;
+input int    InpLabelNameWidth = 46;
 input int    InpLabelPriceWidth = 64;
 input int    InpLabelHeight = 18;
 input int    InpLabelRightMargin = 72;
 
 #define NEXUS_CHART_AGENT_VERSION "0.6.5-chart-agent"
-#define NEXUS_CHART_VISUAL_PROFILE "approved-right-ray-v1"
+#define NEXUS_CHART_VISUAL_PROFILE "approved-inline-level-v2"
 
 string g_account = "";
 
@@ -328,12 +328,12 @@ bool DrawCompactTag(const long chart_id,const string prefix,const string key,
       return false;
 
    int height=MathMax(14,InpLabelHeight);
-   int name_width=MathMax(64,InpLabelNameWidth);
+   int name_width=MathMax(36,InpLabelNameWidth);
    int price_width=MathMax(54,InpLabelPriceWidth);
-   int top=y-height/2;
-   int max_top=(int)chart_height-height-2;
-   if(top<2) top=2;
-   if(top>max_top) top=max_top;
+   int center_y=y;
+   int top=center_y-height/2;
+   if(top<1 || top+height>(int)chart_height-1)
+      return false;
 
    int margin=MathMax(4,InpLabelRightMargin);
    string name_box=prefix+key+".NAME.BOX";
@@ -357,6 +357,7 @@ bool DrawCompactTag(const long chart_id,const string prefix,const string key,
    ObjectSetInteger(chart_id,price_box,OBJPROP_SELECTED,false);
    ObjectSetInteger(chart_id,price_box,OBJPROP_HIDDEN,true);
 
+   color tag_background=C'15,21,31';
    if(!ObjectCreate(chart_id,name_box,OBJ_RECTANGLE_LABEL,0,0,0))
       return false;
    ObjectSetInteger(chart_id,name_box,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
@@ -364,8 +365,8 @@ bool DrawCompactTag(const long chart_id,const string prefix,const string key,
    ObjectSetInteger(chart_id,name_box,OBJPROP_YDISTANCE,top);
    ObjectSetInteger(chart_id,name_box,OBJPROP_XSIZE,name_width);
    ObjectSetInteger(chart_id,name_box,OBJPROP_YSIZE,height);
-   ObjectSetInteger(chart_id,name_box,OBJPROP_BGCOLOR,C'15,21,31');
-   ObjectSetInteger(chart_id,name_box,OBJPROP_COLOR,accent_color);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_BGCOLOR,tag_background);
+   ObjectSetInteger(chart_id,name_box,OBJPROP_COLOR,tag_background);
    ObjectSetInteger(chart_id,name_box,OBJPROP_BORDER_TYPE,BORDER_FLAT);
    ObjectSetInteger(chart_id,name_box,OBJPROP_WIDTH,1);
    ObjectSetInteger(chart_id,name_box,OBJPROP_BACK,false);
@@ -376,9 +377,9 @@ bool DrawCompactTag(const long chart_id,const string prefix,const string key,
    if(!ObjectCreate(chart_id,name_text,OBJ_LABEL,0,0,0))
       return false;
    ObjectSetInteger(chart_id,name_text,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
-   ObjectSetInteger(chart_id,name_text,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
-   ObjectSetInteger(chart_id,name_text,OBJPROP_XDISTANCE,margin+price_width+5);
-   ObjectSetInteger(chart_id,name_text,OBJPROP_YDISTANCE,top+1);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_ANCHOR,ANCHOR_CENTER);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_XDISTANCE,margin+price_width+name_width/2);
+   ObjectSetInteger(chart_id,name_text,OBJPROP_YDISTANCE,center_y);
    ObjectSetInteger(chart_id,name_text,OBJPROP_COLOR,clrWhite);
    ObjectSetInteger(chart_id,name_text,OBJPROP_FONTSIZE,MathMax(7,InpLabelFontSize));
    ObjectSetInteger(chart_id,name_text,OBJPROP_BACK,false);
@@ -391,10 +392,10 @@ bool DrawCompactTag(const long chart_id,const string prefix,const string key,
    if(!ObjectCreate(chart_id,price_text,OBJ_LABEL,0,0,0))
       return false;
    ObjectSetInteger(chart_id,price_text,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
-   ObjectSetInteger(chart_id,price_text,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
-   ObjectSetInteger(chart_id,price_text,OBJPROP_XDISTANCE,margin+5);
-   ObjectSetInteger(chart_id,price_text,OBJPROP_YDISTANCE,top+1);
-   ObjectSetInteger(chart_id,price_text,OBJPROP_COLOR,clrWhite);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_ANCHOR,ANCHOR_CENTER);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_XDISTANCE,margin+price_width/2);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_YDISTANCE,center_y);
+   ObjectSetInteger(chart_id,price_text,OBJPROP_COLOR,C'9,14,22');
    ObjectSetInteger(chart_id,price_text,OBJPROP_FONTSIZE,MathMax(7,InpLabelFontSize));
    ObjectSetInteger(chart_id,price_text,OBJPROP_BACK,false);
    ObjectSetInteger(chart_id,price_text,OBJPROP_SELECTABLE,false);
@@ -547,7 +548,7 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
       DeleteShotObjects(chart_id,prefix);
 
       datetime level_start=LastCandleRightEdge(broker_symbol,tf);
-      datetime label_reference=iTime(broker_symbol,tf,0);
+      datetime label_reference=level_start;
       if(level_start<=0 || label_reference<=0)
       {
          error_text="LAST_CANDLE_TIME_UNAVAILABLE";
@@ -590,14 +591,14 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
       if(digits<0) digits=2;
 
       if(!DrawCompactTag(chart_id,prefix,"ENTRY.TAG",label_reference,entry,
-                         entry_color,"Entry Zone",digits))
+                         entry_color,"Entry",digits))
       {
          error_text="ENTRY_TAG_DRAW_FAILED";
          break;
       }
 
       if(!DrawCompactTag(chart_id,prefix,"SL.TAG",label_reference,sl,
-                         sl_color,"Stop Loss",digits))
+                         sl_color,"SL",digits))
       {
          error_text="SL_TAG_DRAW_FAILED";
          break;
@@ -605,7 +606,7 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
 
       for(int i=0;i<ArraySize(targets);i++)
       {
-         string caption="Exit Zone "+IntegerToString(i+1);
+         string caption="TP"+IntegerToString(i+1);
          if(!DrawCompactTag(chart_id,prefix,
                             "TP"+IntegerToString(i+1)+".TAG",
                             label_reference,targets[i],tp_color,caption,digits))
