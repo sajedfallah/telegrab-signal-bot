@@ -37,14 +37,25 @@ def test_miniapp_user_session_risk_support_and_admin_guard(tmp_path: Path, monke
     monkeypatch.setenv("MINIAPP_DEV_BYPASS", "true")
     monkeypatch.setenv("MINIAPP_DEV_USER_ID", "990000001")
     db.init_db(); init_admin_schema()
-    db.create_plan("TEST30", 30, "آزمایشی", "Test", usdt_price="10", service_type="signal")
+    db.create_plan("TEST30", 30, "آزمایشی", "Test", usdt_price="10", vip_access=True, autotrade_access=False, service_type="signal")
+    db.create_plan("AUTO30", 30, "اتوترید", "Auto", usdt_price="20", vip_access=False, autotrade_access=True, service_type="auto_trade")
+    db.create_plan("BUNDLE30", 30, "ترکیبی", "Bundle", usdt_price="25", vip_access=True, autotrade_access=True, service_type="auto_trade")
+    for destination in ("FREE", "VIP"):
+        db.create_signal(market_type="GOLD", symbol="XAUUSD", direction="BUY", entry_price=2400, stop_loss=2390,
+                         targets=[2410], risk_percent=1, rr_ratio=1, destination=destination,
+                         chart_file_id=None, created_by=1)
     with TestClient(app) as client:
         session = client.get("/api/v1/miniapp/session")
         assert session.status_code == 200
         assert session.json()["user"]["telegram_id"] == 990000001
-        assert client.get("/api/v1/miniapp/signals").status_code == 200
+        signals = client.get("/api/v1/miniapp/signals")
+        assert signals.status_code == 200
+        assert len(signals.json()["items"]) == 2
+        assert next(x for x in signals.json()["items"] if x["destination"] == "VIP")["locked"] is True
+        assert next(x for x in signals.json()["items"] if x["destination"] == "FREE")["entry_price"] == 2400
         commerce = client.get("/api/v1/miniapp/commerce")
         assert commerce.status_code == 200
+        assert {x["category"] for x in commerce.json()["plans"]} == {"vip", "autotrade", "bundle"}
         plan = commerce.json()["plans"][0]
         payment = client.post("/api/v1/miniapp/payments", json={"plan_code": plan["code"], "method": "USDT", "reference": "miniapp-test-tx-001"})
         assert payment.status_code == 201

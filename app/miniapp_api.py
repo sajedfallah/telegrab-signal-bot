@@ -8,7 +8,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl
+from zoneinfo import ZoneInfo
 
+from aiogram import Bot
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -76,18 +78,31 @@ def _license(uid: int) -> dict[str, Any] | None:
 
 def _signals(uid: int, limit: int = 50) -> list[dict[str, Any]]:
     vip = bool(_license(uid) and db.has_entitlement(uid, "vip"))
+    local_now = datetime.now(ZoneInfo(settings.timezone))
+    local_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    utc_start = local_start.astimezone(timezone.utc).isoformat()
+    utc_end = (local_start + timedelta(days=1)).astimezone(timezone.utc).isoformat()
     with db.conn() as con:
         rows = con.execute(
             """SELECT id,code,market_type,symbol,direction,timeframe,order_type,entry_price,stop_loss,
                       status,destination,trailing_code,created_at,closed_at,result_value,result_unit
                FROM signals
-               WHERE destination IN ('FREE','BOTH') OR (?=1 AND destination IN ('VIP','BOTH'))
+               WHERE created_at>=? AND created_at<? AND destination IN ('FREE','VIP','BOTH')
                ORDER BY id DESC LIMIT ?""",
-            (int(vip), max(1, min(limit, 100))),
+            (utc_start, utc_end, max(1, min(limit, 100))),
         ).fetchall()
         result = []
         for item in rows:
             signal = dict(item)
+            is_vip_only = str(signal["destination"]).upper() == "VIP"
+            signal["channel"] = "VIP" if is_vip_only else "FREE"
+            signal["locked"] = bool(is_vip_only and not vip)
+            if signal["locked"]:
+                result.append({
+                    "id": signal["id"], "symbol": signal["symbol"], "status": signal["status"],
+                    "destination": "VIP", "channel": "VIP", "locked": True,
+                })
+                continue
             signal["targets"] = [dict(x) for x in con.execute(
                 "SELECT target_no,price FROM signal_targets WHERE signal_id=? ORDER BY target_no", (item["id"],)
             )]
@@ -113,6 +128,26 @@ def session(user=Depends(current_user)):
         "waitlist": db.is_on_autotrade_waitlist(uid),
         "links": {"public": settings.public_channel_url, "free": settings.free_channel_url, "support": settings.support_url},
     }
+
+
+@router.post("/vip-channel-link")
+async def vip_channel_link(user=Depends(current_user)):
+    uid = user["id"]
+    lic = _license(uid)
+    if not lic or not db.has_entitlement(uid, "vip"):
+        raise HTTPException(402, "VIP subscription is required")
+    active = db.active_invites_for_user(uid)
+    if active:
+        return {"url": str(active[-1]["invite_link"])}
+    async with Bot(settings.bot_token) as bot:
+        invite = await bot.create_chat_invite_link(
+            settings.vip_channel_id,
+            name=f"NEXUS-MINIAPP-{uid}-{int(lic['id'])}",
+            creates_join_request=True,
+        )
+    db.save_invite(uid, int(lic["id"]), invite.invite_link)
+    db.add_audit(uid, "miniapp_vip_invite_created", int(lic["id"]), None)
+    return {"url": invite.invite_link}
 
 
 @router.get("/signals")
@@ -163,7 +198,10 @@ def save_risk(req: RiskWrite, user=Depends(current_user)):
 
 @router.get("/commerce")
 def commerce(user=Depends(current_user)):
-    plans = [{"code": code, **plan} for code, plan in db.plan_map(active_only=True).items()]
+    plans = []
+    for code, plan in db.plan_map(active_only=True).items():
+        category = "bundle" if plan["vip_access"] and plan["autotrade_access"] else ("autotrade" if plan["autotrade_access"] else "vip")
+        plans.append({"code": code, "category": category, **plan})
     return {
         "plans": plans,
         "payments": _rows(db.user_payments(user["id"])),
