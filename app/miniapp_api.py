@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import shutil
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -11,7 +12,7 @@ from urllib.parse import parse_qsl
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from . import db
@@ -314,7 +315,28 @@ def admin_data(user=Depends(admin_user)):
         payments = con.execute("SELECT * FROM payments ORDER BY id DESC LIMIT 100").fetchall()
         users = con.execute("SELECT telegram_id,username,first_name,language,role,status,points_balance,created_at FROM users ORDER BY updated_at DESC LIMIT 200").fetchall()
         signals = con.execute("SELECT id,code,symbol,direction,status,destination,trailing_code,created_at FROM signals ORDER BY id DESC LIMIT 100").fetchall()
-    return {"users": _rows(users), "payments": _rows(payments), "signals": _rows(signals), "plans": _rows(db.list_plans(active_only=False)), "discounts": _rows(db.list_discounts()), "campaigns": _rows(db.list_campaigns()), "account_changes": _rows(db.pending_mt5_account_change_requests()), "audit": _rows(db.recent_audits(100))}
+        licenses = con.execute("SELECT * FROM licenses ORDER BY id DESC LIMIT 100").fetchall()
+        tickets = con.execute("SELECT * FROM support_tickets ORDER BY id DESC LIMIT 100").fetchall()
+        jobs = con.execute("SELECT * FROM web_notification_jobs ORDER BY id DESC LIMIT 50").fetchall()
+        risk = con.execute("SELECT * FROM user_risk_preferences ORDER BY updated_at DESC LIMIT 100").fetchall()
+        accounts = con.execute("SELECT * FROM autotrade_mt5_accounts ORDER BY last_seen_at DESC LIMIT 100").fetchall()
+    return {
+        "overview": admin_overview(user), "users": _rows(users), "payments": _rows(payments), "signals": _rows(signals),
+        "plans": _rows(db.list_plans(active_only=False)), "licenses": _rows(licenses), "discounts": _rows(db.list_discounts()),
+        "campaigns": _rows(db.list_campaigns()), "account_changes": _rows(db.pending_mt5_account_change_requests()),
+        "waitlist": _rows(db.autotrade_waitlist_users(100)), "levels": db.user_level_counts(),
+        "leaderboard": _rows(db.referral_leaderboard(20)), "tickets": _rows(tickets), "jobs": _rows(jobs),
+        "risk": _rows(risk), "accounts": _rows(accounts), "audit": _rows(db.recent_audits(100)),
+        "settings": {
+            "referral_reward_points": db.get_setting("referral_reward_points", "100"),
+            "points_per_discount_percent": db.get_setting("points_per_discount_percent", "100"),
+            "points_discount_cap_percent": db.get_setting("points_discount_cap_percent", "30"),
+            "pricing_source": db.get_setting("pricing_source", "manual"),
+            "usdt_irr_rate": db.get_setting("usdt_irr_rate", ""),
+            "pricing_ttl_minutes": db.get_setting("pricing_ttl_minutes", "30"),
+            "pricing_proration": db.get_setting("pricing_proration", "1"),
+        },
+    }
 
 
 class AdminUserAction(BaseModel):
@@ -385,3 +407,150 @@ def trade_command(req: TradeCommand, admin=Depends(admin_user)):
     command_id = db.create_autotrade_command(req.signal_id, req.command, {"value": req.value} if req.value else {}, actor_type="TELEGRAM_MINIAPP", actor_id=admin["id"], account_number=req.account_number)
     db.add_audit(admin["id"], "miniapp_trade_command", req.signal_id, f"{req.command}; command={command_id}")
     return {"id": command_id, "status": "QUEUED"}
+
+
+class PlanAdminWrite(BaseModel):
+    price_usdt: str | None = Field(None, max_length=32)
+    setup_fee_usdt: str | None = Field(None, max_length=32)
+    active: bool | None = None
+    vip_access: bool | None = None
+    autotrade_access: bool | None = None
+    renewal_discount_percent: float | None = Field(None, ge=0, le=100)
+
+
+@router.put("/admin/plans/{code}")
+def update_plan(code: str, req: PlanAdminWrite, admin=Depends(admin_user)):
+    if not db.get_plan(code): raise HTTPException(404, "Plan not found")
+    if req.price_usdt is not None: db.update_plan_price(code, "usdt", req.price_usdt)
+    if req.setup_fee_usdt is not None: db.update_plan_setup_fee(code, req.setup_fee_usdt)
+    if req.active is not None: db.set_plan_active(code, req.active)
+    if req.vip_access is not None: db.update_plan_entitlement(code, "vip", req.vip_access)
+    if req.autotrade_access is not None: db.update_plan_entitlement(code, "autotrade", req.autotrade_access)
+    if req.renewal_discount_percent is not None: db.update_plan_renewal_discount(code, req.renewal_discount_percent)
+    db.add_audit(admin["id"], "miniapp_plan_updated", None, code)
+    return {"ok": True}
+
+
+class DiscountAdminWrite(BaseModel):
+    code: str = Field(min_length=2, max_length=32)
+    percent: float = Field(gt=0, le=100)
+    expires_days: int = Field(ge=1, le=3650)
+    max_uses: int | None = Field(None, ge=1)
+
+
+@router.post("/admin/discounts", status_code=201)
+def create_discount(req: DiscountAdminWrite, admin=Depends(admin_user)):
+    try: discount_id = db.create_discount(req.code.upper(), req.percent, req.expires_days, req.max_uses, admin["id"])
+    except Exception as exc: raise HTTPException(409, "Discount code already exists") from exc
+    db.add_audit(admin["id"], "miniapp_discount_created", discount_id, req.code)
+    return {"id": discount_id, "ok": True}
+
+
+@router.put("/admin/discounts/{discount_id}")
+def toggle_discount(discount_id: int, active: bool, admin=Depends(admin_user)):
+    db.set_discount_active(discount_id, active); db.add_audit(admin["id"], "miniapp_discount_toggled", discount_id, str(active))
+    return {"ok": True}
+
+
+class CampaignAdminWrite(BaseModel):
+    title_fa: str = Field(min_length=2, max_length=120)
+    title_en: str = Field(default="NEXUS Campaign", max_length=120)
+    percent: float = Field(gt=0, le=100)
+    days: int = Field(ge=1, le=365)
+    plan_code: str | None = Field(None, max_length=64)
+    audience: str = Field(pattern="^(all|vip|nonvip|expired)$")
+    max_uses: int | None = Field(None, ge=1)
+
+
+@router.post("/admin/campaigns", status_code=201)
+def create_campaign(req: CampaignAdminWrite, admin=Depends(admin_user)):
+    campaign_id = db.create_campaign(req.title_fa, req.title_en, req.percent, req.days, req.plan_code, req.audience, req.max_uses, admin["id"])
+    db.add_audit(admin["id"], "miniapp_campaign_created", campaign_id, req.title_fa)
+    return {"id": campaign_id, "ok": True}
+
+
+@router.put("/admin/campaigns/{campaign_id}")
+def toggle_campaign(campaign_id: int, active: bool, admin=Depends(admin_user)):
+    db.set_campaign_active(campaign_id, active); db.add_audit(admin["id"], "miniapp_campaign_toggled", campaign_id, str(active))
+    return {"ok": True}
+
+
+class SettingAdminWrite(BaseModel):
+    key: str
+    value: str = Field(max_length=256)
+
+
+@router.put("/admin/settings")
+def update_setting(req: SettingAdminWrite, admin=Depends(admin_user)):
+    allowed = {"referral_reward_points", "points_per_discount_percent", "points_discount_cap_percent", "pricing_source", "usdt_irr_rate", "pricing_ttl_minutes", "pricing_proration"}
+    if req.key not in allowed: raise HTTPException(422, "Setting is not editable")
+    db.set_setting(req.key, req.value); db.add_audit(admin["id"], "miniapp_setting_updated", None, req.key)
+    return {"ok": True}
+
+
+class BroadcastAdminWrite(BaseModel):
+    audience: str = Field(pattern="^(ALL|VIP|REGULAR)$")
+    message: str = Field(min_length=2, max_length=4000)
+    channels: list[str] = ["TELEGRAM"]
+
+
+@router.post("/admin/broadcast", status_code=202)
+def broadcast(req: BroadcastAdminWrite, background: BackgroundTasks, admin=Depends(admin_user)):
+    channels = sorted({x.upper() for x in req.channels})
+    if any(x not in {"TELEGRAM", "EMAIL", "PUSH"} for x in channels): raise HTTPException(422, "Invalid channel")
+    with db.conn() as con:
+        cur = con.execute("INSERT INTO web_notification_jobs(channels,audience,message,created_by,created_at) VALUES(?,?,?,?,?)", (",".join(channels), req.audience, req.message, admin["id"], db.now_iso()))
+    from .admin_api import _deliver_notification
+    background.add_task(_deliver_notification, int(cur.lastrowid), channels, req.audience, req.message)
+    db.add_audit(admin["id"], "miniapp_broadcast_queued", int(cur.lastrowid), req.audience)
+    return {"id": cur.lastrowid, "status": "QUEUED"}
+
+
+class SupportReplyWrite(BaseModel):
+    reply: str = Field(min_length=2, max_length=4000)
+    close: bool = True
+
+
+@router.post("/admin/support/{ticket_id}/reply")
+def support_reply(ticket_id: int, req: SupportReplyWrite, admin=Depends(admin_user)):
+    with db.conn() as con:
+        cur = con.execute("UPDATE support_tickets SET admin_reply=?,status=?,updated_at=? WHERE id=?", (req.reply, "CLOSED" if req.close else "OPEN", db.now_iso(), ticket_id))
+    if not cur.rowcount: raise HTTPException(404, "Ticket not found")
+    db.add_audit(admin["id"], "miniapp_support_replied", ticket_id, None)
+    return {"ok": True}
+
+
+@router.post("/admin/backup", status_code=201)
+def create_backup(admin=Depends(admin_user)):
+    folder = db.DB_PATH.parent / "artifacts" / "backups"; folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"nexus-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.db"
+    shutil.copy2(db.DB_PATH, target); db.add_audit(admin["id"], "miniapp_database_backup", None, target.name)
+    return {"ok": True, "name": target.name, "size": target.stat().st_size}
+
+
+class SignalAdminWrite(BaseModel):
+    market_type: str = Field(pattern="^(FOREX|CRYPTO|GOLD|INDEX|OTHER)$")
+    symbol: str = Field(min_length=2, max_length=32)
+    direction: str = Field(pattern="^(BUY|SELL)$")
+    timeframe: str = Field(default="M5")
+    order_type: str = Field(default="MARKET")
+    entry_price: float
+    stop_loss: float
+    targets: list[float] = Field(min_length=1, max_length=10)
+    risk_percent: float = Field(gt=0, le=10)
+    destination: str = Field(pattern="^(FREE|VIP|BOTH)$")
+    volume_mode: str = Field(default="RISK", pattern="^(RISK|FIXED)$")
+    lot_size: float | None = Field(None, gt=0)
+    trailing_code: str | None = None
+
+
+@router.post("/admin/signals", status_code=201)
+def create_admin_signal(req: SignalAdminWrite, admin=Depends(admin_user)):
+    try:
+        row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
+            stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
+            chart_file_id=None, created_by=admin["id"], lot_size=req.lot_size, trailing_code=req.trailing_code,
+            order_type=req.order_type, volume_mode=req.volume_mode, timeframe=req.timeframe)
+    except ValueError as exc: raise HTTPException(422, str(exc)) from exc
+    db.add_audit(admin["id"], "miniapp_signal_created", int(row["id"]), str(row["code"]))
+    return dict(row)

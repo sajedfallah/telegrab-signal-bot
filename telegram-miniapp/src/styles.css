@@ -456,3 +456,17 @@ header > div { flex: 1; margin-inline: 10px; }
 .lockMessage b { display: block; margin: 8px; }
 .lockMessage p { color: var(--muted); font-size: 12px; }
 .channelTag { display: block; color: #22c982; text-align: left; margin-bottom: 5px; }
+.adminMetrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 12px; }
+.adminMetrics > div { padding: 14px 7px; text-align: center; border: 1px solid var(--line); border-radius: 16px; background: #101b17; }
+.adminMetrics b,.adminMetrics span { display: block; }
+.adminMetrics b { color: var(--green); font-size: 18px; }
+.adminMetrics span { color: var(--muted); font-size: 11px; margin-top: 4px; }
+.adminModules { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.adminModules button { min-height: 118px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; text-align: right; gap: 6px; background: linear-gradient(145deg,#142a22,#0e1d18); border-color: #315446; }
+.adminModules button:last-child { grid-column: 1/-1; min-height: 92px; }
+.adminModules i { font-style: normal; font-size: 26px; }
+.adminModules small { color: var(--muted); }
+.adminBack { width: 100%; margin-bottom: 12px; background: #111d18; border-color: var(--line); color: #8fe6bc; }
+.sectionTools { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 13px; }
+.sectionTools span { padding: 7px 9px; border: 1px solid var(--line); border-radius: 99px; color: #b7d2c6; background: #0b1712; font-size: 11px; }
+@media (max-width: 370px) { .adminModules { grid-template-columns: 1fr; } .adminModules button:last-child { grid-column: auto; } }

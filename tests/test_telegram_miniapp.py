@@ -75,3 +75,19 @@ def test_miniapp_rejects_requests_without_telegram_identity(tmp_path: Path, monk
     db.init_db(); init_admin_schema()
     with TestClient(app) as client:
         assert client.get("/api/v1/miniapp/session").status_code == 401
+
+
+def test_miniapp_admin_parity_endpoints(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "miniapp-admin.db")
+    monkeypatch.setenv("MINIAPP_DEV_BYPASS", "true")
+    monkeypatch.setenv("MINIAPP_DEV_USER_ID", str(settings.admin_ids[0]))
+    db.init_db(); init_admin_schema()
+    db.create_plan("VIP30", 30, "وی‌آی‌پی", "VIP", usdt_price="10", vip_access=True, autotrade_access=False, service_type="signal")
+    with TestClient(app) as client:
+        data = client.get("/api/v1/miniapp/admin/data")
+        assert data.status_code == 200
+        assert {"users", "payments", "plans", "discounts", "campaigns", "leaderboard", "waitlist", "tickets", "risk", "accounts", "audit"} <= set(data.json())
+        assert client.put("/api/v1/miniapp/admin/settings", json={"key":"usdt_irr_rate", "value":"650000"}).status_code == 200
+        assert client.put("/api/v1/miniapp/admin/plans/VIP30", json={"price_usdt":"12"}).status_code == 200
+        assert client.post("/api/v1/miniapp/admin/discounts", json={"code":"MINI20", "percent":20, "expires_days":30}).status_code == 201
+        assert client.post("/api/v1/miniapp/admin/campaigns", json={"title_fa":"کمپین تست", "title_en":"Test", "percent":10, "days":7, "audience":"all"}).status_code == 201
