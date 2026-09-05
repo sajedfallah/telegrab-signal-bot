@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app import db
 from app.admin_api import init_admin_schema
 from app.autotrade.api import app
+from app.config import settings
 
 
 def test_admin_web_auth_dashboard_and_signal_crud(tmp_path: Path, monkeypatch):
@@ -66,6 +67,17 @@ def test_admin_web_auth_dashboard_and_signal_crud(tmp_path: Path, monkeypatch):
         fixed_row = db.get_signal(fixed.json()["id"])
         assert fixed_row["volume_mode"] == "FIXED"
         assert fixed_row["trailing_code"] == "NEXUS_TRAIL_07"
+
+        published = client.post("/api/v1/admin-web/signals", headers=headers, json={
+            "market_type":"GOLD","symbol":"XAUUSD","direction":"BUY","entry_price":2300,
+            "stop_loss":2290,"targets":[2310],"risk_percent":1,"destination":"BOTH",
+            "chart_base64":"data:image/png;base64,iVBORw0KGgo=","publish":True,
+            "issuer_account":settings.nexus_admin_mt5_accounts[0],
+        })
+        assert published.status_code == 201
+        assert published.json()["status"] == "ACTIVE"
+        assert published.json()["publication"]["status"] == "WAITING_EXECUTION"
+        assert db.get_mt5_signal_publication_asset(published.json()["id"])
 
         assert client.get("/api/v1/admin-web/reports", headers=headers).status_code == 200
         xlsx = client.get("/api/v1/admin-web/reports/export.xlsx", headers=headers)

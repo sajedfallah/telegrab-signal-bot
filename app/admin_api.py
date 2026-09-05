@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import binascii
 import hashlib
 import hmac
 import io
@@ -472,6 +473,9 @@ class SignalWrite(BaseModel):
     max_entry_deviation_abs: float | None = Field(None, gt=0)
     technical_analysis: str = Field(default="", max_length=10000)
     fundamental_analysis: str = Field(default="", max_length=10000)
+    chart_base64: str | None = Field(None, max_length=7_000_000)
+    publish: bool = False
+    issuer_account: str | None = Field(None, max_length=32)
 
     @field_validator("lot_size")
     @classmethod
@@ -505,22 +509,55 @@ def signal_options(admin=Depends(current_admin)):
         "OTHER": ["USOIL","UKOIL","NATGAS"],
     }
     trailing = [{"code":code,"name":profile["name"],"guide":TRAILING_GUIDE_FA.get(code,""),"config":profile} for code,profile in TRAILING_PROFILES.items()]
-    return {"symbols":symbols,"trailing":trailing,"order_types":["MARKET","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"],"timeframes":["M1","M3","M5","M15","M30","H1","H4","D1","W1"]}
+    from .config import settings
+    return {"symbols":symbols,"trailing":trailing,"admin_accounts":list(settings.nexus_admin_mt5_accounts),"order_types":["MARKET","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"],"timeframes":["M1","M3","M5","M15","M30","H1","H4","D1","W1"]}
 
 
 @router.post("/signals", status_code=201)
-def create_signal(req: SignalWrite, admin=Depends(require("ADMIN", "MODERATOR"))):
+async def create_signal(req: SignalWrite, admin=Depends(require("ADMIN", "MODERATOR"))):
     try:
-        row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
-            stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
-            chart_file_id=None, created_by=int(admin["id"]), timeframe=req.timeframe, order_type=req.order_type,
-            volume_mode=req.volume_mode, lot_size=req.lot_size, trailing_code=req.trailing_code,
-            max_entry_deviation_pct=req.max_entry_deviation_pct, max_entry_deviation_abs=req.max_entry_deviation_abs,
-            stop_limit_price=req.stop_limit_price)
+        raw_chart: bytes | None = None
+        chart = req.chart_base64
+        if chart and "," in chart[:128]: chart = chart.split(",", 1)[1]
+        if chart:
+            try:
+                raw_chart = base64.b64decode(chart, validate=True)
+                if not raw_chart or len(raw_chart) > 5_000_000: raise ValueError("chart image is empty or exceeds 5 MB")
+                if not (raw_chart.startswith(b"\x89PNG\r\n\x1a\n") or raw_chart.startswith(b"\xff\xd8\xff")): raise ValueError("chart image must be PNG or JPEG")
+            except (ValueError, binascii.Error) as exc:
+                raise HTTPException(422, f"invalid chart image: {exc}") from exc
+        if req.publish:
+            from .config import settings
+            account = str(req.issuer_account or (settings.nexus_admin_mt5_accounts[0] if settings.nexus_admin_mt5_accounts else "")).strip()
+            if not account or account not in settings.nexus_admin_mt5_accounts:
+                raise HTTPException(409, "یک حساب مرجع MT5 معتبر برای صدور وب تنظیم کنید")
+            row = db.issue_mt5_admin_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction,
+                entry_price=req.entry_price, stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent,
+                rr_ratio=None, destination=req.destination, order_type=req.order_type, volume_mode=req.volume_mode,
+                lot_size=req.lot_size, trailing_code=req.trailing_code, max_entry_deviation_pct=req.max_entry_deviation_pct,
+                max_entry_deviation_abs=req.max_entry_deviation_abs, timeframe=req.timeframe, stop_limit_price=req.stop_limit_price,
+                admin_account=account, admin_id=int(admin["id"]), request_id=f"WEB-{secrets.token_urlsafe(12)}")
+        else:
+            row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
+                stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
+                chart_file_id=None, created_by=int(admin["id"]), timeframe=req.timeframe, order_type=req.order_type,
+                volume_mode=req.volume_mode, lot_size=req.lot_size, trailing_code=req.trailing_code,
+                max_entry_deviation_pct=req.max_entry_deviation_pct, max_entry_deviation_abs=req.max_entry_deviation_abs,
+                stop_limit_price=req.stop_limit_price)
         with db.conn() as con:
             con.execute("UPDATE signals SET category='GENERAL',technical_analysis=?,fundamental_analysis=? WHERE id=?", (req.technical_analysis, req.fundamental_analysis, row["id"]))
-        _audit(admin, "web_signal_created", int(row["id"]), str(row["code"]))
-        return {"id": row["id"], "code": row["code"], "status": row["status"]}
+        publication = None
+        if req.publish:
+            if raw_chart:
+                folder = db.DB_PATH.parent / "assets" / "autotrade" / "pending_signal_charts"
+                folder.mkdir(parents=True, exist_ok=True)
+                extension = "png" if raw_chart.startswith(b"\x89PNG") else "jpg"
+                path = folder / f"{int(row['id'])}.{extension}"
+                path.write_bytes(raw_chart); db.save_mt5_signal_publication_asset(int(row["id"]), str(path))
+            publication = {"status":"WAITING_EXECUTION", "source_account":row["issuer_account"], "image":"UPLOADED" if raw_chart else "GENERATED_FALLBACK"}
+        final = db.get_signal(int(row["id"]))
+        _audit(admin, "web_signal_issued" if req.publish else "web_signal_created", int(row["id"]), str(row["code"]))
+        return {"id": row["id"], "code": row["code"], "status": final["status"], "publication": publication}
     except ValueError as exc:
         raise HTTPException(422, str(exc))
 

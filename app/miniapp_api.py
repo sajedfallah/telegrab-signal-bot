@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import json
 import os
+import base64
+import binascii
 import shutil
 import time
 from datetime import datetime, timedelta, timezone
@@ -542,15 +544,45 @@ class SignalAdminWrite(BaseModel):
     volume_mode: str = Field(default="RISK", pattern="^(RISK|FIXED)$")
     lot_size: float | None = Field(None, gt=0)
     trailing_code: str | None = None
+    chart_base64: str | None = Field(None, max_length=7_000_000)
+    publish: bool = True
+    issuer_account: str | None = Field(None, max_length=32)
 
 
 @router.post("/admin/signals", status_code=201)
-def create_admin_signal(req: SignalAdminWrite, admin=Depends(admin_user)):
+async def create_admin_signal(req: SignalAdminWrite, admin=Depends(admin_user)):
+    chart = req.chart_base64
+    if chart and "," in chart[:128]: chart = chart.split(",", 1)[1]
+    raw_chart: bytes | None = None
+    if chart:
+        try:
+            raw_chart = base64.b64decode(chart, validate=True)
+            if not raw_chart or len(raw_chart) > 5_000_000: raise ValueError("chart image is empty or exceeds 5 MB")
+            if not (raw_chart.startswith(b"\x89PNG\r\n\x1a\n") or raw_chart.startswith(b"\xff\xd8\xff")): raise ValueError("chart image must be PNG or JPEG")
+        except (ValueError, binascii.Error) as exc: raise HTTPException(422, f"invalid chart image: {exc}") from exc
     try:
-        row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
-            stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
-            chart_file_id=None, created_by=admin["id"], lot_size=req.lot_size, trailing_code=req.trailing_code,
-            order_type=req.order_type, volume_mode=req.volume_mode, timeframe=req.timeframe)
+        if req.publish:
+            account = str(req.issuer_account or (settings.nexus_admin_mt5_accounts[0] if settings.nexus_admin_mt5_accounts else "")).strip()
+            if not account or account not in settings.nexus_admin_mt5_accounts: raise HTTPException(409, "یک حساب مرجع MT5 معتبر برای صدور تنظیم کنید")
+            row = db.issue_mt5_admin_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction,
+                entry_price=req.entry_price, stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent,
+                rr_ratio=None, destination=req.destination, order_type=req.order_type, volume_mode=req.volume_mode,
+                lot_size=req.lot_size, trailing_code=req.trailing_code, timeframe=req.timeframe,
+                admin_account=account, admin_id=admin["id"], request_id=f"MINIAPP-{int(time.time())}-{admin['id']}")
+        else:
+            row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
+                stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
+                chart_file_id=None, created_by=admin["id"], lot_size=req.lot_size, trailing_code=req.trailing_code,
+                order_type=req.order_type, volume_mode=req.volume_mode, timeframe=req.timeframe)
     except ValueError as exc: raise HTTPException(422, str(exc)) from exc
-    db.add_audit(admin["id"], "miniapp_signal_created", int(row["id"]), str(row["code"]))
-    return dict(row)
+    publication = None
+    if req.publish:
+        if raw_chart:
+            folder = db.DB_PATH.parent / "assets" / "autotrade" / "pending_signal_charts"; folder.mkdir(parents=True, exist_ok=True)
+            extension = "png" if raw_chart.startswith(b"\x89PNG") else "jpg"
+            path = folder / f"{int(row['id'])}.{extension}"; path.write_bytes(raw_chart)
+            db.save_mt5_signal_publication_asset(int(row["id"]), str(path))
+        publication = {"status":"WAITING_EXECUTION", "source_account":row["issuer_account"], "image":"UPLOADED" if raw_chart else "GENERATED_FALLBACK"}
+    final = db.get_signal(int(row["id"]))
+    db.add_audit(admin["id"], "miniapp_signal_published" if req.publish else "miniapp_signal_created", int(row["id"]), str(row["code"]))
+    return {**dict(final), "publication": publication}

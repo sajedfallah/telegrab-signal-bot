@@ -877,6 +877,7 @@ function SignalForm({
   const [volumeMode, setVolumeMode] = useState<"RISK" | "FIXED">("RISK");
   const [orderType, setOrderType] = useState("MARKET");
   const [trailing, setTrailing] = useState("");
+  const [chartBase64, setChartBase64] = useState<string | null>(null);
   useEffect(() => {
     request("/signals/options")
       .then(setOptions)
@@ -886,6 +887,7 @@ function SignalForm({
     e.preventDefault();
     const f = new FormData(e.currentTarget);
     const body: any = Object.fromEntries(f);
+    delete body.chart_file;
     body.entry_price = +body.entry_price;
     body.stop_loss = +body.stop_loss;
     body.volume_mode = volumeMode;
@@ -906,9 +908,11 @@ function SignalForm({
       .split(",")
       .map(Number)
       .filter(Boolean);
+    body.chart_base64 = chartBase64;
+    body.publish = true;
     try {
-      await request("/signals", { method: "POST", body: JSON.stringify(body) });
-      toast("سیگنال جدید به‌صورت پیش‌نویس ثبت شد");
+      const result = await request("/signals", { method: "POST", body: JSON.stringify(body) });
+      toast(result.publication?.status === "WAITING_EXECUTION" ? "سیگنال به اکسپرت مرجع ارسال شد؛ پس از تأیید اجرا، کارت تلگرام خودکار منتشر می‌شود" : `سیگنال با وضعیت ${result.status} ثبت شد`);
       onDone();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -1033,6 +1037,12 @@ function SignalForm({
           <option value="FREE">عمومی</option>
         </select>
       </Field>
+      <Field label="حساب مرجع MT5 برای تأیید اجرا">
+        <select name="issuer_account" required>
+          {(options?.admin_accounts || []).map((account:string)=><option key={account} value={account}>{account}</option>)}
+        </select>
+        {!options?.admin_accounts?.length&&<small>ابتدا NEXUS_ADMIN_MT5_ACCOUNTS را روی سرور تنظیم کنید.</small>}
+      </Field>
       <Field label="حداکثر انحراف ورود (%)">
         <input
           name="max_entry_deviation_pct"
@@ -1096,11 +1106,20 @@ function SignalForm({
       <Field label="تحلیل فاندامنتال" full>
         <textarea name="fundamental_analysis" rows={3} />
       </Field>
+      <Field label="تصویر چارت برای فلش‌کارت (اختیاری)" full>
+        <input name="chart_file" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e)=>{
+          const file=e.target.files?.[0];
+          if(!file){setChartBase64(null);return}
+          if(file.size>5_000_000){toast("حجم تصویر باید کمتر از ۵ مگابایت باشد","error");e.target.value="";return}
+          const reader=new FileReader();reader.onload=()=>setChartBase64(String(reader.result));reader.readAsDataURL(file)
+        }}/>
+        <small>اگر تصویر انتخاب نشود، سیستم از اطلاعات سیگنال یک فلش‌کارت استاندارد NEXUS می‌سازد.</small>
+      </Field>
       <div className="form-actions full">
         <button type="button" className="ghost" onClick={onDone}>
           انصراف
         </button>
-        <button className="primary">ثبت پیش‌نویس سیگنال</button>
+        <button className="primary">صدور و انتشار سیگنال</button>
       </div>
     </form>
   );
