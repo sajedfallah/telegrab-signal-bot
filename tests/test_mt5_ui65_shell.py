@@ -48,10 +48,13 @@ def test_setup_focus_guard_is_applied_only_after_production_core_include():
     include_at = SHIM.index('#include "../NEXUS_AutoTrade/NEXUS_AutoTrade.mq5"')
     delete_macro_at = SHIM.index("#define ObjectDelete")
     integer_macro_at = SHIM.index("#define ObjectSetInteger")
-    assert include_at < delete_macro_at < integer_macro_at
+    string_macro_at = SHIM.index("#define ObjectSetString")
+    assert include_at < delete_macro_at < integer_macro_at < string_macro_at
+    assert "UI65IsFocusedEdit" in SHIM
     assert "UI65IsFocusedSetupEdit" in SHIM
     assert "property_id==OBJPROP_SELECTED && value==0" in SHIM
-    assert 'name!=NXS_UI_PREFIX+"license" && name!=NXS_UI_PREFIX+"admin"' in SHIM
+    assert "property_id==OBJPROP_TEXT && UI65IsFocusedEdit" in SHIM
+    assert "if(current==value) return true;" in SHIM
 
 
 def test_new_signal_requires_review_then_explicit_confirmation():
