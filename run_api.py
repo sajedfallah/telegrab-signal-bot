@@ -20,6 +20,12 @@ install_risk_firewall()
 from app.autotrade.live_event_runtime import install_live_snapshot_event_bridge
 install_live_snapshot_event_bridge()
 
+# The web control plane is mounted onto the already-hardened production API.
+# It must come after the production runtimes above so Risk/Signal/Live Truth
+# remain single-source and are never replaced by web-specific implementations.
+from app.admin_web_runtime import install_admin_web_runtime
+install_admin_web_runtime()
+
 
 if __name__ == "__main__":
     uvicorn.run(
