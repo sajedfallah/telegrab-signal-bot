@@ -23,6 +23,9 @@ install_live_snapshot_event_bridge()
 from app.web_chart_capture_runtime import install_web_chart_capture_runtime
 install_web_chart_capture_runtime()
 
+from app.web_signal_command_runtime import install_web_signal_command_runtime
+install_web_signal_command_runtime()
+
 # Web and Mini App are mounted onto the already-hardened production API.
 # Production Signal/Risk/Live runtimes above remain authoritative.
 from app.admin_web_runtime import install_admin_web_runtime
