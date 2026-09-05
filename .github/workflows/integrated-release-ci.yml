@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - feature/v065-integrated-release
+      - integration/nexus-v065-platform
   pull_request:
     branches:
       - feature/v065-integrated-release
+      - integration/nexus-v065-platform
   workflow_dispatch:
 
 jobs:
@@ -45,6 +47,12 @@ jobs:
 
       - name: Compile integrated runtime
         run: python -m compileall -q app run.py run_api.py
+
+      - name: Platform integration contract tests
+        run: |
+          python -m pytest tests/test_admin_web_integrated_runtime.py -q
+          python -m pytest tests/test_miniapp_integrated_runtime.py -q
+          python -m pytest tests/test_web_chart_capture_integrated.py -q
 
       - name: Focused new feature tests
         run: |
