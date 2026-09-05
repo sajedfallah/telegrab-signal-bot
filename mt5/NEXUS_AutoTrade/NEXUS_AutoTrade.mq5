@@ -11,7 +11,7 @@
 #include "Include/CommandManager.mqh"
 
 input group "NEXUS Technical Settings"
-input string InpApiBaseUrl="http://127.0.0.1:8080";
+input string InpApiBaseUrl="https://api.nexustrade.ir";
 input int    InpHttpTimeoutMs=5000;
 input int    InpPollSeconds=3;
 input int    InpHeartbeatSeconds=300;
@@ -154,8 +154,8 @@ void UISetLabel(const string name,const string text,const int x,const int y,cons
    ObjectSetInteger(0,n,OBJPROP_XDISTANCE,x);
    ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
    ObjectSetInteger(0,n,OBJPROP_FONTSIZE,size);
-   ObjectSetInteger(0,n,OBJPROP_COLOR,C'220,226,232');
-   ObjectSetString(0,n,OBJPROP_FONT,"Segoe UI");
+   ObjectSetInteger(0,n,OBJPROP_COLOR,clrWhite);
+   ObjectSetString(0,n,OBJPROP_FONT,"Arial");
    ObjectSetString(0,n,OBJPROP_TEXT,text);
   }
 
@@ -176,9 +176,9 @@ void UISetEdit(const string name,const string value,const int x,const int y,cons
    ObjectSetInteger(0,n,OBJPROP_YDISTANCE,y);
    ObjectSetInteger(0,n,OBJPROP_XSIZE,w);
    ObjectSetInteger(0,n,OBJPROP_YSIZE,h);
-   ObjectSetInteger(0,n,OBJPROP_BGCOLOR,C'31,38,46');
-   ObjectSetInteger(0,n,OBJPROP_COLOR,clrWhite);
-   ObjectSetInteger(0,n,OBJPROP_BORDER_COLOR,C'72,84,96');
+   ObjectSetInteger(0,n,OBJPROP_BGCOLOR,clrWhite);
+   ObjectSetInteger(0,n,OBJPROP_COLOR,clrBlack);
+   ObjectSetInteger(0,n,OBJPROP_BORDER_COLOR,clrDimGray);
    ObjectSetInteger(0,n,OBJPROP_FONTSIZE,10);
 
    // IMPORTANT: OBJ_EDIT must explicitly be editable.
@@ -210,7 +210,6 @@ void UISetButton(const string name,const string text,const int x,const int y,con
    ObjectSetInteger(0,n,OBJPROP_BGCOLOR,bg);
    ObjectSetInteger(0,n,OBJPROP_COLOR,clrWhite);
    ObjectSetInteger(0,n,OBJPROP_FONTSIZE,9);
-   ObjectSetString(0,n,OBJPROP_FONT,"Segoe UI");
    // Keep interactive controls above the unified panel background.
    // Without an explicit Z-order, the background rectangle can consume
    // mouse clicks and make every status/admin button appear dead.
@@ -303,30 +302,22 @@ void ShowSetupPanel(const string status="Enter your NEXUS License")
    ObjectSetInteger(0,bg,OBJPROP_XDISTANCE,10);
    ObjectSetInteger(0,bg,OBJPROP_YDISTANCE,20);
    ObjectSetInteger(0,bg,OBJPROP_XSIZE,410);
-   ObjectSetInteger(0,bg,OBJPROP_YSIZE,InpAdminMode?300:245);
-   ObjectSetInteger(0,bg,OBJPROP_BGCOLOR,C'16,21,27');
-   ObjectSetInteger(0,bg,OBJPROP_BORDER_COLOR,C'58,70,82');
+   ObjectSetInteger(0,bg,OBJPROP_YSIZE,300);
+   ObjectSetInteger(0,bg,OBJPROP_BGCOLOR,clrBlack);
+   ObjectSetInteger(0,bg,OBJPROP_BORDER_COLOR,clrDimGray);
    ObjectSetInteger(0,bg,OBJPROP_BACK,false);
 
-   UISetLabel("title","NEXUS  |  SECURE CONNECTION",25,35,13);
+   UISetLabel("title","NEXUS AUTO TRADE - SETUP",25,35,13);
    UISetLabel("status",status,25,62,9);
-   UISetLabel("account_info","MT5 ACCOUNT  "+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"   •   "+AccountInfoString(ACCOUNT_SERVER),25,82,8);
-   if(InpAdminMode)
-     {
-      UISetLabel("admin_lbl","ADMIN TOKEN",25,108,9);
-      UISetEdit("admin",EffectiveAdminToken(),25,126,365,32);
-      UISetLabel("paste_help","Paste the administrator token issued by NEXUS.",25,166,8);
-      UISetButton("connect","SIGN IN AS ADMIN",25,200,260,36,clrSeaGreen);
-      UISetButton("reset","CLEAR",295,200,95,36,clrFireBrick);
-     }
-   else
-     {
-      UISetLabel("license_lbl","LICENSE KEY",25,108,9);
-      UISetEdit("license",g_license_key,25,126,365,32);
-      UISetLabel("paste_help","Click License box, then type or press Ctrl+V to paste.",25,166,8);
-      UISetButton("connect","CONNECT & ACTIVATE",25,195,260,36,clrSeaGreen);
-      UISetButton("reset","CLEAR",295,195,95,36,clrFireBrick);
-     }
+   UISetLabel("license_lbl","License Key",25,92,10);
+   UISetEdit("license",g_license_key,25,110,365,28);
+   UISetLabel("admin_lbl","Admin Token (optional)",25,144,10);
+   UISetEdit("admin",EffectiveAdminToken(),25,162,365,28);
+   UISetLabel("paste_help","Click License box, then type or press Ctrl+V to paste. Admin Token is optional.",25,195,9);
+   UISetLabel("locked1","NEXUS LOCKED MANAGEMENT",25,218,11);
+   UISetLabel("locked2","No valid License/Admin Token = no trading.",25,240,9);
+   UISetButton("connect","CONNECT & ACTIVATE",25,265,240,35,clrSeaGreen);
+   UISetButton("reset","RESET",275,265,90,35,clrFireBrick);
    ChartRedraw();
   }
 
@@ -488,13 +479,13 @@ void SetExecutionStatus(const string state,const NexusSignal &s,const string res
 
 void DeleteStatusPanel()
   {
-   string names[]={"status_shadow","status_bg","status_title","status_meta","status_tab0","status_tab1","status_tab2","status_tab3","status_tab4","status_tab5","status_body","status_min","settings_conn","settings_trade","settings_risk","settings_system","md_title","md_free","md_vip","md_both","md_state"};
+   string names[]={"status_shadow","status_bg","status_title","status_tab0","status_tab1","status_tab2","status_tab3","status_tab4","status_tab5","status_body","status_min","settings_conn","settings_trade","settings_risk","settings_system","md_title","md_free","md_vip","md_both","md_state"};
    for(int i=0;i<ArraySize(names);i++) ObjectDelete(0,NXS_UI_PREFIX+names[i]);
   }
 
 void DeleteStatusTabs()
   {
-   for(int i=0;i<3;i++) ObjectDelete(0,NXS_UI_PREFIX+"status_tab"+IntegerToString(i));
+   for(int i=0;i<2;i++) ObjectDelete(0,NXS_UI_PREFIX+"status_tab"+IntegerToString(i));
   }
 
 void DeleteAdminSignalPanel()
@@ -531,61 +522,53 @@ void PaintAdminSignalPanel()
    g_admin_fixed_lot=StringToDouble(v_lot); if(g_admin_fixed_lot<=0) g_admin_fixed_lot=0.01;
 
    DeleteAdminSignalPanel();
-   UISetLabel("sig_title","NEW SIGNAL",24,96,12);
-   UISetLabel("sig_legacy","ORDER DETAILS",24,122,8);
-   UISetLabel("sig_sub","HOST  "+_Symbol+"   •   CANONICAL  "+CanonicalSignalSymbol(_Symbol),24,140,8);
-   UISetLabel("sig_symbol_lbl","SYMBOL",24,164,8); UISetEdit("sig_symbol",v_symbol,24,180,120,28);
-   UISetLabel("sig_entry_lbl","ENTRY",154,164,8); UISetEdit("sig_entry",v_entry,154,180,110,28);
-   UISetLabel("sig_sl_lbl","STOP LOSS",274,164,8); UISetEdit("sig_sl",v_sl,274,180,110,28);
-   UISetLabel("sig_tp1_lbl","TP1",24,218,8); UISetEdit("sig_tp1",v_tp1,24,234,105,28);
-   UISetLabel("sig_tp2_lbl","TP2",139,218,8); UISetEdit("sig_tp2",v_tp2,139,234,105,28);
-   UISetLabel("sig_tp3_lbl","TP3",254,218,8); UISetEdit("sig_tp3",v_tp3,254,234,105,28);
-   UISetLabel("sig_tp4_lbl","TP4",24,272,8); UISetEdit("sig_tp4",v_tp4,24,288,105,28);
-   UISetLabel("sig_tp5_lbl","TP5",139,272,8); UISetEdit("sig_tp5",v_tp5,139,288,105,28);
-   UISetLabel("sig_risk_lbl","RISK %",254,272,8); UISetEdit("sig_risk",v_risk,254,288,105,28);
+   UISetButton("sig_min",g_panel_minimized?"+":"—",456,78,30,24,clrDimGray);
+   UISetLabel("sig_title","NEXUS  /  SIGNAL COMMAND",24,88,11);
+   UISetLabel("sig_legacy","SIGNAL • SETTINGS / MANAGEMENT",24,76,7);
+   UISetLabel("sig_sub","HOST: "+_Symbol+"   •   CANONICAL: "+CanonicalSignalSymbol(_Symbol),24,108,8);
+   UISetLabel("sig_symbol_lbl","SYMBOL",24,130,8); UISetEdit("sig_symbol",v_symbol,24,145,120,24);
+   UISetLabel("sig_entry_lbl","ENTRY",154,130,8); UISetEdit("sig_entry",v_entry,154,145,110,24);
+   UISetLabel("sig_sl_lbl","STOP LOSS",274,130,8); UISetEdit("sig_sl",v_sl,274,145,110,24);
+   UISetLabel("sig_tp1_lbl","TP1",24,177,8); UISetEdit("sig_tp1",v_tp1,24,192,105,24);
+   UISetLabel("sig_tp2_lbl","TP2",139,177,8); UISetEdit("sig_tp2",v_tp2,139,192,105,24);
+   UISetLabel("sig_tp3_lbl","TP3",254,177,8); UISetEdit("sig_tp3",v_tp3,254,192,105,24);
+   UISetLabel("sig_tp4_lbl","TP4",24,224,8); UISetEdit("sig_tp4",v_tp4,24,239,105,24);
+   UISetLabel("sig_tp5_lbl","TP5",139,224,8); UISetEdit("sig_tp5",v_tp5,139,239,105,24);
+   UISetLabel("sig_risk_lbl","RISK %",254,224,8); UISetEdit("sig_risk",v_risk,254,239,105,24);
 
-   UISetButton("sig_buy","✓ BUY",24,326,78,28,g_admin_signal_direction=="BUY"?clrSeaGreen:clrDimGray);
-   UISetButton("sig_sell","SELL",108,326,78,28,g_admin_signal_direction=="SELL"?clrFireBrick:clrDimGray);
-   UISetButton("sig_market","MARKET",196,326,84,28,g_admin_signal_order=="MARKET"?clrSeaGreen:clrDimGray);
-   UISetButton("sig_limit","LIMIT",286,326,73,28,g_admin_signal_order=="LIMIT"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_buy","BUY",24,273,70,25,g_admin_signal_direction=="BUY"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_sell","SELL",99,273,70,25,g_admin_signal_direction=="SELL"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_market","MARKET",174,273,78,25,g_admin_signal_order=="MARKET"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_limit","LIMIT",257,273,70,25,g_admin_signal_order=="LIMIT"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_issue","ISSUE SIGNAL",317,273,67,25,clrSeaGreen);
 
-   UISetLabel("sig_size_lbl","POSITION SIZING",24,370,8);
-   UISetButton("sig_size_risk","RISK %",24,386,90,26,g_admin_sizing_mode=="RISK"?clrSeaGreen:clrDimGray);
-   UISetButton("sig_size_fixed","FIXED LOT",120,386,100,26,g_admin_sizing_mode=="FIXED"?clrSeaGreen:clrDimGray);
-   UISetEdit("sig_lot",v_lot,230,386,90,26);
-   UISetLabel("sig_lot_hint",g_admin_sizing_mode=="FIXED"?"ACTIVE":"IGNORED",326,393,7);
-   UISetLabel("sig_trail_lbl","TRAILING PROFILE",24,424,8);
+   UISetLabel("sig_size_lbl","SIZING",24,309,8);
+   UISetButton("sig_size_risk","RISK",24,324,85,24,g_admin_sizing_mode=="RISK"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_size_fixed","FIXED",114,324,85,24,g_admin_sizing_mode=="FIXED"?clrSeaGreen:clrDimGray);
+   UISetEdit("sig_lot",v_lot,209,324,95,24);
+   UISetLabel("sig_lot_hint","FIXED LOT",310,331,7);
+   UISetLabel("sig_trail_lbl","TRAILING / PROFILE",24,358,8);
    for(int ti=1;ti<=7;ti++)
      {
       string tn="sig_trail_"+StringFormat("%02d",ti);
       int tx=24+(ti-1)*50;
-      UISetButton(tn,StringFormat("T%02d",ti),tx,440,46,26,g_admin_trailing_profile==NexusTrailingCode(ti)?clrSeaGreen:clrDimGray);
+      UISetButton(tn,StringFormat("T%02d",ti),tx,373,46,24,g_admin_trailing_profile==NexusTrailingCode(ti)?clrSeaGreen:clrDimGray);
      }
-   UISetLabel("sig_dest_lbl","PUBLISH TO  •  CHANNEL / ACCESS",24,480,8);
-   UISetButton("sig_dest_free","FREE",24,496,105,26,g_manual_destination=="FREE"?clrSeaGreen:clrDimGray);
-   UISetButton("sig_dest_vip","VIP",139,496,105,26,g_manual_destination=="VIP"?clrSeaGreen:clrDimGray);
-   UISetButton("sig_dest_both","BOTH",254,496,105,26,g_manual_destination=="BOTH"?clrSeaGreen:clrDimGray);
-   UISetLabel("sig_dest_state","SELECTED  "+(g_manual_destination=="NONE"?"—":g_manual_destination),370,503,8);
-   UISetButton("sig_issue",g_admin_signal_busy?"ISSUING...":"ISSUE SIGNAL",24,536,460,34,clrSeaGreen);
-   }
+   UISetLabel("sig_dest_lbl","CHANNEL / ACCESS",24,404,8);
+   UISetButton("sig_dest_free","FREE",24,419,105,24,g_manual_destination=="FREE"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_dest_vip","VIP",139,419,105,24,g_manual_destination=="VIP"?clrSeaGreen:clrDimGray);
+   UISetButton("sig_dest_both","BOTH",254,419,105,24,g_manual_destination=="BOTH"?clrSeaGreen:clrDimGray);
+   UISetLabel("sig_dest_state","SELECTED: "+(g_manual_destination=="NONE"?"NONE":g_manual_destination),24,450,8);
 
-void PaintAdminTradePanel()
-  {
-   DeleteAdminSignalPanel();
-   UISetLabel("sig_title","TRADE MANAGEMENT",24,96,12);
-   UISetLabel("sig_sub","Commands are queued, executed by MT5 and confirmed by the broker.",24,121,8);
-   UISetLabel("sig_manage_id_lbl","SIGNAL ID",24,157,8);
-   UISetEdit("sig_manage_id",g_admin_manage_id,24,174,210,30);
-   UISetLabel("sig_manage_value_lbl","VALUE / PRICE / PERCENT",250,157,8);
-   UISetEdit("sig_manage_value",g_admin_manage_value,250,174,234,30);
-   UISetLabel("sig_manage_title","POSITION ACTIONS",24,226,8);
-   UISetButton("sig_be","MOVE TO BREAK-EVEN",24,244,220,32,clrSeaGreen);
-   UISetButton("sig_trail","ACTIVATE TRAILING",254,244,230,32,clrSeaGreen);
-   UISetButton("sig_setsl","UPDATE STOP LOSS",24,286,220,32,clrDimGray);
-   UISetButton("sig_settp","UPDATE TAKE PROFIT",254,286,230,32,clrDimGray);
-   UISetButton("sig_cancel","CANCEL PENDING ORDER",24,338,220,34,clrDimGray);
-   UISetButton("sig_close","CLOSE POSITION",254,338,230,34,clrFireBrick);
-   UISetLabel("sig_legacy","Destructive commands require a valid Signal ID and broker confirmation.",24,390,8);
+   UISetLabel("sig_manage_title","TRADE MANAGEMENT",24,471,9);
+   UISetEdit("sig_manage_id",v_manage_id,24,489,120,24);
+   UISetEdit("sig_manage_value",v_manage_value,149,489,95,24);
+   UISetButton("sig_be","BE",249,489,45,24,clrDimGray);
+   UISetButton("sig_close","CLOSE",299,489,60,24,clrFireBrick);
+   UISetButton("sig_cancel","CANCEL",24,520,75,24,clrDimGray);
+   UISetButton("sig_setsl","SET SL",104,520,75,24,clrDimGray);
+   UISetButton("sig_settp","SET TP",184,520,75,24,clrDimGray);
+   UISetButton("sig_trail","TRAIL",264,520,75,24,clrDimGray);
   }
 
 
@@ -777,7 +760,7 @@ void PaintStatusPanel()
 
    int chart_w=(int)ChartGetInteger(0,CHART_WIDTH_IN_PIXELS,0);
    int panel_w=g_panel_minimized?360:MathMin(560,MathMax(500,chart_w-24));
-   int panel_h=g_panel_minimized?48:((g_access_mode==NEXUS_ADMIN && g_panel_tab==4)?590:430);
+   int panel_h=g_panel_minimized?48:((g_access_mode==NEXUS_ADMIN && g_panel_tab==4)?575:390);
    ObjectSetInteger(0,shadow,OBJPROP_CORNER,CORNER_LEFT_UPPER);
    ObjectSetInteger(0,shadow,OBJPROP_XDISTANCE,16);
    ObjectSetInteger(0,shadow,OBJPROP_YDISTANCE,17);
@@ -793,15 +776,14 @@ void PaintStatusPanel()
    ObjectSetInteger(0,bg,OBJPROP_YDISTANCE,12);
    ObjectSetInteger(0,bg,OBJPROP_XSIZE,panel_w);
    ObjectSetInteger(0,bg,OBJPROP_YSIZE,panel_h);
-   ObjectSetInteger(0,bg,OBJPROP_BGCOLOR,C'16,21,27');
-   ObjectSetInteger(0,bg,OBJPROP_BORDER_COLOR,C'58,70,82');
+   ObjectSetInteger(0,bg,OBJPROP_BGCOLOR,clrBlack);
+   ObjectSetInteger(0,bg,OBJPROP_BORDER_COLOR,clrSlateGray);
    ObjectSetInteger(0,bg,OBJPROP_BACK,false);
    ObjectSetInteger(0,bg,OBJPROP_SELECTABLE,false);
    ObjectSetInteger(0,bg,OBJPROP_SELECTED,false);
    ObjectSetInteger(0,bg,OBJPROP_ZORDER,10);
 
    UISetLabel("status_title","NEXUS | "+(g_access_mode==NEXUS_ADMIN?"ADMIN":"USER"),24,20,12);
-   UISetLabel("status_meta",(TerminalInfoInteger(TERMINAL_CONNECTED)?"● ONLINE":"● OFFLINE")+"   •   "+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"   •   "+_Symbol,175,23,8);
    UISetButton("status_min",g_panel_minimized?"+":"—",panel_w-44,18,30,24,clrDimGray);
 
    if(g_panel_minimized)
@@ -821,12 +803,11 @@ void PaintStatusPanel()
 
    // Legacy tab names retained and used for the Settings sub-tabs.
    string tabs[6]={"OVERVIEW","CONNECTION","TRADING","RISK","SIGNAL","SYSTEM"};
-   string main_tabs[3]={"NEW SIGNAL","TRADES","SETTINGS"};
-   int active_main=(g_panel_tab==4?0:(g_panel_tab==6?1:2));
-   for(int i=0;i<3;i++)
-      UISetButton("status_tab"+IntegerToString(i),main_tabs[i],20+i*158,55,148,28,i==active_main?clrSeaGreen:C'48,57,66');
+   string main_tabs[2]={"SIGNAL","SETTINGS / MANAGEMENT"};
+   for(int i=0;i<2;i++)
+      UISetButton("status_tab"+IntegerToString(i),main_tabs[i],20+i*150,55,i==0?130:145,24,(i==(g_panel_tab==4?0:1))?clrSeaGreen:clrDimGray);
 
-   if(g_panel_tab!=4 && g_panel_tab!=6)
+   if(g_panel_tab!=4)
      {
       UISetButton("settings_conn",tabs[1],180,91,90,22,g_panel_tab==1?clrSeaGreen:clrDimGray);
       UISetButton("settings_trade",tabs[2],275,91,80,22,g_panel_tab==2?clrSeaGreen:clrDimGray);
@@ -906,8 +887,7 @@ void PaintStatusPanel()
            "\nLAST ERROR    "+(g_last_exec_reason==""?"—":g_last_exec_reason);
      }
 
-   int body_y=(g_panel_tab==4 || g_panel_tab==6)?91:130;
-   UISetLabel("status_body",body,24,body_y,10);
+   UISetLabel("status_body",body,24,91,10);
    ObjectSetInteger(0,NXS_UI_PREFIX+"status_body",OBJPROP_COLOR,clrWhite);
    ObjectSetString(0,NXS_UI_PREFIX+"status_body",OBJPROP_FONT,"Consolas");
    ObjectSetInteger(0,NXS_UI_PREFIX+"status_body",OBJPROP_ZORDER,30);
@@ -916,11 +896,6 @@ void PaintStatusPanel()
      {
       ObjectSetString(0,NXS_UI_PREFIX+"status_body",OBJPROP_TEXT,"");
       PaintAdminSignalPanel();
-     }
-   else if(g_access_mode==NEXUS_ADMIN && g_panel_tab==6)
-     {
-      ObjectSetString(0,NXS_UI_PREFIX+"status_body",OBJPROP_TEXT,"");
-      PaintAdminTradePanel();
      }
    else
       DeleteAdminSignalPanel();
@@ -1012,6 +987,12 @@ void CompleteNexusSignalClaim(const string signal_id)
    ReleaseNexusSignalClaim(signal_id);
   }
 
+bool NexusSignalExecutionDone(const string signal_id)
+  {
+   string key=NexusSignalDoneKey(signal_id);
+   return GlobalVariableCheck(key) && GlobalVariableGet(key)>0.5;
+  }
+
 bool IsPendingSignalType(const string order_type)
   {
    return order_type=="LIMIT" || order_type=="BUY_LIMIT" || order_type=="SELL_LIMIT" ||
@@ -1063,9 +1044,30 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    SetExecutionStatus("ENTRY CHECK PASS",s,symbol);
    if(!ClaimNexusSignal(s.signal_id))
      {
-      string duplicate="duplicate signal execution blocked by NEXUS idempotency lock";
-      SendSignalReceiptReliable(s.db_id,"rejected","",duplicate);
-      SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
+      // A permanent DONE marker means another NEXUS instance already
+      // completed this canonical signal. Never publish a false rejection.
+      if(NexusSignalExecutionDone(s.signal_id))
+        {
+         SetExecutionStatus(
+            "ALREADY CLAIMED",
+            s,
+            symbol,
+            "execution already completed by another NEXUS instance"
+         );
+         AdvanceSignalCursor(s.db_id);
+         return true;
+        }
+
+      // A live claim is temporary ownership by another EA instance.
+      // Do not reject and do not advance the cursor; shared cursor sync
+      // or the next poll will observe the authoritative execution result.
+      SetExecutionStatus(
+         "CLAIM BUSY",
+         s,
+         symbol,
+         "another NEXUS instance is processing this signal"
+      );
+      return false;
      }
    ulong ticket=0;
     if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
@@ -1078,6 +1080,13 @@ bool ProcessIncomingSignal(const NexusSignal &s)
        AdvanceSignalCursor(s.db_id); return true;
       }
     CompleteNexusSignalClaim(s.signal_id);
+
+    // Execution truth ordering:
+    // broker order -> authoritative live snapshot -> execution receipt.
+    // If the forced snapshot has a transient transport failure, the reliable
+    // receipt queue remains fail-closed and OnTimer retries only after LiveSync.
+    DoLiveSync(true);
+
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
@@ -1091,6 +1100,16 @@ void PollSignals(const long after_id=-1,const int limit=50,const bool force_admi
      { Print("NEXUS SIGNAL POLL BLOCKED: InpAllowNewTrades=false"); return; }
    if(!force_admin && !g_allow_new)
      { Print("NEXUS SIGNAL POLL BLOCKED: allow_new=false"); return; }
+   // Every EA chart shares the account-level cursor. Refresh the local
+   // copy before requesting signals so secondary instances do not replay
+   // work already completed by another chart.
+   if(after_id<0 && GlobalVariableCheck(CursorKey("signal")))
+     {
+      long shared_signal_cursor=(long)GlobalVariableGet(CursorKey("signal"));
+      if(shared_signal_cursor>g_last_signal_id)
+         g_last_signal_id=shared_signal_cursor;
+     }
+
    long effective_after=(after_id<0 ? g_last_signal_id : after_id);
    int effective_limit=MathMax(1,MathMin(limit,100));
    Print("NEXUS SIGNAL POLL: after_id=",effective_after," limit=",effective_limit," force_admin=",(force_admin?"YES":"NO"));
@@ -1104,6 +1123,14 @@ void PollSignals(const long after_id=-1,const int limit=50,const bool force_admi
 void PollCommands()
   {
    if(!g_allow_manage || !InpManageExistingTrades) return;
+
+   if(GlobalVariableCheck(CursorKey("command")))
+     {
+      long shared_command_cursor=(long)GlobalVariableGet(CursorKey("command"));
+      if(shared_command_cursor>g_last_command_id)
+         g_last_command_id=shared_command_cursor;
+     }
+
    string response;
    if(!g_api.GetCommands(g_last_command_id,100,response)) { Print("NEXUS commands: ",g_api.LastError()); return; }
    NexusCommand commands[];
@@ -1224,16 +1251,25 @@ string BuildLiveOrdersJson()
    return out;
   }
 
-void DoLiveSync()
+bool DoLiveSync(const bool force=false)
   {
    datetime now=TimeCurrent();
-   if(g_last_live_sync>0 && (now-g_last_live_sync)<MathMax(1,InpLiveSyncSeconds)) return;
-   g_last_live_sync=now;
+   if(!force && g_last_live_sync>0 &&
+      (now-g_last_live_sync)<MathMax(1,InpLiveSyncSeconds))
+      return true;
+
    string response;
    if(g_api.LiveState(BuildLivePositionsJson(),BuildLiveOrdersJson(),response))
-      Print("NEXUS LIVE SYNC OK: positions/orders snapshot delivered");
-   else
-      Print("NEXUS LIVE SYNC FAILED: ",g_api.LastError());
+     {
+      g_last_live_sync=now;
+      Print("NEXUS LIVE SYNC OK: positions/orders snapshot delivered",
+            (force?" [FORCED]":""));
+      return true;
+     }
+
+   Print("NEXUS LIVE SYNC FAILED: ",g_api.LastError(),
+         (force?" [FORCED]":""));
+   return false;
   }
 
 void DoHeartbeat()
@@ -2036,13 +2072,13 @@ string BuildReconcileItem(const string event_name,const NEXUSReconcilePosition &
    double exit_price=(event_name=="CLOSE" ? r.exit_price : 0.0);
    double profit=(event_name=="CLOSE" ? r.profit : 0.0);
    return StringFormat(
-      "{\"event\":\"%s\",\"ticket\":\"%I64u\",\"event_id\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"position_id\":\"%I64d\",\"deal_id\":\"%I64u\",\"event_time\":\"%s\",\"event_time_ms\":%I64d,\"destination\":\"BOTH\"}",
+      "{\"event\":\"%s\",\"ticket\":\"%I64u\",\"event_id\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"risk_cash\":%s,\"realized_r\":%s,\"position_id\":\"%I64d\",\"deal_id\":\"%I64u\",\"event_time\":\"%s\",\"event_time_ms\":%I64d,\"destination\":\"BOTH\"}",
       event_name,(ulong)anchor,NexusJsonEscape(event_id),NexusJsonEscape(r.signal_id),
       NexusJsonEscape(r.symbol),NexusJsonEscape(r.direction),DoubleToString(r.volume,8),
       DoubleToString(r.entry_price,8),DoubleToString(r.sl,8),DoubleToString(r.tp,8),
       DoubleToString(exit_price,8),DoubleToString(profit,8),DoubleToString(r.gross_profit,8),
       DoubleToString(r.commission,8),DoubleToString(r.swap,8),DoubleToString(r.risk_cash,8),
-      DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8),(long)r.identifier,(ulong)anchor,"",
+      DoubleToString(r.risk_cash>0.0 ? profit/r.risk_cash : 0.0,8),(long)r.identifier,(ulong)anchor,ReconcileIsoEventTime(event_time),
       (long)event_time*1000);
   }
 
@@ -2271,11 +2307,11 @@ void OnChartEvent(const int id,const long &lparam,const double &dparam,const str
       ObjectSetInteger(0,sparam,OBJPROP_STATE,false);
       return;
      }
-   for(int tab=0;tab<3;tab++)
+   for(int tab=0;tab<2;tab++)
      {
       if(sparam==NXS_UI_PREFIX+"status_tab"+IntegerToString(tab))
         {
-         g_panel_tab=(tab==0?4:(tab==1?6:1));
+         g_panel_tab=(tab==0?4:1);
          PaintStatusPanel();
          ObjectSetInteger(0,sparam,OBJPROP_STATE,false);
          return;
@@ -2293,10 +2329,10 @@ void OnChartEvent(const int id,const long &lparam,const double &dparam,const str
    if(sparam==NXS_UI_PREFIX+"sig_settp") { IssueAdminCommand("UPDATE_TP"); ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
    if(sparam==NXS_UI_PREFIX+"sig_trail") { IssueAdminCommand("ACTIVATE_TRAILING"); ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
 
-   if(sparam==NXS_UI_PREFIX+"sig_buy") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_direction="BUY"; PaintStatusPanel(); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
-   if(sparam==NXS_UI_PREFIX+"sig_sell") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_direction="SELL"; PaintStatusPanel(); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
-   if(sparam==NXS_UI_PREFIX+"sig_market") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_order="MARKET"; PaintStatusPanel(); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
-   if(sparam==NXS_UI_PREFIX+"sig_limit") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_order="LIMIT"; PaintStatusPanel(); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
+   if(sparam==NXS_UI_PREFIX+"sig_buy") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_direction="BUY"; UISetButton("sig_buy","BUY",24,273,70,25,clrSeaGreen); UISetButton("sig_sell","SELL",99,273,70,25,clrDimGray); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
+   if(sparam==NXS_UI_PREFIX+"sig_sell") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_direction="SELL"; UISetButton("sig_buy","BUY",24,273,70,25,clrDimGray); UISetButton("sig_sell","SELL",99,273,70,25,clrSeaGreen); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
+   if(sparam==NXS_UI_PREFIX+"sig_market") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_order="MARKET"; UISetButton("sig_market","MARKET",174,273,78,25,clrSeaGreen); UISetButton("sig_limit","LIMIT",257,273,70,25,clrDimGray); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
+   if(sparam==NXS_UI_PREFIX+"sig_limit") { if(g_access_mode==NEXUS_ADMIN) { g_admin_signal_order="LIMIT"; UISetButton("sig_market","MARKET",174,273,78,25,clrDimGray); UISetButton("sig_limit","LIMIT",257,273,70,25,clrSeaGreen); } ObjectSetInteger(0,sparam,OBJPROP_STATE,false); return; }
    for(int ti=1;ti<=7;ti++)
      {
       string tn=NXS_UI_PREFIX+"sig_trail_"+StringFormat("%02d",ti);
@@ -2345,8 +2381,10 @@ void OnTimer()
   {
    if(g_setup_required) return;
    DoHeartbeat();
-   ProcessPendingReceipts();
+
+   // Refresh broker truth before retrying any queued execution receipt.
    DoLiveSync();
+   ProcessPendingReceipts();
    ReconcileMT5History();
    ProcessPendingOrders();
    ProcessPendingOpenTrades();
