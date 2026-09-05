@@ -877,11 +877,24 @@ function SignalForm({
   const [volumeMode, setVolumeMode] = useState<"RISK" | "FIXED">("RISK");
   const [orderType, setOrderType] = useState("MARKET");
   const [trailing, setTrailing] = useState("");
+  const [review, setReview] = useState<any>(null);
+  const [progress, setProgress] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   useEffect(() => {
     request("/signals/options")
       .then(setOptions)
       .catch((e) => toast(e.message, "error"));
   }, []);
+  useEffect(() => {
+    if (!progress?.id || progress.publication_stage === "PUBLISHED") return;
+    const timer = window.setInterval(() => {
+      request(`/signals/${progress.id}/publication`)
+        .then((value) => setProgress({ ...value, id: value.signal_id }))
+        .catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [progress?.id, progress?.publication_stage]);
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const f = new FormData(e.currentTarget);
@@ -906,16 +919,29 @@ function SignalForm({
       .split(",")
       .map(Number)
       .filter(Boolean);
+    body.request_id = requestId;
+    setReview(body);
+  }
+  async function issue(body: any) {
+    setBusy(true);
     try {
-      await request("/signals", { method: "POST", body: JSON.stringify(body) });
-      toast("سیگنال جدید به‌صورت پیش‌نویس ثبت شد");
-      onDone();
+      const result = await request("/signals", { method: "POST", body: JSON.stringify(body) });
+      setProgress(result);
+      setReview(null);
+      setRequestId(crypto.randomUUID());
+      toast("سیگنال ثبت شد؛ در انتظار تصویر واقعی MT5 است");
     } catch (e) {
       toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
     }
   }
   return (
     <form className="form-grid signal-issue-form" onSubmit={submit}>
+      <div className={`shot-agent full ${options?.screenshot_agent?.online ? "online" : "offline"}`}>
+        <ServerCog />
+        <div><b>عامل تصویر MT5 روی VPS</b><span>{options?.screenshot_agent?.online ? `آنلاین • حساب ${options.screenshot_agent.account_number}` : "آفلاین؛ سیگنال ذخیره می‌شود اما تا اتصال MT5 منتشر نخواهد شد"}</span></div>
+      </div>
       <Field label="بازار">
         <select
           name="market_type"
@@ -1033,6 +1059,11 @@ function SignalForm({
           <option value="FREE">عمومی</option>
         </select>
       </Field>
+      <Field label="حساب عامل MT5">
+        <select name="issuer_account" required>
+          {(options?.admin_accounts || []).map((account: string) => <option value={account} key={account}>{account}</option>)}
+        </select>
+      </Field>
       <Field label="حداکثر انحراف ورود (%)">
         <input
           name="max_entry_deviation_pct"
@@ -1096,11 +1127,26 @@ function SignalForm({
       <Field label="تحلیل فاندامنتال" full>
         <textarea name="fundamental_analysis" rows={3} />
       </Field>
+      {review && (
+        <div className="signal-review full">
+          <div><span>بررسی نهایی</span><b>{review.symbol} {review.direction} • {review.timeframe}</b></div>
+          <dl><div><dt>ورود</dt><dd>{review.entry_price}</dd></div><div><dt>حد ضرر</dt><dd>{review.stop_loss}</dd></div><div><dt>اهداف</dt><dd>{review.targets.join("، ")}</dd></div><div><dt>مقصد</dt><dd>{review.destination}</dd></div></dl>
+          <p>منبع تصویر: چارت واقعی MT5 روی VPS. انتشار تلگرام پس از دریافت و اعتبارسنجی تصویر به‌صورت خودکار انجام می‌شود.</p>
+          <div className="form-actions"><button type="button" className="ghost" onClick={() => setReview(null)}>بازگشت</button><button type="button" className="primary" disabled={busy} onClick={() => issue(review)}>{busy ? "در حال صدور…" : "صدور سیگنال"}</button></div>
+        </div>
+      )}
+      {progress && (
+        <div className="publication-progress full">
+          <b>{progress.code} • {progress.publication_stage || "WAITING_FOR_CHART"}</b>
+          <span>{progress.publication_stage === "PUBLISHED" ? "تصویر دریافت و سیگنال در تلگرام منتشر شد؛ AutoTrade فعال است." : progress.publication_stage === "CAPTURE_FAILED" || progress.publication_stage === "PUBLISH_FAILED" ? "فرآیند نیازمند بررسی ادمین است." : "در انتظار تصویر واقعی چارت از MT5 روی VPS…"}</span>
+          <div className="form-actions"><button type="button" className="ghost" onClick={onDone}>بستن</button></div>
+        </div>
+      )}
       <div className="form-actions full">
         <button type="button" className="ghost" onClick={onDone}>
           انصراف
         </button>
-        <button className="primary">ثبت پیش‌نویس سیگنال</button>
+        <button className="primary" disabled={!!review || !!progress || busy}>بررسی سیگنال</button>
       </div>
     </form>
   );

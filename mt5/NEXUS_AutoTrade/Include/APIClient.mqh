@@ -197,6 +197,28 @@ public:
       return false;
      }
 
+   bool NextChartCaptureJob(string &response)
+     {
+      return Request("GET","/api/v1/autotrade/admin/chart-capture/jobs/next","",true,response);
+     }
+
+   bool UploadChartCapture(const long job_id,const long signal_db_id,const string signal_code,
+                           const string broker_symbol,const string timeframe,const string chart_base64,
+                           const string captured_at,const string sha256,string &response)
+     {
+      string body=StringFormat("{\"job_id\":%I64d,\"signal_db_id\":%I64d,\"signal_code\":\"%s\",\"account_number\":\"%s\",\"broker_symbol\":\"%s\",\"timeframe\":\"%s\",\"chart_base64\":\"%s\",\"capture_timestamp\":\"%s\",\"image_sha256\":\"%s\"}",
+         job_id,signal_db_id,NexusJsonEscape(signal_code),NexusJsonEscape(m_account),NexusJsonEscape(broker_symbol),
+         NexusJsonEscape(timeframe),NexusJsonEscape(chart_base64),NexusJsonEscape(captured_at),NexusJsonEscape(sha256));
+      return Request("POST",StringFormat("/api/v1/autotrade/admin/chart-capture/%I64d/result",job_id),body,true,response);
+     }
+
+   bool FailChartCapture(const long job_id,const string error_code,const string error_text,string &response)
+     {
+      string body=StringFormat("{\"job_id\":%I64d,\"account_number\":\"%s\",\"error_code\":\"%s\",\"error_text\":\"%s\"}",
+         job_id,NexusJsonEscape(m_account),NexusJsonEscape(error_code),NexusJsonEscape(error_text));
+      return Request("POST",StringFormat("/api/v1/autotrade/admin/chart-capture/%I64d/fail",job_id),body,true,response);
+     }
+
    bool LiveState(const string positions_json,const string orders_json,string &response)
      {
       string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"broker\":\"%s\",\"server\":\"%s\",\"ea_version\":\"%s\",\"positions\":[%s],\"orders\":[%s]}",

@@ -499,6 +499,36 @@ def init_db() -> None:
                 FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS signal_chart_capture_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                signal_id INTEGER NOT NULL,
+                signal_code TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                timeframe TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'PENDING',
+                requested_by TEXT NOT NULL,
+                requested_at TEXT NOT NULL,
+                claimed_by_account TEXT,
+                claimed_at TEXT,
+                completed_at TEXT,
+                failed_at TEXT,
+                attempt_count INTEGER NOT NULL DEFAULT 0,
+                error_text TEXT,
+                image_path TEXT,
+                image_sha256 TEXT,
+                next_attempt_at TEXT,
+                expires_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_chart_capture_status ON signal_chart_capture_jobs(status,next_attempt_at,id);
+            CREATE INDEX IF NOT EXISTS idx_chart_capture_signal ON signal_chart_capture_jobs(signal_id,id);
+            CREATE INDEX IF NOT EXISTS idx_chart_capture_requested ON signal_chart_capture_jobs(requested_at);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_chart_capture_one_active
+                ON signal_chart_capture_jobs(signal_id)
+                WHERE status IN ('PENDING','CLAIMED','CAPTURING','UPLOADED');
+
             CREATE TABLE IF NOT EXISTS autotrade_notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER NOT NULL,
@@ -681,6 +711,7 @@ def init_db() -> None:
             "issuer_type": "ALTER TABLE signals ADD COLUMN issuer_type TEXT NOT NULL DEFAULT 'LEGACY_TELEGRAM'",
             "issuer_account": "ALTER TABLE signals ADD COLUMN issuer_account TEXT",
             "issued_at": "ALTER TABLE signals ADD COLUMN issued_at TEXT",
+            "publication_stage": "ALTER TABLE signals ADD COLUMN publication_stage TEXT NOT NULL DEFAULT 'DRAFT'",
         }
         for name, ddl in authority_migrations.items():
             if name not in scols:
@@ -2133,7 +2164,7 @@ def create_signal(*, market_type: str, symbol: str, direction: str, entry_price:
                     return existing
             raise
         signal_id = int(cur.lastrowid)
-        code = f"NX-{signal_id:04d}"
+        code = f"NX-{signal_id:02d}"
         con.execute("UPDATE signals SET code=? WHERE id=?", (code, signal_id))
         con.executemany(
             "INSERT INTO signal_targets(signal_id,target_no,price) VALUES(?,?,?)",
@@ -2495,6 +2526,147 @@ def clear_mt5_signal_publication_asset(signal_id: int) -> None:
             pass
 
 
+def create_chart_capture_job(signal_id: int, requested_by: str, *, ttl_seconds: int = 300) -> sqlite3.Row:
+    signal = get_signal(signal_id)
+    if not signal:
+        raise ValueError("signal not found")
+    now = datetime.now(timezone.utc)
+    now_s = now.isoformat()
+    with conn() as con:
+        existing = con.execute(
+            "SELECT * FROM signal_chart_capture_jobs WHERE signal_id=? AND status IN ('PENDING','CLAIMED','CAPTURING','UPLOADED') ORDER BY id DESC LIMIT 1",
+            (int(signal_id),),
+        ).fetchone()
+        if existing:
+            return existing
+        cur = con.execute(
+            """INSERT INTO signal_chart_capture_jobs
+               (signal_id,signal_code,symbol,timeframe,status,requested_by,requested_at,attempt_count,next_attempt_at,expires_at,created_at,updated_at)
+               VALUES(?,?,?,?, 'PENDING', ?,?,0,?,?,?,?)""",
+            (int(signal_id), str(signal["code"]), str(signal["symbol"]), str(signal["timeframe"] or "M5"),
+             str(requested_by), now_s, now_s, (now + timedelta(seconds=max(30, int(ttl_seconds)))).isoformat(), now_s, now_s),
+        )
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(cur.lastrowid),)).fetchone()
+
+
+def get_chart_capture_job(job_id: int) -> sqlite3.Row | None:
+    with conn() as con:
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(job_id),)).fetchone()
+
+
+def get_signal_chart_capture_job(signal_id: int) -> sqlite3.Row | None:
+    with conn() as con:
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE signal_id=? ORDER BY id DESC LIMIT 1", (int(signal_id),)).fetchone()
+
+
+def claim_next_chart_capture_job(account_number: str) -> sqlite3.Row | None:
+    account = str(account_number).strip()
+    now = datetime.now(timezone.utc)
+    now_s = now.isoformat()
+    stale = (now - timedelta(seconds=15)).isoformat()
+    with conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        con.execute(
+            """UPDATE signal_chart_capture_jobs
+               SET status=CASE WHEN attempt_count>=3 THEN 'FAILED' ELSE 'PENDING' END,
+                   failed_at=CASE WHEN attempt_count>=3 THEN ? ELSE failed_at END,
+                   error_text='capture claim timed out',next_attempt_at=?,updated_at=?
+               WHERE status IN ('CLAIMED','CAPTURING') AND claimed_at<?""",
+            (now_s, now_s, now_s, stale),
+        )
+        con.execute(
+            "UPDATE signal_chart_capture_jobs SET status='EXPIRED',failed_at=?,error_text='job expired',updated_at=? WHERE status='PENDING' AND expires_at<?",
+            (now_s, now_s, now_s),
+        )
+        row = con.execute(
+            """SELECT j.* FROM signal_chart_capture_jobs j
+               JOIN signals s ON s.id=j.signal_id
+               WHERE j.status='PENDING' AND j.attempt_count<3 AND j.next_attempt_at<=? AND j.expires_at>?
+                 AND s.issuer_type='WEB_ADMIN' AND s.issuer_account=?
+               ORDER BY j.requested_at,j.id LIMIT 1""",
+            (now_s, now_s, account),
+        ).fetchone()
+        if not row:
+            return None
+        cur = con.execute(
+            """UPDATE signal_chart_capture_jobs
+               SET status='CLAIMED',claimed_by_account=?,claimed_at=?,attempt_count=attempt_count+1,updated_at=?
+               WHERE id=? AND status='PENDING'""",
+            (account, now_s, now_s, int(row["id"])),
+        )
+        if cur.rowcount != 1:
+            return None
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(row["id"]),)).fetchone()
+
+
+def complete_chart_capture_job(job_id: int, account_number: str, *, broker_symbol: str, timeframe: str,
+                               image_path: str, image_sha256: str) -> tuple[sqlite3.Row, bool]:
+    now = now_iso()
+    account = str(account_number).strip()
+    with conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(job_id),)).fetchone()
+        if not row:
+            raise ValueError("chart capture job not found")
+        if str(row["status"]) in {"UPLOADED", "COMPLETED"}:
+            if str(row["image_sha256"] or "") != str(image_sha256):
+                raise ValueError("chart capture job already completed with another image")
+            return row, False
+        if str(row["status"]) not in {"CLAIMED", "CAPTURING"} or str(row["claimed_by_account"] or "") != account:
+            raise ValueError("chart capture job is not owned by this MT5 account")
+        con.execute(
+            """UPDATE signal_chart_capture_jobs SET status='UPLOADED',completed_at=?,image_path=?,image_sha256=?,
+               error_text=NULL,updated_at=? WHERE id=?""",
+            (now, str(image_path), str(image_sha256), now, int(job_id)),
+        )
+        updated = con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(job_id),)).fetchone()
+        return updated, True
+
+
+def fail_chart_capture_job(job_id: int, account_number: str, error_text: str) -> sqlite3.Row:
+    now = datetime.now(timezone.utc)
+    now_s = now.isoformat()
+    account = str(account_number).strip()
+    with conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(job_id),)).fetchone()
+        if not row:
+            raise ValueError("chart capture job not found")
+        if str(row["claimed_by_account"] or "") != account or str(row["status"]) not in {"CLAIMED", "CAPTURING"}:
+            raise ValueError("chart capture job is not owned by this MT5 account")
+        attempts = int(row["attempt_count"] or 0)
+        terminal = attempts >= 3 or now_s >= str(row["expires_at"])
+        delay = 3 if attempts <= 1 else 7
+        status = "FAILED" if terminal else "PENDING"
+        con.execute(
+            """UPDATE signal_chart_capture_jobs SET status=?,failed_at=?,error_text=?,next_attempt_at=?,
+               claimed_by_account=NULL,claimed_at=NULL,updated_at=? WHERE id=?""",
+            (status, now_s if terminal else None, str(error_text)[:1000], (now + timedelta(seconds=delay)).isoformat(), now_s, int(job_id)),
+        )
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(job_id),)).fetchone()
+
+
+def retry_chart_capture_job(signal_id: int) -> sqlite3.Row:
+    now = now_iso()
+    with conn() as con:
+        row = con.execute("SELECT * FROM signal_chart_capture_jobs WHERE signal_id=? ORDER BY id DESC LIMIT 1", (int(signal_id),)).fetchone()
+        if not row:
+            raise ValueError("chart capture job not found")
+        if str(row["status"]) not in {"FAILED", "EXPIRED"}:
+            raise ValueError("only failed or expired jobs may be retried")
+        con.execute(
+            """UPDATE signal_chart_capture_jobs SET status='PENDING',attempt_count=0,error_text=NULL,failed_at=NULL,
+               claimed_by_account=NULL,claimed_at=NULL,next_attempt_at=?,expires_at=?,updated_at=? WHERE id=?""",
+            (now, (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(), now, int(row["id"])),
+        )
+        return con.execute("SELECT * FROM signal_chart_capture_jobs WHERE id=?", (int(row["id"]),)).fetchone()
+
+
+def mark_chart_capture_job_completed(job_id: int) -> None:
+    with conn() as con:
+        con.execute("UPDATE signal_chart_capture_jobs SET status='COMPLETED',updated_at=? WHERE id=? AND status='UPLOADED'", (now_iso(), int(job_id)))
+
+
 def set_signal_publish_messages(signal_id: int, free_message_id: int | None, vip_message_id: int | None) -> None:
     """Merge newly-published channel messages without erasing existing reply chains."""
     with conn() as con:
@@ -2729,7 +2901,7 @@ def autotrade_active_signals(after_id: int = 0, limit: int = 50):
         return list(con.execute(
             """SELECT * FROM signals
                WHERE id>? AND status='ACTIVE'
-                 AND issuer_type='MT5_ADMIN'
+                 AND issuer_type IN ('MT5_ADMIN','WEB_ADMIN')
                ORDER BY id ASC LIMIT ?""",
             (int(after_id), max(1, min(int(limit), 100))),
         ).fetchall())
@@ -2739,8 +2911,8 @@ def create_autotrade_command(signal_id: int, command: str, payload: dict | None 
     signal = get_signal(signal_id)
     if not signal:
         raise ValueError("signal not found")
-    if "issuer_type" in signal.keys() and str(signal["issuer_type"]).upper() != "MT5_ADMIN":
-        raise ValueError("only MT5_ADMIN signals accept v0.6 admin commands")
+    if "issuer_type" in signal.keys() and str(signal["issuer_type"]).upper() not in {"MT5_ADMIN", "WEB_ADMIN"}:
+        raise ValueError("only canonical Admin signals accept v0.6 admin commands")
     now = now_iso()
     with conn() as con:
         cur = con.execute("INSERT INTO autotrade_commands(signal_id,command,payload_json,created_at) VALUES(?,?,?,?)",

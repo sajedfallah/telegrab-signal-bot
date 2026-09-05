@@ -43,7 +43,29 @@ bool NexusTrailClaimManageSecond(const string sig,const datetime now)
       (double)now,
       previous
    );
-   }
+  }
+
+// Broker comments are mutable and may be cleared after a partial close.
+// Recover the immutable signal-to-ticket mapping persisted by NEXUS instead.
+string NexusTrailRecoverSignal(const ulong ticket,const string broker_comment)
+  {
+   string sig=broker_comment;
+   StringTrimLeft(sig); StringTrimRight(sig); StringReplace(sig," ","_");
+   if(StringFind(sig,"NX-")==0 || StringFind(sig,"MANUAL.")==0) return sig;
+   string prefix="NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+".";
+   string suffix=".ticket";
+   int total=GlobalVariablesTotal();
+   for(int i=0;i<total;i++)
+     {
+      string key=GlobalVariableName(i);
+      if(StringFind(key,prefix)!=0) continue;
+      int suffix_pos=StringLen(key)-StringLen(suffix);
+      if(suffix_pos<=StringLen(prefix) || StringSubstr(key,suffix_pos)!=suffix) continue;
+      if((ulong)MathRound(GlobalVariableGet(key))!=ticket) continue;
+      return StringSubstr(key,StringLen(prefix),suffix_pos-StringLen(prefix));
+     }
+   return "";
+  }
 
 // Hardened profile-based trailing engine.
 // NEXUS positions use the immutable signal snapshot.

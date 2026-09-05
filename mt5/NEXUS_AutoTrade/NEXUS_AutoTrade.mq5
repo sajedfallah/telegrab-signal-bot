@@ -75,6 +75,7 @@ bool g_force_close_all=false;
 long g_last_signal_id=0;
 long g_last_command_id=0;
 datetime g_last_heartbeat=0;
+datetime g_last_chart_capture_poll=0;
 datetime g_last_history_reconcile=0;
 bool g_bootstrap=true;
 bool g_setup_required=false;
@@ -1429,6 +1430,171 @@ string CaptureChartBase64(const string symbol,const string tag)
    return encoded;
   }
 
+ENUM_TIMEFRAMES NexusTimeframe(const string value)
+  {
+   if(value=="M1") return PERIOD_M1; if(value=="M3") return PERIOD_M3;
+   if(value=="M5") return PERIOD_M5; if(value=="M15") return PERIOD_M15;
+   if(value=="M30") return PERIOD_M30; if(value=="H1") return PERIOD_H1;
+   if(value=="H4") return PERIOD_H4; if(value=="D1") return PERIOD_D1;
+   if(value=="W1") return PERIOD_W1;
+   return PERIOD_CURRENT;
+  }
+
+string NexusSha256Hex(const uchar &raw[])
+  {
+   uchar key[],digest[]; ArrayResize(key,0);
+   if(CryptEncode(CRYPT_HASH_SHA256,raw,key,digest)<=0) return "";
+   string out="";
+   for(int i=0;i<ArraySize(digest);i++) out+=StringFormat("%02x",(int)digest[i]);
+   return out;
+  }
+
+void DeleteShotObjects(const long chart_id,const string prefix)
+  {
+   for(int i=ObjectsTotal(chart_id)-1;i>=0;i--)
+     {
+      string name=ObjectName(chart_id,i);
+      if(StringFind(name,prefix)==0) ObjectDelete(chart_id,name);
+     }
+  }
+
+bool DrawShotLevel(const long chart_id,const string prefix,const string key,const double price,const color line_color)
+  {
+   if(price<=0) return true;
+   string line=prefix+key+".LINE";
+   if(!ObjectCreate(chart_id,line,OBJ_HLINE,0,0,price)) return false;
+   ObjectSetInteger(chart_id,line,OBJPROP_COLOR,line_color);
+   ObjectSetInteger(chart_id,line,OBJPROP_WIDTH,key=="ENTRY"?2:1);
+   ObjectSetInteger(chart_id,line,OBJPROP_STYLE,key=="ENTRY"?STYLE_SOLID:STYLE_DASH);
+   ObjectSetString(chart_id,line,OBJPROP_TEXT,key+"  "+DoubleToString(price,(int)SymbolInfoInteger(ChartSymbol(chart_id),SYMBOL_DIGITS)));
+   string label=prefix+key+".LABEL";
+   datetime label_time=(datetime)(iTime(ChartSymbol(chart_id),(ENUM_TIMEFRAMES)ChartPeriod(chart_id),0)+PeriodSeconds((ENUM_TIMEFRAMES)ChartPeriod(chart_id))*4);
+   if(ObjectCreate(chart_id,label,OBJ_TEXT,0,label_time,price))
+     {
+      ObjectSetString(chart_id,label,OBJPROP_TEXT,"  "+key);
+      ObjectSetInteger(chart_id,label,OBJPROP_COLOR,line_color);
+      ObjectSetInteger(chart_id,label,OBJPROP_FONTSIZE,10);
+      ObjectSetString(chart_id,label,OBJPROP_FONT,"Arial Bold");
+     }
+   return true;
+  }
+
+bool CaptureChartJob(const long job_id,const string signal_code,const string requested_symbol,const string timeframe,
+                     const string direction,const double entry,const double sl,const string targets_json,
+                     string &chart_base64,string &broker_symbol,string &sha256,string &error_text)
+  {
+   ENUM_TIMEFRAMES period=NexusTimeframe(timeframe);
+   if(period==PERIOD_CURRENT) { error_text="UNSUPPORTED_TIMEFRAME"; return false; }
+   string canonical=CanonicalSignalSymbol(requested_symbol);
+   string mapped=g_mapper.Resolve(requested_symbol,InpEnableAutoSymbolMapping);
+   long chart_id=-1; bool opened=false;
+
+   if(CanonicalSignalSymbol(_Symbol)==canonical && (ENUM_TIMEFRAMES)_Period==period) chart_id=ChartID();
+   if(chart_id<0 && mapped!="")
+      for(long cid=ChartFirst();cid>=0;cid=ChartNext(cid))
+         if(ChartSymbol(cid)==mapped && (ENUM_TIMEFRAMES)ChartPeriod(cid)==period) { chart_id=cid; break; }
+   if(chart_id<0)
+      for(long cid=ChartFirst();cid>=0;cid=ChartNext(cid))
+         if(CanonicalSignalSymbol(ChartSymbol(cid))==canonical && (ENUM_TIMEFRAMES)ChartPeriod(cid)==period) { chart_id=cid; break; }
+   if(chart_id<0 && mapped!="" && SymbolSelect(mapped,true))
+     {
+      chart_id=ChartOpen(mapped,period);
+      opened=(chart_id>0);
+     }
+   if(chart_id<0) { error_text="BROKER_SYMBOL_OR_CHART_NOT_FOUND"; return false; }
+
+   broker_symbol=ChartSymbol(chart_id);
+   for(int wait=0;wait<15 && Bars(broker_symbol,period)<20;wait++) { Sleep(200); ChartRedraw(chart_id); }
+   if(Bars(broker_symbol,period)<20)
+     { if(opened) ChartClose(chart_id); error_text="CHART_NOT_RENDERED"; return false; }
+
+   string prefix="NXS.SHOT."+(string)job_id+".";
+   NEXUSScreenshotObjectState hidden[];
+   bool captured=false;
+   HideNexusUiForScreenshot(chart_id,hidden);
+   DeleteShotObjects(chart_id,prefix);
+   bool draw_ok=DrawShotLevel(chart_id,prefix,"ENTRY",entry,clrDodgerBlue) && DrawShotLevel(chart_id,prefix,"SL",sl,clrTomato);
+   string clean=targets_json; StringReplace(clean,"[",""); StringReplace(clean,"]","");
+   string parts[]; int count=StringSplit(clean,',',parts);
+   for(int i=0;i<count && i<10;i++)
+      if(!DrawShotLevel(chart_id,prefix,"TP"+(string)(i+1),StringToDouble(parts[i]),clrLimeGreen)) draw_ok=false;
+   string title=prefix+"TITLE";
+   if(ObjectCreate(chart_id,title,OBJ_LABEL,0,0,0))
+     {
+      ObjectSetInteger(chart_id,title,OBJPROP_CORNER,CORNER_LEFT_UPPER); ObjectSetInteger(chart_id,title,OBJPROP_XDISTANCE,22);
+      ObjectSetInteger(chart_id,title,OBJPROP_YDISTANCE,18); ObjectSetInteger(chart_id,title,OBJPROP_COLOR,clrWhite);
+      ObjectSetInteger(chart_id,title,OBJPROP_FONTSIZE,13); ObjectSetString(chart_id,title,OBJPROP_FONT,"Arial Bold");
+      ObjectSetString(chart_id,title,OBJPROP_TEXT,signal_code+"  |  "+canonical+" "+direction+"  |  "+timeframe);
+     }
+   if(!draw_ok) error_text="ANNOTATION_CREATE_FAILED";
+   else
+     {
+      ChartRedraw(chart_id); Sleep(500); ChartRedraw(chart_id);
+      FolderCreate("NEXUS_Shots");
+      string filename="NEXUS_Shots\\JOB_"+(string)job_id+"_"+(string)GetTickCount()+".png";
+      ResetLastError();
+      if(ChartScreenShot(chart_id,filename,1280,720,ALIGN_RIGHT))
+        {
+         Sleep(150);
+         int h=FileOpen(filename,FILE_READ|FILE_BIN);
+         if(h!=INVALID_HANDLE)
+           {
+            ulong size=FileSize(h); uchar raw[];
+            if(size>=4096 && size<=5000000)
+              {
+               ArrayResize(raw,(int)size); uint got=FileReadArray(h,raw,0,(int)size);
+               if(got==size) { chart_base64=Base64EncodeBytes(raw); sha256=NexusSha256Hex(raw); captured=(StringLen(chart_base64)>1000 && StringLen(sha256)==64); }
+              }
+            FileClose(h);
+           }
+         FileDelete(filename);
+         if(!captured) error_text="INVALID_SCREENSHOT_FILE";
+        }
+      else error_text="CHART_SCREENSHOT_FAILED_"+(string)GetLastError();
+     }
+
+   // Fail-safe: restore the NEXUS panel and delete only this job's objects.
+   DeleteShotObjects(chart_id,prefix);
+   RestoreNexusUiAfterScreenshot(chart_id,hidden);
+   if(opened) ChartClose(chart_id);
+   Print("NEXUS CHART JOB | job=",job_id," requested=",requested_symbol," canonical=",canonical,
+         " broker=",broker_symbol," chart_id=",chart_id," timeframe=",timeframe," result=",captured?"OK":error_text);
+   return captured;
+  }
+
+void PollChartCaptureJobs()
+  {
+   if(g_access_mode!=NEXUS_ADMIN || !g_admin_authenticated) return;
+   datetime now=TimeCurrent();
+   if(g_last_chart_capture_poll>0 && now-g_last_chart_capture_poll<2) return;
+   g_last_chart_capture_poll=now;
+   string response;
+   if(!g_api.NextChartCaptureJob(response)) { Print("NEXUS chart job poll failed: ",g_api.LastError()); return; }
+   string job=NexusJsonObject(response,"job");
+   if(job=="") return;
+   long job_id=NexusJsonLong(job,"job_id",0), signal_db_id=NexusJsonLong(job,"signal_db_id",0);
+   string signal_code=NexusJsonString(job,"signal_code",""),symbol=NexusJsonString(job,"symbol","");
+   string timeframe=NexusJsonString(job,"timeframe","M5"),direction=NexusJsonString(job,"direction","");
+   double entry=NexusJsonDouble(job,"entry",0),sl=NexusJsonDouble(job,"sl",0);
+   string targets=NexusJsonArray(job,"targets");
+   string image,broker,sha,error;
+   if(job_id<=0 || signal_db_id<=0 || signal_code=="" || !CaptureChartJob(job_id,signal_code,symbol,timeframe,direction,entry,sl,targets,image,broker,sha,error))
+     {
+      string fail_response;
+      if(error=="") error="INVALID_JOB_PAYLOAD";
+      if(!g_api.FailChartCapture(job_id,"CAPTURE_FAILED",error,fail_response)) Print("NEXUS chart job failure report failed: ",g_api.LastError());
+      return;
+     }
+   string upload_response;
+   string captured_at=TimeToString(TimeGMT(),TIME_DATE|TIME_SECONDS);
+   if(!g_api.UploadChartCapture(job_id,signal_db_id,signal_code,broker,timeframe,image,captured_at,sha,upload_response))
+     {
+      string fail_response;
+      g_api.FailChartCapture(job_id,"UPLOAD_FAILED",g_api.LastError(),fail_response);
+      Print("NEXUS chart upload failed: ",g_api.LastError());
+     }
+  }
+
 bool PositionIdentifierExists(const long identifier)
   {
    for(int i=PositionsTotal()-1;i>=0;i--)
@@ -2381,6 +2547,7 @@ void OnTimer()
   {
    if(g_setup_required) return;
    DoHeartbeat();
+   PollChartCaptureJobs();
 
    // Refresh broker truth before retrying any queued execution receipt.
    DoLiveSync();
@@ -2447,7 +2614,7 @@ bool SendPendingLifecycleEvent(const string event_name,const ulong order_ticket,
    string signal_id=comment;
    long saved_dbid=LoadManualPendingSignal(order_ticket);
    string saved_destination=LoadManualPendingDestination(order_ticket);
-   if(saved_dbid>0) signal_id="NX-"+StringFormat("%04d",(int)saved_dbid);
+   if(saved_dbid>0) signal_id="NX-"+StringFormat("%02d",(int)saved_dbid);
    if(signal_id=="") return false;
    string direction=(ot==ORDER_TYPE_BUY_LIMIT || ot==ORDER_TYPE_BUY_STOP || ot==ORDER_TYPE_BUY_STOP_LIMIT)?"LONG":"SHORT";
    double volume=HistoryOrderGetDouble(order_ticket,ORDER_VOLUME_INITIAL);
@@ -2556,7 +2723,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
            }
          // Queue the event in terminal memory; delivery is retried from OnTimer.
          // The destination is restored from the durable pending-order mapping.
-         string pending_signal=(pending_dbid>0 ? "NX-"+StringFormat("%04d",(int)pending_dbid) : "");
+         string pending_signal=(pending_dbid>0 ? "NX-"+StringFormat("%02d",(int)pending_dbid) : "");
          string pending_destination=LoadManualPendingDestination(trans.order);
          string open_destination=(pending_destination!="NONE"?pending_destination:g_manual_destination);
          if(open_destination=="FREE" || open_destination=="VIP" || open_destination=="BOTH")

@@ -10,6 +10,7 @@ import os
 import secrets
 import struct
 import time
+import uuid
 import zipfile
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -472,6 +473,8 @@ class SignalWrite(BaseModel):
     max_entry_deviation_abs: float | None = Field(None, gt=0)
     technical_analysis: str = Field(default="", max_length=10000)
     fundamental_analysis: str = Field(default="", max_length=10000)
+    issuer_account: str | None = Field(default=None, min_length=3, max_length=32)
+    request_id: str | None = Field(default=None, min_length=8, max_length=160)
 
     @field_validator("lot_size")
     @classmethod
@@ -497,6 +500,7 @@ def signals(q: str = "", status: str = "", market: str = "", limit: int = Query(
 @router.get("/signals/options")
 def signal_options(admin=Depends(current_admin)):
     from .autotrade.trailing_profiles import TRAILING_PROFILES, TRAILING_GUIDE_FA
+    from .config import settings
     symbols = {
         "FOREX": ["EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD","NZDUSD","EURJPY","GBPJPY","EURGBP"],
         "CRYPTO": ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT","DOGEUSDT","AVAXUSDT","LINKUSDT","TONUSDT"],
@@ -505,24 +509,109 @@ def signal_options(admin=Depends(current_admin)):
         "OTHER": ["USOIL","UKOIL","NATGAS"],
     }
     trailing = [{"code":code,"name":profile["name"],"guide":TRAILING_GUIDE_FA.get(code,""),"config":profile} for code,profile in TRAILING_PROFILES.items()]
-    return {"symbols":symbols,"trailing":trailing,"order_types":["MARKET","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"],"timeframes":["M1","M3","M5","M15","M30","H1","H4","D1","W1"]}
+    heartbeat = None
+    accounts = list(settings.nexus_admin_mt5_accounts)
+    if accounts:
+        with db.conn() as con:
+            marks = ",".join("?" for _ in accounts)
+            heartbeat = con.execute(
+                f"SELECT account_number,last_seen_at FROM mt5_heartbeats_v060 WHERE role='ADMIN' AND account_number IN ({marks}) ORDER BY last_seen_at DESC LIMIT 1",
+                accounts,
+            ).fetchone()
+    fresh = False
+    if heartbeat:
+        try:
+            fresh = (_utcnow() - datetime.fromisoformat(str(heartbeat["last_seen_at"]))).total_seconds() <= 120
+        except ValueError:
+            fresh = False
+    return {"symbols":symbols,"trailing":trailing,"order_types":["MARKET","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"],"timeframes":["M1","M3","M5","M15","M30","H1","H4","D1","W1"],
+            "admin_accounts": accounts, "screenshot_agent": {"online": fresh, "account_number": heartbeat["account_number"] if heartbeat else None, "last_seen_at": heartbeat["last_seen_at"] if heartbeat else None}}
 
 
 @router.post("/signals", status_code=201)
 def create_signal(req: SignalWrite, admin=Depends(require("ADMIN", "MODERATOR"))):
     try:
+        from .config import settings
+        allowed = tuple(str(x) for x in settings.nexus_admin_mt5_accounts)
+        account = str(req.issuer_account or (allowed[0] if allowed else "UNCONFIGURED")).strip()
+        if allowed and account not in allowed:
+            raise ValueError("an allow-listed Admin MT5 screenshot account is required")
+        request_id = req.request_id or secrets.token_urlsafe(24)
+        token = f"WEB:{int(admin['id'])}:{request_id}"
+        existing = db.get_signal_by_publish_token(token)
         row = db.create_signal(market_type=req.market_type, symbol=req.symbol, direction=req.direction, entry_price=req.entry_price,
             stop_loss=req.stop_loss, targets=req.targets, risk_percent=req.risk_percent, rr_ratio=None, destination=req.destination,
             chart_file_id=None, created_by=int(admin["id"]), timeframe=req.timeframe, order_type=req.order_type,
             volume_mode=req.volume_mode, lot_size=req.lot_size, trailing_code=req.trailing_code,
             max_entry_deviation_pct=req.max_entry_deviation_pct, max_entry_deviation_abs=req.max_entry_deviation_abs,
-            stop_limit_price=req.stop_limit_price)
+            stop_limit_price=req.stop_limit_price, publish_token=token)
         with db.conn() as con:
-            con.execute("UPDATE signals SET category='GENERAL',technical_analysis=?,fundamental_analysis=? WHERE id=?", (req.technical_analysis, req.fundamental_analysis, row["id"]))
-        _audit(admin, "web_signal_created", int(row["id"]), str(row["code"]))
-        return {"id": row["id"], "code": row["code"], "status": row["status"]}
+            con.execute("""UPDATE signals SET category='GENERAL',technical_analysis=?,fundamental_analysis=?,
+                         signal_uuid=COALESCE(signal_uuid,?),issuer_type='WEB_ADMIN',issuer_account=?,issued_at=COALESCE(issued_at,?),
+                         status='DRAFT',publication_stage='WAITING_FOR_CHART' WHERE id=?""",
+                        (req.technical_analysis, req.fundamental_analysis, str(uuid.uuid4()), account, db.now_iso(), row["id"]))
+            row = con.execute("SELECT * FROM signals WHERE id=?", (int(row["id"]),)).fetchone()
+        job = db.create_chart_capture_job(int(row["id"]), f"WEB_ADMIN:{admin['id']}")
+        if existing is None:
+            db.add_signal_event(int(row["id"]), "WEB_SIGNAL_CREATED", actor_type="WEB_ADMIN", actor_id=admin["id"], request_id=request_id, correlation_id=str(row["code"]))
+            db.add_signal_event(int(row["id"]), "CHART_JOB_CREATED", actor_type="WEB_ADMIN", actor_id=admin["id"], request_id=f"chart-job:{job['id']}", correlation_id=str(row["code"]), payload={"job_id": int(job["id"]), "account": account})
+            _audit(admin, "WEB_SIGNAL_CREATED", int(row["id"]), str(row["code"]))
+        return {"id": row["id"], "code": row["code"], "status": row["status"], "publication_stage": row["publication_stage"],
+                "chart_job": dict(job), "idempotent": existing is not None}
     except ValueError as exc:
         raise HTTPException(422, str(exc))
+
+
+@router.get("/signals/{signal_id}/publication")
+def signal_publication(signal_id: int, admin=Depends(current_admin)):
+    row = db.get_signal(signal_id)
+    if not row:
+        raise HTTPException(404, "سیگنال پیدا نشد")
+    job = db.get_signal_chart_capture_job(signal_id)
+    return {"signal_id": signal_id, "code": row["code"], "signal_status": row["status"],
+            "publication_stage": row["publication_stage"], "chart_job": dict(job) if job else None,
+            "published": bool(row["free_message_id"] or row["vip_message_id"])}
+
+
+@router.post("/signals/{signal_id}/chart/retry")
+def retry_signal_chart(signal_id: int, admin=Depends(require("ADMIN", "MODERATOR"))):
+    try:
+        job = db.retry_chart_capture_job(signal_id)
+        with db.conn() as con:
+            con.execute("UPDATE signals SET publication_stage='WAITING_FOR_CHART' WHERE id=?", (signal_id,))
+        db.add_signal_event(signal_id, "CHART_JOB_CREATED", actor_type="WEB_ADMIN", actor_id=admin["id"], request_id=f"chart-job:{job['id']}:retry", payload={"retry": True})
+        return {"ok": True, "chart_job": dict(job)}
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+
+
+class PublishWithoutChart(BaseModel):
+    confirm: bool
+
+
+@router.post("/signals/{signal_id}/publish-without-chart")
+async def publish_signal_without_chart(req: PublishWithoutChart, signal_id: int, admin=Depends(require("ADMIN"))):
+    if req.confirm is not True:
+        raise HTTPException(409, "explicit confirmation is required")
+    row = db.get_signal(signal_id)
+    if not row or str(row["issuer_type"]).upper() != "WEB_ADMIN":
+        raise HTTPException(404, "وب‌سیگنال پیدا نشد")
+    from .autotrade.api import _publish_mt5_admin_signal_async
+    result = await _publish_mt5_admin_signal_async(row, None, allow_without_chart=True)
+    _audit(admin, "WEB_SIGNAL_PUBLISH_WITHOUT_CHART", signal_id, json.dumps(result, ensure_ascii=False))
+    return result
+
+
+@router.post("/signals/{signal_id}/cancel-publication")
+def cancel_signal_publication(signal_id: int, admin=Depends(require("ADMIN", "MODERATOR"))):
+    row = db.get_signal(signal_id)
+    if not row or str(row["status"]).upper() not in {"DRAFT", "PENDING"}:
+        raise HTTPException(409, "این سیگنال دیگر قابل لغو نیست")
+    with db.conn() as con:
+        con.execute("UPDATE signals SET status='CANCELED',publication_stage='CANCELED' WHERE id=?", (signal_id,))
+        con.execute("UPDATE signal_chart_capture_jobs SET status='EXPIRED',failed_at=?,error_text='signal canceled',updated_at=? WHERE signal_id=? AND status IN ('PENDING','CLAIMED','CAPTURING')", (db.now_iso(), db.now_iso(), signal_id))
+    db.add_signal_event(signal_id, "SIGNAL_CANCELED", actor_type="WEB_ADMIN", actor_id=admin["id"])
+    return {"ok": True}
 
 
 class SignalPatch(BaseModel):

@@ -8,6 +8,9 @@ import json
 import uuid
 import math
 import hmac
+import hashlib
+import time
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
@@ -127,6 +130,37 @@ class MT5AdminCommandRequest(BaseModel):
     command: str = Field(pattern="^(?:MOVE_SL_TO_ENTRY|CLOSE_SIGNAL|CANCEL_PENDING|UPDATE_SL|UPDATE_TP|ACTIVATE_TRAILING|PARTIAL_CLOSE)$")
     value: str | None = Field(default=None, max_length=128)
     request_id: str | None = Field(default=None, max_length=160)
+
+
+class ChartCaptureResultRequest(BaseModel):
+    job_id: int = Field(ge=1)
+    signal_db_id: int = Field(ge=1)
+    signal_code: str = Field(min_length=4, max_length=64)
+    account_number: str = Field(min_length=3, max_length=32)
+    broker_symbol: str = Field(min_length=1, max_length=64)
+    timeframe: str = Field(pattern="^(?:M1|M3|M5|M15|M30|H1|H4|D1|W1)$")
+    chart_base64: str = Field(min_length=1000, max_length=8_000_000)
+    capture_timestamp: str = Field(min_length=10, max_length=64)
+    image_sha256: str = Field(pattern="^[0-9a-fA-F]{64}$")
+
+
+class ChartCaptureFailureRequest(BaseModel):
+    job_id: int = Field(ge=1)
+    account_number: str = Field(min_length=3, max_length=32)
+    error_code: str = Field(min_length=1, max_length=64)
+    error_text: str = Field(min_length=1, max_length=1000)
+
+
+_chart_rate_windows: dict[str, list[float]] = {}
+
+
+def _chart_rate_limit(account: str, limit: int = 60) -> None:
+    now = time.monotonic()
+    recent = [stamp for stamp in _chart_rate_windows.get(account, []) if now - stamp < 60]
+    if len(recent) >= limit:
+        raise HTTPException(status_code=429, detail="chart capture rate limit exceeded")
+    recent.append(now)
+    _chart_rate_windows[account] = recent
 
 
 class CommandReceiptRequest(BaseModel):
@@ -527,19 +561,21 @@ def command_receipt_mt5_get(
     return {"ok": True}
 
 
-async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) -> dict:
+async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
     """Publish an MT5-authority signal only after an accepted execution receipt.
 
     The publication asset is staged before MT5 execution and consumed only here.
     Channel claims make publication idempotent across duplicate receipts/retries.
     """
+    row = db.get_signal(int(row["id"])) or row
+    issuer_type = str(row.get("issuer_type", "MT5_ADMIN") if isinstance(row, dict) else row["issuer_type"] or "MT5_ADMIN").strip().upper()
     receipt = db.mt5_signal_live_state(int(row["id"])) or {}
     exec_status = str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
 
     # This guard is intentionally inside the publisher itself so EVERY caller
     # (accepted receipt, retry worker, CLOSE anchor recovery, future callers)
     # inherits the same execution-truth invariant.
-    if exec_status not in PUBLISHABLE_RECEIPT_STATUSES:
+    if issuer_type == "MT5_ADMIN" and exec_status not in PUBLISHABLE_RECEIPT_STATUSES:
         return {
             "free_message_id": None,
             "vip_message_id": None,
@@ -550,6 +586,12 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
             "complete": False,
             "execution_status": exec_status,
         }
+
+    chart_job = db.get_signal_chart_capture_job(int(row["id"])) if issuer_type == "WEB_ADMIN" else None
+    if issuer_type == "WEB_ADMIN" and not allow_without_chart and (not chart_job or str(chart_job["status"]) not in {"UPLOADED", "COMPLETED"}):
+        return {"free_message_id": None, "vip_message_id": None,
+                "errors": ["CHART_GATE: real MT5 chart has not been uploaded"],
+                "published": False, "complete": False, "execution_status": "NOT_APPLICABLE"}
 
     errors: list[str] = []
     try:
@@ -577,6 +619,9 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
             errors.append(f"CHART: {exc}")
             raw = b""
 
+    if issuer_type == "WEB_ADMIN" and not raw and not allow_without_chart:
+        return {"free_message_id": None, "vip_message_id": None, "errors": ["CHART_GATE: uploaded chart asset is missing"], "published": False, "complete": False}
+
     try:
         if raw:
             chart_frame = await asyncio.to_thread(build_chart_frame, raw)
@@ -602,6 +647,11 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
     except Exception as exc:
         errors.append(f"CHART_RENDER: {exc}")
         chart_frame = b""
+
+    if issuer_type == "WEB_ADMIN":
+        with db.conn() as con:
+            con.execute("UPDATE signals SET publication_stage='FLASHCARD_READY' WHERE id=?", (int(row["id"]),))
+        db.add_signal_event(int(row["id"]), "FLASHCARD_GENERATED", actor_type="BACKEND", actor_id=row["created_by"], correlation_id=str(row["code"]), payload={"chart": bool(raw)})
 
     destination = str(row["destination"] or "BOTH").upper()
     targets = db.get_signal_targets(int(row["id"]))
@@ -658,11 +708,129 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None) 
     complete = (destination == "FREE" and free_id is not None) or (destination == "VIP" and vip_id is not None) or (destination == "BOTH" and free_id is not None and vip_id is not None)
     if complete:
         db.clear_mt5_signal_publication_asset(int(row["id"]))
+        if issuer_type == "WEB_ADMIN":
+            with db.conn() as con:
+                con.execute("UPDATE signals SET status='ACTIVE',publication_stage='PUBLISHED' WHERE id=?", (int(row["id"]),))
+            if chart_job:
+                db.mark_chart_capture_job_completed(int(chart_job["id"]))
+            db.add_signal_event(int(row["id"]), "TELEGRAM_PUBLISHED", actor_type="BACKEND", actor_id=row["created_by"], correlation_id=str(row["code"]), payload={"destination": destination, "free_message_id": free_id, "vip_message_id": vip_id})
+    elif issuer_type == "WEB_ADMIN":
+        with db.conn() as con:
+            con.execute("UPDATE signals SET publication_stage='PUBLISH_FAILED' WHERE id=?", (int(row["id"]),))
+        db.add_signal_event(int(row["id"]), "TELEGRAM_PUBLISH_FAILED", actor_type="BACKEND", actor_id=row["created_by"], result="FAILED", reason="; ".join(errors)[:1000])
     return {"free_message_id": free_id, "vip_message_id": vip_id, "errors": errors,
             "published": bool(free_id or vip_id), "complete": complete}
 
-def _publish_mt5_admin_signal(row, chart_base64: str | None = None) -> dict:
-    return asyncio.run(_publish_mt5_admin_signal_async(row, chart_base64))
+def _publish_mt5_admin_signal(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
+    return asyncio.run(_publish_mt5_admin_signal_async(row, chart_base64, allow_without_chart=allow_without_chart))
+
+
+@app.get("/api/v1/autotrade/admin/chart-capture/jobs/next")
+def claim_chart_capture_job(
+    x_mt5_account: str | None = Header(None),
+    x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
+):
+    account = str(x_mt5_account or "").strip()
+    try:
+        auth = authorize_admin_mt5(account, x_admin_token)
+        _chart_rate_limit(account)
+        job = db.claim_next_chart_capture_job(account)
+        if not job:
+            return {"ok": True, "job": None, "poll_after_seconds": 2}
+        signal = db.get_signal(int(job["signal_id"]))
+        if not signal or str(signal["issuer_type"] or "").upper() != "WEB_ADMIN" or str(signal["status"]).upper() != "DRAFT":
+            db.fail_chart_capture_job(int(job["id"]), account, "signal is not eligible for chart capture")
+            raise HTTPException(status_code=409, detail="signal is not eligible for chart capture")
+        targets = [float(t["price"]) for t in db.get_signal_targets(int(signal["id"]))]
+        db.add_signal_event(int(signal["id"]), "CHART_JOB_CLAIMED", actor_type="MT5_ADMIN", actor_id=auth["telegram_id"], account_number=account, request_id=f"chart-job:{job['id']}", payload={"attempt": int(job["attempt_count"])})
+        return {"ok": True, "job": {"job_id": int(job["id"]), "signal_db_id": int(signal["id"]),
+                "signal_code": str(signal["code"]), "symbol": str(signal["symbol"]), "timeframe": str(signal["timeframe"] or "M5"),
+                "direction": str(signal["direction"]), "entry": float(signal["entry_price"]), "sl": float(signal["stop_loss"]),
+                "targets": targets}}
+    except AutoTradeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/autotrade/admin/chart-capture/{job_id}/result")
+async def upload_chart_capture_result(
+    job_id: int,
+    req: ChartCaptureResultRequest,
+    background_tasks: BackgroundTasks,
+    x_mt5_account: str | None = Header(None),
+    x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
+):
+    account = str(x_mt5_account or "").strip()
+    try:
+        auth = authorize_admin_mt5(account, x_admin_token)
+        _chart_rate_limit(account, 30)
+        if int(req.job_id) != int(job_id) or req.account_number != account:
+            raise HTTPException(status_code=409, detail="chart job identity mismatch")
+        job = db.get_chart_capture_job(job_id)
+        if not job or int(job["signal_id"]) != int(req.signal_db_id) or str(job["signal_code"]) != req.signal_code:
+            raise HTTPException(status_code=409, detail="signal identity mismatch")
+        signal = db.get_signal(int(job["signal_id"]))
+        if not signal:
+            raise HTTPException(status_code=404, detail="signal not found")
+        if str(req.timeframe).upper() != str(signal["timeframe"] or "M5").upper():
+            raise HTTPException(status_code=409, detail="captured timeframe does not match signal")
+        try:
+            raw = base64.b64decode(req.chart_base64, validate=True)
+        except binascii.Error as exc:
+            raise HTTPException(status_code=422, detail="invalid chart base64") from exc
+        if len(raw) < 4096 or len(raw) > 5_000_000 or not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(status_code=422, detail="chart must be a valid 4 KB–5 MB PNG")
+        digest = hashlib.sha256(raw).hexdigest()
+        if not hmac.compare_digest(digest, req.image_sha256.lower()):
+            raise HTTPException(status_code=422, detail="chart sha256 mismatch")
+        current_status = str(job["status"] or "").upper()
+        if current_status in {"UPLOADED", "COMPLETED"}:
+            if not hmac.compare_digest(str(job["image_sha256"] or ""), digest):
+                raise HTTPException(status_code=409, detail="chart capture job already completed with another image")
+            return {"ok": True, "idempotent": True, "status": current_status, "publication": "ALREADY_QUEUED"}
+        if current_status not in {"CLAIMED", "CAPTURING"} or str(job["claimed_by_account"] or "") != account:
+            raise HTTPException(status_code=409, detail="chart capture job is not owned by this MT5 account")
+        folder = db.DB_PATH.parent / "artifacts" / "signal_charts"
+        folder.mkdir(parents=True, exist_ok=True)
+        safe_symbol = "".join(ch for ch in str(signal["symbol"]).upper() if ch.isalnum() or ch in "-_")[:32]
+        path = folder / f"{signal['code']}_{safe_symbol}_{signal['timeframe']}_{job_id}.png"
+        path.write_bytes(raw)
+        completed, changed = db.complete_chart_capture_job(job_id, account, broker_symbol=req.broker_symbol,
+            timeframe=req.timeframe, image_path=str(path), image_sha256=digest)
+        db.save_mt5_signal_publication_asset(int(signal["id"]), str(path))
+        with db.conn() as con:
+            con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+        if changed:
+            db.add_signal_event(int(signal["id"]), "CHART_CAPTURED", actor_type="MT5_ADMIN", actor_id=auth["telegram_id"], account_number=account, request_id=f"chart-job:{job_id}", payload={"broker_symbol": req.broker_symbol, "timeframe": req.timeframe, "sha256": digest, "capture_timestamp": req.capture_timestamp})
+            background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None)
+        return {"ok": True, "idempotent": not changed, "status": completed["status"], "publication": "QUEUED" if changed else "ALREADY_QUEUED"}
+    except AutoTradeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/autotrade/admin/chart-capture/{job_id}/fail")
+def fail_chart_capture(
+    job_id: int,
+    req: ChartCaptureFailureRequest,
+    x_mt5_account: str | None = Header(None),
+    x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
+):
+    account = str(x_mt5_account or "").strip()
+    try:
+        auth = authorize_admin_mt5(account, x_admin_token)
+        _chart_rate_limit(account, 30)
+        if req.account_number != account or req.job_id != job_id:
+            raise HTTPException(status_code=409, detail="chart job identity mismatch")
+        job = db.fail_chart_capture_job(job_id, account, f"{req.error_code}: {req.error_text}")
+        with db.conn() as con:
+            con.execute("UPDATE signals SET publication_stage=? WHERE id=?", ("CAPTURE_FAILED" if str(job["status"]) == "FAILED" else "WAITING_FOR_CHART", int(job["signal_id"])))
+        db.add_signal_event(int(job["signal_id"]), "CHART_UPLOAD_FAILED", actor_type="MT5_ADMIN", actor_id=auth["telegram_id"], account_number=account, result="FAILED", reason=f"{req.error_code}: {req.error_text}", request_id=f"chart-job:{job_id}")
+        return {"ok": True, "status": job["status"], "attempt_count": job["attempt_count"], "next_attempt_at": job["next_attempt_at"]}
+    except AutoTradeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/admin/mt5/signals")

@@ -21,9 +21,10 @@ def test_trailing_recovers_signal_identity_when_broker_clears_comment():
 
 
 def test_small_partial_uses_closest_valid_broker_volume_step():
-    assert "double ceil_volume=MathCeil" in TM
+    assert "double units=MathRound" in TM
     assert "double max_partial=" in TM
-    assert "floor_valid" in TM and "ceil_valid" in TM
+    assert "adaptive_remain" in TM
+    assert "partial close has no executable broker-grid volume" in TM
 
 
 def test_full_close_requires_position_disappearance():

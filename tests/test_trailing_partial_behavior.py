@@ -37,7 +37,7 @@ def test_quantizer_chooses_nearest_valid_step_and_preserves_minimum_residual():
 
 def test_unsplittable_minimum_lot_is_never_falsely_reported_as_partial_success():
     assert closest_executable_partial(0.01, 0.01 * 0.30, 0.01, 0.01) < 0.01
-    assert "partial close below minimum volume" in TM
+    assert "partial close unavailable on broker volume grid" in TM
 
 
 def test_tp_done_is_after_broker_confirmation_call():

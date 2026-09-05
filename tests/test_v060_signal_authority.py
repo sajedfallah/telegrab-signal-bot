@@ -66,6 +66,6 @@ def test_v060_mt5_minimize_removes_all_signal_form_objects():
 def test_v060_signal_id_is_server_generated_for_mt5_authority():
     db = (ROOT / "app" / "db.py").read_text(encoding="utf-8")
     api = (ROOT / "app" / "autotrade" / "api.py").read_text(encoding="utf-8")
-    assert 'code = f"NX-{signal_id:04d}"' in db
+    assert 'code = f"NX-{signal_id:02d}"' in db
     assert 'token = str(signal_code or "").strip() or ("MT5ADMIN-" + secrets.token_urlsafe(18))' in db
     assert 'signal_code=req.signal_code' in api
