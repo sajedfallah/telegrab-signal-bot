@@ -44,6 +44,16 @@ def test_customer_setup_never_renders_admin_token_field():
     assert "Admin credentials are never shown in customer mode." in setup
 
 
+def test_setup_focus_guard_is_applied_only_after_production_core_include():
+    include_at = SHIM.index('#include "../NEXUS_AutoTrade/NEXUS_AutoTrade.mq5"')
+    delete_macro_at = SHIM.index("#define ObjectDelete")
+    integer_macro_at = SHIM.index("#define ObjectSetInteger")
+    assert include_at < delete_macro_at < integer_macro_at
+    assert "UI65IsFocusedSetupEdit" in SHIM
+    assert "property_id==OBJPROP_SELECTED && value==0" in SHIM
+    assert 'name!=NXS_UI_PREFIX+"license" && name!=NXS_UI_PREFIX+"admin"' in SHIM
+
+
 def test_new_signal_requires_review_then_explicit_confirmation():
     assert 'UI65Button("sig_review","REVIEW SIGNAL"' in UI
     assert 'UI65Button("sig_issue",g_admin_signal_busy?"ISSUING...":"CONFIRM & ISSUE"' in UI
