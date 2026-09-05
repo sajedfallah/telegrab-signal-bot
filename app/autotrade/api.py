@@ -47,17 +47,26 @@ app.add_middleware(
 @app.middleware("http")
 async def admin_security_headers(request, call_next):
     response = await call_next(request)
+    is_miniapp = request.url.path.startswith("/miniapp")
     response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
+    if not is_miniapp:
+        response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     if request.url.path.startswith("/admin"):
         response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss:"
         response.headers["Cache-Control"] = "no-store"
+    elif is_miniapp:
+        # Telegram Web can host Mini Apps in an iframe. Restrict framing to
+        # Telegram instead of applying the admin panel's blanket DENY policy.
+        response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; frame-ancestors https://web.telegram.org https://*.telegram.org"
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 from ..admin_api import router as admin_router
 app.include_router(admin_router)
+from ..miniapp_api import router as miniapp_router
+app.include_router(miniapp_router)
 
 RECEIPT_STATUSES = "^(?:executed|activated|rejected|failed|failed_retryable|closed|pending|ignored)$"
 
@@ -1098,3 +1107,8 @@ _admin_dist = Path(__file__).resolve().parents[2] / "admin-web" / "dist"
 if _admin_dist.exists():
     from fastapi.staticfiles import StaticFiles
     app.mount("/admin", StaticFiles(directory=_admin_dist, html=True), name="admin-web")
+
+_miniapp_dist = Path(__file__).resolve().parents[2] / "telegram-miniapp" / "dist"
+if _miniapp_dist.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/miniapp", StaticFiles(directory=_miniapp_dist, html=True), name="telegram-miniapp")

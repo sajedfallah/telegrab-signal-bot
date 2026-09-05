@@ -24,3 +24,8 @@ admin-web/dist/
 admin-web/*.tsbuildinfo
 admin-web/vite.config.js
 admin-web/vite.config.d.ts
+telegram-miniapp/node_modules/
+telegram-miniapp/dist/
+telegram-miniapp/*.tsbuildinfo
+telegram-miniapp/vite.config.js
+telegram-miniapp/vite.config.d.ts

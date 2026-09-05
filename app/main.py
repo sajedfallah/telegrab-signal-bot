@@ -21,9 +21,9 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiohttp.resolver import AsyncResolver
 from aiogram.enums import ChatMemberStatus, ParseMode
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import CommandStart
+from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, ChatJoinRequest, InlineKeyboardButton, InlineKeyboardMarkup, Message, BufferedInputFile, ReplyParameters
+from aiogram.types import CallbackQuery, ChatJoinRequest, InlineKeyboardButton, InlineKeyboardMarkup, Message, BufferedInputFile, ReplyParameters, WebAppInfo
 
 from .config import settings
 from . import db
@@ -358,6 +358,22 @@ async def start(message: Message, bot: Bot, state: FSMContext):
         await screen(bot, message.from_user.id, message.chat.id, tr(get_lang(message.from_user.id), "⚠️ بررسی عضویت تلگرام موقتاً در دسترس نیست. چند لحظه دیگر دوباره تلاش کنید.", "⚠️ Telegram membership verification is temporarily unavailable. Please try again shortly."), join_gate(get_lang(message.from_user.id)))
         return
     await (show_main(bot, message.from_user.id, message.chat.id) if ok else show_gate(bot, message.from_user.id, message.chat.id))
+
+
+@router.message(Command("app"))
+async def open_miniapp(message: Message):
+    """Open the authenticated Telegram Mini App from a dedicated command."""
+    lang = get_lang(message.from_user.id)
+    if not settings.miniapp_url:
+        await message.answer(tr(lang, "آدرس مینی‌اپ هنوز تنظیم نشده است.", "The Mini App URL is not configured yet."))
+        return
+    label = tr(lang, "⚡ ورود به مینی‌اپ NEXUS", "⚡ Open NEXUS Mini App")
+    await message.answer(
+        tr(lang, "پنل یکپارچه NEXUS را باز کنید:", "Open the integrated NEXUS dashboard:"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=label, web_app=WebAppInfo(url=settings.miniapp_url))
+        ]]),
+    )
 
 
 @router.callback_query(F.data.startswith("lang:"))

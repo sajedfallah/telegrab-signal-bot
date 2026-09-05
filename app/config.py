@@ -32,6 +32,7 @@ EA_RELEASE = "0.6.5"
 @dataclass(frozen=True)
 class Settings:
     bot_token: str = _required("BOT_TOKEN")
+    miniapp_url: str = os.getenv("MINIAPP_URL", "").strip()
     admin_ids: tuple[int, ...] = tuple(
         int(x.strip()) for x in _required("ADMIN_IDS").split(",") if x.strip()
     )
