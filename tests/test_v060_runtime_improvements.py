@@ -37,5 +37,6 @@ def test_signal_parser_can_parse_single_canonical_object():
 def test_signal_workspace_has_compact_sizing_and_two_level_navigation():
     assert 'SIZING' in EA
     assert 'sig_size_risk' in EA and 'sig_size_fixed' in EA
-    assert 'main_tabs[2]' in EA
-    assert 'SETTINGS / MANAGEMENT' in EA
+    assert 'main_tabs[3]' in EA
+    assert '"NEW SIGNAL","TRADES","SETTINGS"' in EA
+    assert 'void PaintAdminTradePanel()' in EA
