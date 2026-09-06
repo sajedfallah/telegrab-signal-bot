@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Unified NEXUS channel-report runtime.
 
-The legacy report split performance into CRYPTO and FOREX buckets.  XAUUSD is
+The legacy report split performance into CRYPTO and FOREX buckets. XAUUSD is
 stored by the execution pipeline as market_type=GOLD, so a valid closed Gold
 trade was excluded from both buckets and the public report incorrectly showed
-zero trades.  This runtime replaces that market-type-dependent aggregation with
+zero trades. This runtime replaces that market-type-dependent aggregation with
 publication-channel truth: every actually published signal is counted in one
 unified report regardless of market_type.
 """
@@ -174,7 +174,7 @@ def render_admin_report(
     *,
     partial: bool = False,
 ) -> str:
-    """Keep the private business section while making trading performance unified."""
+    """Keep the private business section available for explicit admin use."""
     start_iso, end_iso = main._period_utc(start_local, end_local)
     st = unified_report_stats(main, start_iso, end_iso, None)
     business = main.db.trading_report_stats(start_iso, end_iso)
@@ -224,12 +224,12 @@ def render_admin_report(
 def channel_targets(main: Any, audience: str) -> tuple[Any, ...]:
     """Canonical report routing required by product policy.
 
-    FREE report -> Free channel only.
+    FREE report -> Free channel and NEXUS public channel.
     VIP report  -> VIP channel and NEXUS public channel.
     """
     audience = audience.upper().strip()
     raw = (
-        (main.settings.free_channel_target,)
+        (main.settings.free_channel_target, main.settings.public_channel_id)
         if audience == "FREE"
         else (main.settings.vip_channel_id, main.settings.public_channel_id)
     )
@@ -269,10 +269,7 @@ async def send_channel_report(
             audience,
         )
         for target in channel_targets(main, audience):
-            # v2 key intentionally differs from the legacy dispatch key so a
-            # corrected report can be re-sent for a period that previously got
-            # the broken market-split report.
-            report_type = f"{kind}_channel_v2_{audience.lower()}"
+            report_type = f"{kind}_channel_v3_{audience.lower()}"
             recipient_key = str(target)
             if not main.db.claim_report_dispatch(
                 report_type,
@@ -308,7 +305,7 @@ async def send_channel_report(
 
 
 def install(main: Any) -> None:
-    """Install unified report aggregation/routing without editing the legacy core."""
+    """Install unified channel routing and suppress automatic private signal reports."""
     main._channel_report_caption = lambda kind, start_local, end_local, lang: render_channel_report(
         main, kind, start_local, end_local, lang, "FREE"
     )
@@ -324,5 +321,16 @@ def install(main: Any) -> None:
     async def patched_send_channel_report(bot, kind, period_key, start_local, end_local):
         await send_channel_report(main, bot, kind, period_key, start_local, end_local)
 
+    async def patched_send_scheduled_report(bot, kind, period_key, start_local, end_local):
+        # Product policy: scheduled FREE/VIP performance reports are channel
+        # content, not private bot messages. Explicit admin reports remain
+        # available through the admin UI, but the automatic worker publishes
+        # only to the designated signal/public channels.
+        await send_channel_report(main, bot, kind, period_key, start_local, end_local)
+
     main._send_channel_report = patched_send_channel_report
-    log.info("[NEXUS][REPORT_RUNTIME][INSTALLED] unified market-agnostic channel reports")
+    main._send_scheduled_report = patched_send_scheduled_report
+    log.info(
+        "[NEXUS][REPORT_RUNTIME][INSTALLED] channel-only scheduled reports: "
+        "FREE->free+public VIP->vip+public"
+    )
