@@ -44,6 +44,32 @@ class WebSignalWrite(BaseModel):
     issuer_account: str = Field(min_length=3, max_length=32)
 
 
+def _audit_signal_issue_once(*, admin_id: int, signal_id: int, request_id: str, code: str) -> None:
+    details = f"request_id={request_id};code={code}"
+    now = db.now_iso()
+    with db.conn() as con:
+        con.execute(
+            """
+            INSERT INTO audit_logs(admin_id,action,target_id,details,created_at)
+            SELECT ?,?,?,?,?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_logs
+                WHERE admin_id=? AND action='web_signal_issued' AND target_id=? AND details=?
+            )
+            """,
+            (
+                int(admin_id),
+                "web_signal_issued",
+                int(signal_id),
+                details,
+                now,
+                int(admin_id),
+                int(signal_id),
+                details,
+            ),
+        )
+
+
 @router.get("/chart-agents")
 def chart_agents(admin=Depends(current_admin)):
     status = chart_agent_status()
@@ -68,6 +94,12 @@ def issue_web_signal(req: WebSignalWrite, admin=Depends(require_admin)):
         state = publication_status(int(row["id"]))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    _audit_signal_issue_once(
+        admin_id=int(admin["id"]),
+        signal_id=int(row["id"]),
+        request_id=req.request_id,
+        code=str(row["code"]),
+    )
     return {
         "id": int(row["id"]),
         "code": str(row["code"]),
