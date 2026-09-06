@@ -100,8 +100,11 @@ def test_chart_agent_is_screenshot_only_and_uses_dedicated_chart():
 
 def test_web_admin_requires_review_before_issue():
     src = Path("admin-web/dist/signal.js").read_text(encoding="utf-8-sig")
+    nav = Path("admin-web/dist/app.js").read_text(encoding="utf-8-sig")
     assert "REVIEW SIGNAL" in src
     assert "ISSUE SIGNAL" in src
     assert "/signals/issue" in src
     assert "/chart-agents" in src
     assert "MT5 Screenshot Agent آفلاین است" in src
+    assert 'data-p="issue">صدور سیگنال' in nav
+    assert "issue=signals;" in src

@@ -40,3 +40,7 @@ signals=async function(){
     document.getElementById('confirmIssue').onclick=async()=>{if(!confirm('سیگنال برای Screenshot واقعی MT5 و انتشار ارسال شود؟'))return;try{const r=await req('/signals/issue',{method:'POST',body:JSON.stringify(b)});toast(`${r.code} ایجاد شد؛ منتظر Screenshot MT5`);review.innerHTML='';_webSignalStatus(r.id)}catch(e){toast(e.message)}};
   };
 };
+
+// The dedicated navigation item intentionally reuses the exact same guarded
+// Web → MT5 ChartAgent → screenshot workflow as the signal list.
+issue=signals;
