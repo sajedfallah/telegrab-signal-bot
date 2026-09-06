@@ -7,9 +7,6 @@ from urllib.parse import urlparse
 from ..ecosystem import ecosystem_settings
 
 
-# Public is intentionally strict: only these five editorial categories may
-# publish to the general NEXUS destination. Everything educational is routed to
-# Academy. Unknown/new categories fail closed until explicitly classified.
 PUBLIC_CATEGORY_KEYS = frozenset({
     "daily_analysis",
     "quick_tip",
@@ -76,47 +73,52 @@ def _parse_target(raw: str) -> int | str:
         return value
 
 
-def _public_topic_id() -> int | None:
-    raw = (
-        os.getenv("PUBLIC_CONTENT_TOPIC_ID", "").strip()
-        or os.getenv("MARKET_CONTENT_TOPIC_ID", "").strip()
-    )
+def _topic_id_from_env(primary: str, fallback: str | None = None) -> int | None:
+    raw = os.getenv(primary, "").strip()
+    if not raw and fallback:
+        raw = os.getenv(fallback, "").strip()
     if not raw:
         return None
     try:
         topic_id = int(raw)
     except ValueError as exc:
-        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be an integer") from exc
+        raise RuntimeError(f"{primary} must be an integer") from exc
     if topic_id <= 0:
-        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be greater than zero")
+        raise RuntimeError(f"{primary} must be greater than zero")
     return topic_id
 
 
 def resolve_channel_destination(core_settings, category_key: str) -> ChannelDestination:
     route = route_key_for_category(category_key)
     if route == "public":
-        # v0.6.5+: public editorial may live in a Telegram forum topic instead
-        # of a standalone channel. PUBLIC_CONTENT_* is canonical; the older
-        # MARKET_CONTENT_CHANNEL_ID remains a backward-compatible target.
         raw_chat = (
             os.getenv("PUBLIC_CONTENT_CHAT_ID", "").strip()
             or os.getenv("MARKET_CONTENT_CHANNEL_ID", "").strip()
         )
         chat_id: int | str = _parse_target(raw_chat) if raw_chat else core_settings.public_channel_id
-        channel_url = (
-            os.getenv("PUBLIC_CONTENT_URL", "").strip()
-            or core_settings.public_channel_url
-        )
+        channel_url = os.getenv("PUBLIC_CONTENT_URL", "").strip() or core_settings.public_channel_url
         return ChannelDestination(
             key="public",
             label_fa="کانال عمومی NEXUS",
             chat_id=chat_id,
             channel_url=channel_url,
-            message_thread_id=_public_topic_id(),
+            message_thread_id=_topic_id_from_env("PUBLIC_CONTENT_TOPIC_ID", "MARKET_CONTENT_TOPIC_ID"),
+        )
+
+    academy_chat_raw = os.getenv("ACADEMY_CONTENT_CHAT_ID", "").strip()
+    academy_topic_id = _topic_id_from_env("ACADEMY_CONTENT_TOPIC_ID")
+    academy_url = os.getenv("ACADEMY_CONTENT_URL", "").strip() or ecosystem_settings.academy_channel_url
+
+    if academy_chat_raw:
+        return ChannelDestination(
+            key="academy",
+            label_fa="NEXUS Academy",
+            chat_id=_parse_target(academy_chat_raw),
+            channel_url=academy_url,
+            message_thread_id=academy_topic_id,
         )
 
     raw_id = ecosystem_settings.academy_channel_id
-    url = ecosystem_settings.academy_channel_url
     target: int | str | None = None
     if raw_id:
         try:
@@ -124,19 +126,19 @@ def resolve_channel_destination(core_settings, category_key: str) -> ChannelDest
         except ValueError:
             target = raw_id
     if target is None:
-        target = _public_username_target(url)
+        target = _public_username_target(academy_url)
 
     if target is None:
         raise RuntimeError(
-            "ACADEMY_CHANNEL_ID or a public ACADEMY_CHANNEL_URL is required before direct educational publishing"
+            "ACADEMY_CONTENT_CHAT_ID, ACADEMY_CHANNEL_ID or a public ACADEMY_CHANNEL_URL is required before direct educational publishing"
         )
-    if not url:
+    if not academy_url and academy_topic_id is None:
         raise RuntimeError("ACADEMY_CHANNEL_URL is required to create traceable Telegram post permalinks")
 
     return ChannelDestination(
         key="academy",
         label_fa="NEXUS Academy",
         chat_id=target,
-        channel_url=url,
-        message_thread_id=None,
+        channel_url=academy_url,
+        message_thread_id=academy_topic_id,
     )
