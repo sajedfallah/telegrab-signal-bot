@@ -2,7 +2,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from aiogram import F
+from aiogram import Bot, F
 from dotenv import load_dotenv
 
 load_dotenv(encoding="utf-8-sig")
@@ -72,14 +72,7 @@ install_risk_admin(main_module)
 
 
 def _restrict_core_catchall_to_private() -> None:
-    """Keep legacy cleanup for ordinary private messages without swallowing commands.
-
-    Academy and other extension routers are registered as child routers. An
-    unfiltered private catch-all on the parent router would consume slash
-    commands before they can propagate to those child routers. Restrict the
-    cleanup handler to private non-command text so /academy_* and future
-    extension commands continue through normal routing.
-    """
+    """Keep legacy cleanup for ordinary private messages without swallowing commands."""
     handlers = main_module.router.message.handlers
     found = any(
         getattr(handler.callback, "__name__", "") == "clean_unhandled_message"
@@ -104,9 +97,39 @@ def _restrict_core_catchall_to_private() -> None:
     )(_private_unhandled_message)
 
 
+def _promote_academy_handlers() -> None:
+    """Run Academy handlers before legacy parent-router catch-alls.
+
+    aiogram evaluates handlers attached to the current router before child
+    routers. The v0.6.5 app has several legacy generic handlers, so merely
+    including academy_router as a child is not sufficient for admin commands.
+    Prepending Academy handlers to the core observers makes /academy_* and
+    academy callbacks deterministic without changing legacy business logic.
+    """
+    existing_message_callbacks = {
+        id(handler.callback) for handler in main_module.router.message.handlers
+    }
+    promoted_messages = [
+        handler for handler in academy_router.message.handlers
+        if id(handler.callback) not in existing_message_callbacks
+    ]
+    if promoted_messages:
+        main_module.router.message.handlers[:0] = promoted_messages
+
+    existing_callback_callbacks = {
+        id(handler.callback) for handler in main_module.router.callback_query.handlers
+    }
+    promoted_callbacks = [
+        handler for handler in academy_router.callback_query.handlers
+        if id(handler.callback) not in existing_callback_callbacks
+    ]
+    if promoted_callbacks:
+        main_module.router.callback_query.handlers[:0] = promoted_callbacks
+
+
 _restrict_core_catchall_to_private()
+_promote_academy_handlers()
 main_module.router.include_router(topic_admin_router)
-main_module.router.include_router(academy_router)
 
 bot_main = main_module.main
 
@@ -123,14 +146,17 @@ async def _safe_content_runtime() -> None:
 
 
 async def _safe_academy_runtime() -> None:
+    academy_bot = Bot(main_module.settings.bot_token)
     try:
-        await academy_worker(main_module.bot)
+        await academy_worker(academy_bot)
     except asyncio.CancelledError:
         raise
     except Exception:
         main_module.log.exception(
             "[NEXUS] Academy Mentor runtime failed; Telegram bot remains online"
         )
+    finally:
+        await academy_bot.session.close()
 
 
 async def main() -> None:
