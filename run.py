@@ -72,6 +72,14 @@ install_risk_admin(main_module)
 
 
 def _restrict_core_catchall_to_private() -> None:
+    """Keep legacy cleanup for ordinary private messages without swallowing commands.
+
+    Academy and other extension routers are registered as child routers. An
+    unfiltered private catch-all on the parent router would consume slash
+    commands before they can propagate to those child routers. Restrict the
+    cleanup handler to private non-command text so /academy_* and future
+    extension commands continue through normal routing.
+    """
     handlers = main_module.router.message.handlers
     found = any(
         getattr(handler.callback, "__name__", "") == "clean_unhandled_message"
@@ -89,7 +97,11 @@ def _restrict_core_catchall_to_private() -> None:
     async def _private_unhandled_message(message, bot):
         await main_module.clean_unhandled_message(message, bot)
 
-    main_module.router.message(F.chat.type == "private")(_private_unhandled_message)
+    main_module.router.message(
+        F.chat.type == "private",
+        F.text,
+        ~F.text.startswith("/"),
+    )(_private_unhandled_message)
 
 
 _restrict_core_catchall_to_private()
