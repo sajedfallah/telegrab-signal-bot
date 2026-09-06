@@ -76,20 +76,27 @@ def _parse_target(raw: str) -> int | str:
         return value
 
 
-def _public_topic_id() -> int | None:
-    raw = (
-        os.getenv("PUBLIC_CONTENT_TOPIC_ID", "").strip()
-        or os.getenv("MARKET_CONTENT_TOPIC_ID", "").strip()
-    )
+def _topic_id_from_env(name: str, *, fallback_name: str | None = None) -> int | None:
+    raw = os.getenv(name, "").strip()
+    if not raw and fallback_name:
+        raw = os.getenv(fallback_name, "").strip()
     if not raw:
         return None
     try:
         topic_id = int(raw)
     except ValueError as exc:
-        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be an integer") from exc
+        raise RuntimeError(f"{name} must be an integer") from exc
     if topic_id <= 0:
-        raise RuntimeError("PUBLIC_CONTENT_TOPIC_ID must be greater than zero")
+        raise RuntimeError(f"{name} must be greater than zero")
     return topic_id
+
+
+def _public_topic_id() -> int | None:
+    return _topic_id_from_env("PUBLIC_CONTENT_TOPIC_ID", fallback_name="MARKET_CONTENT_TOPIC_ID")
+
+
+def _academy_topic_id() -> int | None:
+    return _topic_id_from_env("ACADEMY_CONTENT_TOPIC_ID")
 
 
 def resolve_channel_destination(core_settings, category_key: str) -> ChannelDestination:
@@ -115,10 +122,20 @@ def resolve_channel_destination(core_settings, category_key: str) -> ChannelDest
             message_thread_id=_public_topic_id(),
         )
 
+    # Academy may either publish to the historical standalone Academy channel
+    # or to a dedicated Telegram forum topic. ACADEMY_CONTENT_* is canonical
+    # when provided and is intentionally independent from FREE_SIGNAL_*.
+    raw_academy_chat = os.getenv("ACADEMY_CONTENT_CHAT_ID", "").strip()
     raw_id = ecosystem_settings.academy_channel_id
-    url = ecosystem_settings.academy_channel_url
+    url = (
+        os.getenv("ACADEMY_CONTENT_URL", "").strip()
+        or ecosystem_settings.academy_channel_url
+    )
+
     target: int | str | None = None
-    if raw_id:
+    if raw_academy_chat:
+        target = _parse_target(raw_academy_chat)
+    elif raw_id:
         try:
             target = int(raw_id)
         except ValueError:
@@ -128,15 +145,17 @@ def resolve_channel_destination(core_settings, category_key: str) -> ChannelDest
 
     if target is None:
         raise RuntimeError(
-            "ACADEMY_CHANNEL_ID or a public ACADEMY_CHANNEL_URL is required before direct educational publishing"
+            "ACADEMY_CONTENT_CHAT_ID, ACADEMY_CHANNEL_ID or a public ACADEMY_CHANNEL_URL is required before educational publishing"
         )
     if not url:
-        raise RuntimeError("ACADEMY_CHANNEL_URL is required to create traceable Telegram post permalinks")
+        # A forum topic can still publish without a public permalink URL. Keep
+        # routing operational and leave permalink generation disabled upstream.
+        url = ""
 
     return ChannelDestination(
         key="academy",
         label_fa="NEXUS Academy",
         chat_id=target,
         channel_url=url,
-        message_thread_id=None,
+        message_thread_id=_academy_topic_id(),
     )
