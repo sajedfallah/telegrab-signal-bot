@@ -174,7 +174,7 @@ def render_admin_report(
     *,
     partial: bool = False,
 ) -> str:
-    """Keep the private business section while making trading performance unified."""
+    """Keep the private business section available for explicit admin use."""
     start_iso, end_iso = main._period_utc(start_local, end_local)
     st = unified_report_stats(main, start_iso, end_iso, None)
     business = main.db.trading_report_stats(start_iso, end_iso)
@@ -305,7 +305,7 @@ async def send_channel_report(
 
 
 def install(main: Any) -> None:
-    """Install unified report aggregation/routing without editing the legacy core."""
+    """Install unified channel routing and suppress automatic private signal reports."""
     main._channel_report_caption = lambda kind, start_local, end_local, lang: render_channel_report(
         main, kind, start_local, end_local, lang, "FREE"
     )
@@ -321,5 +321,16 @@ def install(main: Any) -> None:
     async def patched_send_channel_report(bot, kind, period_key, start_local, end_local):
         await send_channel_report(main, bot, kind, period_key, start_local, end_local)
 
+    async def patched_send_scheduled_report(bot, kind, period_key, start_local, end_local):
+        # Product policy: scheduled FREE/VIP performance reports are channel
+        # content, not private bot messages. Explicit admin reports remain
+        # available through the admin UI, but the automatic worker publishes
+        # only to the designated signal/public channels.
+        await send_channel_report(main, bot, kind, period_key, start_local, end_local)
+
     main._send_channel_report = patched_send_channel_report
-    log.info("[NEXUS][REPORT_RUNTIME][INSTALLED] unified market-agnostic channel reports")
+    main._send_scheduled_report = patched_send_scheduled_report
+    log.info(
+        "[NEXUS][REPORT_RUNTIME][INSTALLED] channel-only scheduled reports: "
+        "FREE->free+public VIP->vip+public"
+    )
