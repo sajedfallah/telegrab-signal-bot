@@ -6,7 +6,7 @@
 
 - checkout در `C:\NEXUS_V065_STAGING` روی SHA موردنظر integration باشد.
 - `NEXUS_ENV=staging` و API روی `http://127.0.0.1:18080` اجرا شود.
-- `FREE_CHANNEL_*` و `VIP_CHANNEL_*` فقط مقصد sandbox باشند؛ اگر این شرط اثبات نشده، مرحلهٔ publish اجرا نمی‌شود.
+- `FREE_CHANNEL_*` و `VIP_CHANNEL_*` فقط مقصد sandbox باشند؛ اگر این شرط اثبات نشده، مرحلهٔ publish اجرا نمی‌شود. علاوه بر آن، در staging مقدار `NEXUS_ALLOW_STAGING_TELEGRAM_PUBLISH` به‌صورت پیش‌فرض false است؛ فقط پس از تأیید انسانی مقصدهای sandbox می‌تواند true شود.
 - ChartAgent مستقل باشد، `InpApiBaseUrl=http://127.0.0.1:18080` و `InpPollSeconds=2` داشته باشد.
 - `NEXUS_Screenshot.tpl` با `scripts/provision_screenshot_template.py` پاک‌سازی و در MT5 نصب شده باشد.
 

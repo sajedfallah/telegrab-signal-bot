@@ -33,6 +33,22 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def staging_telegram_publication_allowed() -> bool:
+    """Fail closed for staging until its Telegram destinations are approved.
+
+    A staging configuration can legitimately use the production Bot token for
+    API validation.  That must never be enough to publish a staging signal to
+    a real channel.  Production keeps its existing behavior; non-production
+    needs the explicit, deployment-local acknowledgement below.
+    """
+    environment = os.getenv("NEXUS_ENV", "production").strip().lower()
+    if environment not in {"staging", "stage", "test", "testing"}:
+        return True
+    return os.getenv("NEXUS_ALLOW_STAGING_TELEGRAM_PUBLISH", "").strip().lower() in {
+        "1", "true", "yes", "on"
+    }
+
+
 def ensure_schema() -> None:
     with db.conn() as con:
         con.executescript(
@@ -341,6 +357,19 @@ async def _publish_web_signal(signal_id: int) -> dict[str, Any]:
         pub = con.execute("SELECT * FROM web_signal_publications WHERE signal_id=?", (int(signal_id),)).fetchone()
     if not pub or not pub["screenshot_path"]:
         return {"complete": False, "errors": ["screenshot missing"]}
+
+    if not staging_telegram_publication_allowed():
+        error = "staging Telegram publication is blocked until sandbox destinations are explicitly approved"
+        with db.conn() as con:
+            con.execute(
+                "UPDATE web_signal_publications SET stage='PUBLISH_BLOCKED',error_text=?,updated_at=? WHERE signal_id=?",
+                (error, _now(), int(signal_id)),
+            )
+        db.add_signal_event(
+            int(signal_id), "PUBLISH_BLOCKED", actor_type="SYSTEM", correlation_id=str(row["code"]),
+            payload={"reason": "staging_telegram_publish_not_acknowledged"},
+        )
+        return {"complete": False, "errors": [error]}
 
     try:
         raw = Path(str(pub["screenshot_path"])).read_bytes()
