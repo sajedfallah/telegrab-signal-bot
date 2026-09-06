@@ -1,6 +1,7 @@
 from pathlib import Path
 from types import SimpleNamespace
 
+from app import admin_signal_runtime as admin_signal
 from app import db
 from app import web_chart_capture_runtime as capture
 
@@ -65,6 +66,36 @@ def test_web_signal_request_is_idempotent_and_does_not_reset_publication(tmp_pat
             (int(first["id"]),),
         ).fetchone()[0]
     assert count == 1
+
+
+def test_web_admin_signal_issue_writes_one_idempotent_audit_row(tmp_path, monkeypatch):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "nexus.db")
+    monkeypatch.setattr(capture, "settings", SimpleNamespace(nexus_admin_mt5_accounts=("70001",)))
+    db.init_db()
+    capture.ensure_schema()
+
+    req = admin_signal.WebSignalWrite(
+        request_id="WEB-AUDIT-001",
+        issuer_account="70001",
+        **_payload(),
+    )
+    admin = {"id": 7, "role": "ADMIN"}
+
+    first = admin_signal.issue_web_signal(req, admin=admin)
+    second = admin_signal.issue_web_signal(req, admin=admin)
+
+    assert first["id"] == second["id"]
+    with db.conn() as con:
+        rows = con.execute(
+            """SELECT action,target_id,details FROM audit_logs
+               WHERE admin_id=? AND action='web_signal_issued' AND target_id=?""",
+            (7, int(first["id"])),
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert rows[0]["target_id"] == int(first["id"])
+    assert "request_id=WEB-AUDIT-001" in str(rows[0]["details"])
+    assert f"code={first['code']}" in str(rows[0]["details"])
 
 
 def test_web_signal_is_not_distributed_before_publication(tmp_path, monkeypatch):
