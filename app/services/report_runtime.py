@@ -2,10 +2,10 @@ from __future__ import annotations
 
 """Unified NEXUS channel-report runtime.
 
-The legacy report split performance into CRYPTO and FOREX buckets.  XAUUSD is
+The legacy report split performance into CRYPTO and FOREX buckets. XAUUSD is
 stored by the execution pipeline as market_type=GOLD, so a valid closed Gold
 trade was excluded from both buckets and the public report incorrectly showed
-zero trades.  This runtime replaces that market-type-dependent aggregation with
+zero trades. This runtime replaces that market-type-dependent aggregation with
 publication-channel truth: every actually published signal is counted in one
 unified report regardless of market_type.
 """
@@ -224,12 +224,12 @@ def render_admin_report(
 def channel_targets(main: Any, audience: str) -> tuple[Any, ...]:
     """Canonical report routing required by product policy.
 
-    FREE report -> Free channel only.
+    FREE report -> Free channel and NEXUS public channel.
     VIP report  -> VIP channel and NEXUS public channel.
     """
     audience = audience.upper().strip()
     raw = (
-        (main.settings.free_channel_target,)
+        (main.settings.free_channel_target, main.settings.public_channel_id)
         if audience == "FREE"
         else (main.settings.vip_channel_id, main.settings.public_channel_id)
     )
@@ -269,10 +269,7 @@ async def send_channel_report(
             audience,
         )
         for target in channel_targets(main, audience):
-            # v2 key intentionally differs from the legacy dispatch key so a
-            # corrected report can be re-sent for a period that previously got
-            # the broken market-split report.
-            report_type = f"{kind}_channel_v2_{audience.lower()}"
+            report_type = f"{kind}_channel_v3_{audience.lower()}"
             recipient_key = str(target)
             if not main.db.claim_report_dispatch(
                 report_type,
