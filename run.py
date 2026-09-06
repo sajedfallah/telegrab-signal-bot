@@ -48,6 +48,8 @@ from app.academy.router import router as academy_router
 from app.academy.runner import academy_worker
 from app.academy.caption_guard_runtime import install as install_academy_caption_guard
 from app.daily_stickers.router import router as daily_sticker_router
+from app.session_stickers.router import router as session_sticker_router
+from app.session_stickers.runner import main as session_sticker_main
 
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
@@ -91,8 +93,8 @@ def _restrict_core_catchall_to_private() -> None:
 
 
 def _promote_extension_handlers() -> None:
-    """Put Academy and daily-sticker commands/callbacks before legacy generic handlers."""
-    extension_routers = (academy_router, daily_sticker_router)
+    """Put Academy, daily-sticker and session-sticker commands/callbacks before legacy generic handlers."""
+    extension_routers = (academy_router, daily_sticker_router, session_sticker_router)
     existing_message_callbacks = {id(handler.callback) for handler in main_module.router.message.handlers}
     promoted_messages = []
     for ext_router in extension_routers:
@@ -142,16 +144,28 @@ async def _safe_academy_runtime() -> None:
         await academy_bot.session.close()
 
 
+async def _safe_session_sticker_runtime() -> None:
+    try:
+        await session_sticker_main()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        main_module.log.exception("[NEXUS] Session sticker runtime failed; Telegram bot remains online")
+
+
 async def main() -> None:
     bot_task = asyncio.create_task(bot_main(), name="nexus-telegram-bot")
     content_task = asyncio.create_task(_safe_content_runtime(), name="nexus-agentic-content")
     academy_task = asyncio.create_task(_safe_academy_runtime(), name="nexus-academy-mentor")
+    session_sticker_task = asyncio.create_task(_safe_session_sticker_runtime(), name="nexus-session-stickers")
+    tasks = (bot_task, content_task, academy_task, session_sticker_task)
     try:
-        await asyncio.gather(bot_task, content_task, academy_task)
+        await asyncio.gather(*tasks)
     finally:
-        for task in (bot_task, content_task, academy_task):
-            if not task.done(): task.cancel()
-        await asyncio.gather(bot_task, content_task, academy_task, return_exceptions=True)
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 _LOCK_HANDLE = None
