@@ -8,6 +8,12 @@ load_dotenv(encoding="utf-8-sig")
 os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
 os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
 
+# Runtime extensions below persist settings and schemas.  Initialize the
+# canonical database first so a fresh local/staging checkout can start without
+# depending on an old nexus_bot.db having already created app_settings.
+from app import db
+db.init_db()
+
 from app.telegram_topic_routing import install_free_topic_routing
 install_free_topic_routing()
 
