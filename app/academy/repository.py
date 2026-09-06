@@ -123,6 +123,12 @@ def get_by_day(day: date | str):
         return con.execute("SELECT * FROM academy_lessons WHERE scheduled_date=?", (key,)).fetchone()
 
 
+def get_by_id(lesson_id: int):
+    ensure_schema()
+    with db.conn() as con:
+        return con.execute("SELECT * FROM academy_lessons WHERE id=?", (int(lesson_id),)).fetchone()
+
+
 def mark_previewed(day: str) -> None:
     with db.conn() as con:
         con.execute("UPDATE academy_lessons SET status='previewed',updated_at=? WHERE scheduled_date=?", (_now(), day))
