@@ -73,3 +73,20 @@ def test_chart_agent_remains_screenshot_only():
     assert "screenshot-only and never trades" in src
     for forbidden in ("OrderSend(", "PositionOpen(", "Buy(", "Sell("):
         assert forbidden not in src
+
+
+def test_trade_level_scale_is_fixed_and_does_not_reject_transient_visible_zeroes():
+    """MT5 may return CHART_PRICE_MIN/MAX=0 while a template redraws.
+
+    The capture must validate the fixed-scale properties it explicitly set,
+    rather than making a false-negative decision from that transient state.
+    """
+    src = _src()
+    assert "ConfigureTradeLevelScale" in src
+    assert "CHART_SCALEFIX" in src
+    assert "CHART_FIXED_MIN" in src
+    assert "CHART_FIXED_MAX" in src
+    assert "TRADE_LEVEL_SCALE_VERIFY_FAILED" in src
+    assert "visible_range_valid" in src
+    assert "RANGE_VERIFY_FAILED" not in src
+    assert "ConfigureTradeLevelScale(chart_id,broker_symbol,entry,sl,targets,scale_error)" in src

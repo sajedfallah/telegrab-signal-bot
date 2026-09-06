@@ -19,6 +19,8 @@ input int    InpLabelNameWidth = 46;
 input int    InpLabelPriceWidth = 64;
 input int    InpLabelHeight = 18;
 input int    InpLabelRightMargin = 72;
+input double InpTradeRangePaddingPercent = 8.0;
+input int    InpScaleApplyTimeoutMs = 1000;
 
 #define NEXUS_CHART_AGENT_VERSION "0.6.5-chart-agent"
 #define NEXUS_CHART_VISUAL_PROFILE "approved-inline-level-v2"
@@ -289,6 +291,107 @@ datetime LastCandleRightEdge(const string symbol,const ENUM_TIMEFRAMES tf)
    return open_time+(datetime)seconds;
 }
 
+bool ValidPrice(const double price)
+{
+   return MathIsValidNumber(price) && price>0.0;
+}
+
+bool ReadVisibleRange(const long chart_id,double &minimum,double &maximum)
+{
+   minimum=0.0;
+   maximum=0.0;
+   return ChartGetDouble(chart_id,CHART_PRICE_MIN,0,minimum) &&
+          ChartGetDouble(chart_id,CHART_PRICE_MAX,0,maximum) &&
+          ValidPrice(minimum) && ValidPrice(maximum) && maximum>minimum;
+}
+
+bool ConfigureTradeLevelScale(const long chart_id,const string symbol,const double entry,
+                              const double sl,const double &targets[],string &error_text)
+{
+   if(!ValidPrice(entry) || !ValidPrice(sl))
+   {
+      error_text="TRADE_LEVEL_RANGE_INVALID";
+      return false;
+   }
+
+   double required_min=MathMin(entry,sl);
+   double required_max=MathMax(entry,sl);
+   for(int i=0;i<ArraySize(targets);i++)
+   {
+      if(!ValidPrice(targets[i]))
+      {
+         error_text="TRADE_LEVEL_TARGET_INVALID_"+IntegerToString(i+1);
+         return false;
+      }
+      required_min=MathMin(required_min,targets[i]);
+      required_max=MathMax(required_max,targets[i]);
+   }
+   if(!ValidPrice(required_min) || !ValidPrice(required_max) || required_max<=required_min)
+   {
+      error_text="TRADE_LEVEL_RANGE_INVALID";
+      return false;
+   }
+
+   double visible_min=0.0,visible_max=0.0;
+   bool visible_valid=ReadVisibleRange(chart_id,visible_min,visible_max);
+   double span=required_max-required_min;
+   double padding=span*MathMax(0.01,MathMin(25.0,InpTradeRangePaddingPercent))/100.0;
+   double point=SymbolInfoDouble(symbol,SYMBOL_POINT);
+   if(!ValidPrice(point)) point=0.00001;
+   padding=MathMax(padding,point*20.0);
+   double fixed_min=required_min-padding;
+   double fixed_max=required_max+padding;
+   if(!ValidPrice(fixed_min) || !ValidPrice(fixed_max) || fixed_max<=fixed_min)
+   {
+      error_text="TRADE_LEVEL_FIXED_RANGE_INVALID";
+      return false;
+   }
+
+   ResetLastError();
+   if(!ChartSetInteger(chart_id,CHART_SCALEFIX,true) ||
+      !ChartSetDouble(chart_id,CHART_FIXED_MIN,fixed_min) ||
+      !ChartSetDouble(chart_id,CHART_FIXED_MAX,fixed_max))
+   {
+      error_text="TRADE_LEVEL_SCALE_SET_FAILED_"+IntegerToString(GetLastError());
+      return false;
+   }
+
+   // MT5 can report CHART_PRICE_MIN/MAX as 0/0 while a template redraw is in
+   // progress.  CHART_FIXED_* is the authoritative state immediately after a
+   // fixed-scale request, so verify that state rather than treating transient
+   // visible-range values as a capture failure.
+   ulong started=GetTickCount64();
+   ulong timeout=(ulong)MathMax(100,InpScaleApplyTimeoutMs);
+   double tolerance=MathMax(point*2.0,(fixed_max-fixed_min)*0.000001);
+   while(GetTickCount64()-started<timeout)
+   {
+      ChartRedraw(chart_id);
+      long scale_fixed=0;
+      double actual_min=0.0,actual_max=0.0;
+      bool configured=ChartGetInteger(chart_id,CHART_SCALEFIX,0,scale_fixed) && scale_fixed!=0 &&
+                      ChartGetDouble(chart_id,CHART_FIXED_MIN,0,actual_min) &&
+                      ChartGetDouble(chart_id,CHART_FIXED_MAX,0,actual_max) &&
+                      ValidPrice(actual_min) && ValidPrice(actual_max) && actual_max>actual_min;
+      if(configured && MathAbs(actual_min-fixed_min)<=tolerance && MathAbs(actual_max-fixed_max)<=tolerance)
+      {
+         Print("[NEXUS ChartAgent] Trade scale configured. required_min=",DoubleToString(required_min,8),
+               " required_max=",DoubleToString(required_max,8),
+               " fixed_min=",DoubleToString(fixed_min,8),
+               " fixed_max=",DoubleToString(fixed_max,8),
+               " visible_range_valid=",(visible_valid ? "1" : "0"));
+         return true;
+      }
+      Sleep(50);
+   }
+
+   error_text="TRADE_LEVEL_SCALE_VERIFY_FAILED:required_min="+DoubleToString(required_min,8)+
+              ",required_max="+DoubleToString(required_max,8)+
+              ",fixed_min="+DoubleToString(fixed_min,8)+
+              ",fixed_max="+DoubleToString(fixed_max,8)+
+              ",visible_range_valid="+(visible_valid ? "1" : "0");
+   return false;
+}
+
 bool DrawTradeRay(const long chart_id,const string name,const datetime start_time,
                   const ENUM_TIMEFRAMES tf,const double price,const color clr,
                   const ENUM_LINE_STYLE style,const int width)
@@ -538,6 +641,14 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
    ChartNavigate(chart_id,CHART_END,0);
    ChartRedraw(chart_id);
    Sleep(100);
+
+   string scale_error="";
+   if(!ConfigureTradeLevelScale(chart_id,broker_symbol,entry,sl,targets,scale_error))
+   {
+      error_text=scale_error;
+      ChartClose(chart_id);
+      return false;
+   }
 
    bool ok=false;
    string prefix="NXS.SHOT."+IntegerToString((int)job_id)+".";
