@@ -29,6 +29,7 @@ from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
 from app.services.market_brief_service import install as install_market_brief_runtime
 from app.services.market_public_channel_runtime import install as install_market_public_channel_runtime
+from app.services.morning_package_runtime import install as install_morning_package_runtime
 from app.services.market_content_route_runtime import install as install_market_content_route_runtime
 from app.services.open_access_runtime import install as install_open_access_runtime
 from app.portal_runtime import install_nexus_hub
@@ -41,6 +42,7 @@ from app.growth_conversion_runtime import install as install_growth_conversion
 from app.edge_analytics_runtime import install as install_edge_analytics
 from app.risk_admin_runtime import install as install_risk_admin
 from app.topic_admin import router as topic_admin_router
+from app.daily_stickers.router import router as daily_sticker_router
 from app.content.runner import main as content_main
 
 install_mt5_event_datetime_helper()
@@ -53,6 +55,7 @@ install_account_runtime(main_module)
 install_report_runtime(main_module)
 install_market_brief_runtime(main_module)
 install_market_public_channel_runtime(main_module)
+install_morning_package_runtime(main_module)
 install_market_content_route_runtime(main_module)
 install_open_access_runtime(main_module)
 install_nexus_hub(main_module)
@@ -74,8 +77,8 @@ def _restrict_core_catchall_to_private() -> None:
     handler. Even though its callback returns immediately for groups, aiogram
     still considers the update handled and therefore never propagates forum
     commands to child routers. Re-registering that handler with an explicit
-    private-chat filter preserves chat hygiene while allowing /topicid and
-    /setfreetopic to reach the forum admin router.
+    private-chat filter preserves chat hygiene while allowing admin child
+    routers to receive their commands.
     """
     handlers = main_module.router.message.handlers
     found = any(
@@ -99,6 +102,7 @@ def _restrict_core_catchall_to_private() -> None:
 
 _restrict_core_catchall_to_private()
 main_module.router.include_router(topic_admin_router)
+main_module.router.include_router(daily_sticker_router)
 
 bot_main = main_module.main
 
