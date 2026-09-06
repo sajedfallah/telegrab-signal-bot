@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import socket
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot
+from aiogram.client.session.aiohttp import AiohttpSession
+from aiohttp.resolver import AsyncResolver
 
 from app.config import settings as core_settings
 
@@ -88,3 +92,20 @@ async def academy_worker(bot: Bot) -> None:
         except Exception:
             log.exception("academy mentor worker loop failed")
         await asyncio.sleep(20)
+
+
+async def main() -> None:
+    if not academy_settings.enabled:
+        log.info("NEXUS Academy Mentor runtime is disabled")
+        return
+
+    session = AiohttpSession()
+    if os.getenv("TELEGRAM_PUBLIC_DNS", "true").strip().lower() in {"1", "true", "yes", "on"}:
+        session._connector_init["resolver"] = AsyncResolver(nameservers=["8.8.8.8", "1.1.1.1"])
+        session._connector_init["family"] = socket.AF_INET
+
+    bot = Bot(core_settings.bot_token, session=session)
+    try:
+        await academy_worker(bot)
+    finally:
+        await bot.session.close()
