@@ -199,7 +199,10 @@ class AcademyMentorAgent:
         if not media:
             raise RuntimeError("academy lesson has no visual assets")
 
-        sent = await bot.send_media_group(destination.chat_id, media)
+        send_group_kwargs = {}
+        if destination.message_thread_id is not None:
+            send_group_kwargs["message_thread_id"] = destination.message_thread_id
+        sent = await bot.send_media_group(destination.chat_id, media, **send_group_kwargs)
         message_id = int(sent[0].message_id)
         lesson_id = int(row["id"])
         options = json.loads(row["exercise_options_json"] or "[]")
@@ -207,6 +210,14 @@ class AcademyMentorAgent:
             [InlineKeyboardButton(text=str(label), callback_data=f"academy_answer:{lesson_id}:{idx}")]
             for idx, label in enumerate(options[:3])
         ])
-        await bot.send_message(destination.chat_id, "✍️ تمرین امروز را انجام دادی؟", reply_markup=keyboard)
+        send_message_kwargs = {}
+        if destination.message_thread_id is not None:
+            send_message_kwargs["message_thread_id"] = destination.message_thread_id
+        await bot.send_message(
+            destination.chat_id,
+            "✍️ تمرین امروز را انجام دادی؟",
+            reply_markup=keyboard,
+            **send_message_kwargs,
+        )
         repository.mark_published(day.isoformat(), message_id)
         return True
