@@ -43,6 +43,8 @@ from app.edge_analytics_runtime import install as install_edge_analytics
 from app.risk_admin_runtime import install as install_risk_admin
 from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
+from app.academy.router import router as academy_router
+from app.academy.runner import academy_worker
 
 install_mt5_event_datetime_helper()
 install_result_card_formatter()
@@ -70,15 +72,6 @@ install_risk_admin(main_module)
 
 
 def _restrict_core_catchall_to_private() -> None:
-    """Keep the legacy unhandled-message cleanup private-chat only.
-
-    app.main registers clean_unhandled_message as an unfiltered parent-router
-    handler. Even though its callback returns immediately for groups, aiogram
-    still considers the update handled and therefore never propagates forum
-    commands to child routers. Re-registering that handler with an explicit
-    private-chat filter preserves chat hygiene while allowing /topicid and
-    /setfreetopic to reach the forum admin router.
-    """
     handlers = main_module.router.message.handlers
     found = any(
         getattr(handler.callback, "__name__", "") == "clean_unhandled_message"
@@ -101,6 +94,7 @@ def _restrict_core_catchall_to_private() -> None:
 
 _restrict_core_catchall_to_private()
 main_module.router.include_router(topic_admin_router)
+main_module.router.include_router(academy_router)
 
 bot_main = main_module.main
 
@@ -116,21 +110,37 @@ async def _safe_content_runtime() -> None:
         )
 
 
+async def _safe_academy_runtime() -> None:
+    try:
+        await academy_worker(main_module.bot)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        main_module.log.exception(
+            "[NEXUS] Academy Mentor runtime failed; Telegram bot remains online"
+        )
+
+
 async def main() -> None:
     bot_task = asyncio.create_task(bot_main(), name="nexus-telegram-bot")
     content_task = asyncio.create_task(
         _safe_content_runtime(),
         name="nexus-agentic-content",
     )
+    academy_task = asyncio.create_task(
+        _safe_academy_runtime(),
+        name="nexus-academy-mentor",
+    )
     try:
-        await asyncio.gather(bot_task, content_task)
+        await asyncio.gather(bot_task, content_task, academy_task)
     finally:
-        for task in (bot_task, content_task):
+        for task in (bot_task, content_task, academy_task):
             if not task.done():
                 task.cancel()
         await asyncio.gather(
             bot_task,
             content_task,
+            academy_task,
             return_exceptions=True,
         )
 
