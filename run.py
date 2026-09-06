@@ -46,6 +46,7 @@ from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
 from app.academy.router import router as academy_router
 from app.academy.runner import academy_worker
+from app.academy.caption_guard_runtime import install as install_academy_caption_guard
 from app.daily_stickers.router import router as daily_sticker_router
 
 install_mt5_event_datetime_helper()
@@ -64,6 +65,7 @@ install_open_access_runtime(main_module)
 install_nexus_hub(main_module)
 install_autotrade_user_experience(main_module)
 install_autotrade_durable_cleanup(main_module)
+install_academy_caption_guard()
 
 install_customer_experience(main_module)
 install_customer_menu_runtime(main_module)
