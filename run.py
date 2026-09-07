@@ -13,10 +13,16 @@ from app.topic_admin import router as topic_admin_router
 from app.content.runner import main as content_main
 from app.daily_stickers.router import router as daily_sticker_router
 from app.daily_stickers.runner import main as daily_sticker_main
+from app.analysis_center import install_analysis_center, router as analysis_center_router
 
 # Customer FAQ, NEXUS folder entry, VIP entitlement gate and post-purchase
 # AutoTrade delivery are attached to the canonical core router.
 install_customer_experience(core)
+
+# Add the multi-symbol AI Analysis Center to the existing admin dashboard.
+# Each symbol owns an independent ACTIVE session and update history.
+install_analysis_center(core)
+bot_router.include_router(analysis_center_router)
 
 # Admin-only /topicid and /setfreetopic diagnostics.
 bot_router.include_router(topic_admin_router)
