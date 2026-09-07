@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#071019" />
+  <title>NEXUS</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/miniapp/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">NEXUS TRADING ECOSYSTEM</div>
+        <h1 id="page-title">خانه</h1>
+      </div>
+      <div class="status-dot" title="Online"></div>
+    </header>
+
+    <main id="app" class="content" aria-live="polite"></main>
+
+    <nav class="bottom-nav" aria-label="ناوبری اصلی">
+      <button data-page="home" class="nav-item active"><span>⌂</span><small>خانه</small></button>
+      <button data-page="signals" class="nav-item"><span>◈</span><small>سیگنال‌ها</small></button>
+      <button data-page="subscriptions" class="nav-item"><span>◇</span><small>اشتراک</small></button>
+      <button data-page="products" class="nav-item"><span>▦</span><small>محصولات</small></button>
+      <button data-page="account" class="nav-item"><span>◎</span><small>حساب من</small></button>
+    </nav>
+  </div>
+
+  <script src="/miniapp/app.js" defer></script>
+</body>
+</html>
