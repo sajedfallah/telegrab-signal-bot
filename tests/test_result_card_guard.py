@@ -17,6 +17,7 @@ def _assert_minimal_shape(card: str) -> None:
     assert "📍 Entry:" not in card
     assert "📊 Performance:" not in card
     assert "🎫 Ticket:" not in card
+    assert "Exit Reason:" not in card
     assert "NEXUS RESULT" not in card
 
 
@@ -33,7 +34,7 @@ def test_mt5_compact_close_becomes_canonical_minimal_result_card():
     assert "🏁 Exit: <code>4383.23</code>" in card
     assert "💰 Broker P/L: <b>+2.61</b>" in card
     assert "⏱️ Duration: <b>00:06:54</b>" in card
-    assert "🚪 Exit Reason: <b>MANUAL CLOSE</b>" in card
+    assert "MANUAL CLOSE" not in card
     assert "TRADE CLOSED |" not in card
     _assert_minimal_shape(card)
 
@@ -56,7 +57,7 @@ def test_manual_english_result_becomes_same_minimal_card_without_fake_broker_pnl
     assert "🏁 Exit: <code>4383.23</code>" in card
     assert "💰 Broker P/L: <b>—</b>" in card
     assert "⏱️ Duration: <b>—</b>" in card
-    assert "🚪 Exit Reason: <b>MANUAL CLOSE</b>" in card
+    assert "MANUAL CLOSE" not in card
     assert "+7.7 PIPS" not in card
     _assert_minimal_shape(card)
 
@@ -79,7 +80,7 @@ def test_manual_persian_result_becomes_same_minimal_card_without_fake_broker_pnl
     assert "🏁 Exit: <code>4383.23</code>" in card
     assert "💰 Broker P/L: <b>—</b>" in card
     assert "⏱️ Duration: <b>—</b>" in card
-    assert "🚪 Exit Reason: <b>بستن دستی</b>" in card
+    assert "بستن دستی" not in card
     assert "+7.7 PIPS" not in card
     _assert_minimal_shape(card)
 

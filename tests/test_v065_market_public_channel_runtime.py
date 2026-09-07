@@ -285,14 +285,24 @@ def test_routine_focus_news_is_suppressed_during_morning_quiet(monkeypatch):
 
 def test_extraordinary_breaking_focus_news_can_bypass_morning_quiet(monkeypatch):
     async def fake_prepare(item, *, local_timezone):
-        return editorial.PersianNewsPayload(text="<b>خبر فوری مهم طلا</b>")
+        return editorial.PersianNewsPayload(text="<b>??? ???? ??? ???</b>")
 
     monkeypatch.setattr(editorial, "prepare_persian_news_payload", fake_prepare)
     monkeypatch.setattr(runtime, "_morning_quiet", lambda *args, **kwargs: True)
+
+    item = market.NewsItem(
+        title="Breaking: US CPI inflation surprises markets as Gold jumps",
+        link="https://example.com/cpi-breaking",
+        source="Reuters",
+        published_at=datetime.now(timezone.utc),
+        score=19,
+    )
+
     bot = FakeBot()
-    result = asyncio.run(runtime._broadcast_news_item(_main(), bot, _news()))
+    result = asyncio.run(runtime._broadcast_news_item(_main(), bot, item))
     assert result == (1, 0)
     assert len(bot.calls) == 1
+
 
 
 def test_news_image_failure_falls_back_to_same_persian_text(monkeypatch):

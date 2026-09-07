@@ -140,22 +140,25 @@ class Settings:
     @property
     def plans(self) -> dict[str, dict[str, object]]:
         # Canonical commercial catalog. IRR is intentionally not a fixed price.
+        # VIP pricing is rebased from 25 USDT/month to 19 USDT/month while
+        # preserving the previous long-duration discount curve (rounded to whole USDT).
+        # AutoTrade standalone pricing remains unchanged. Bundle pricing is the exact
+        # sum of the corresponding VIP + AutoTrade plans.
         return {
-            "VIP1M": {"days":30,"duration_days":30,"fa":"VIP | 1 Month | 25 USDT","en":"VIP | 1 Month | 25 USDT","usdt":"25","price_usdt":"25","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
-            "VIP3M": {"days":90,"duration_days":90,"fa":"VIP | 3 Months | 69 USDT","en":"VIP | 3 Months | 69 USDT","usdt":"69","price_usdt":"69","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
-            "VIP6M": {"days":180,"duration_days":180,"fa":"VIP | 6 Months | 129 USDT","en":"VIP | 6 Months | 129 USDT","usdt":"129","price_usdt":"129","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
-            "VIP12M": {"days":365,"duration_days":365,"fa":"VIP | 1 Year | 239 USDT","en":"VIP | 1 Year | 239 USDT","usdt":"239","price_usdt":"239","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
-            # Standalone AutoTrade Expert products. Prices intentionally remain configurable
-            # until the business sets the independent AutoTrade price list.
+            "VIP1M": {"days":30,"duration_days":30,"fa":"VIP | 1 Month | 19 USDT","en":"VIP | 1 Month | 19 USDT","usdt":"19","price_usdt":"19","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
+            "VIP3M": {"days":90,"duration_days":90,"fa":"VIP | 3 Months | 52 USDT","en":"VIP | 3 Months | 52 USDT","usdt":"52","price_usdt":"52","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
+            "VIP6M": {"days":180,"duration_days":180,"fa":"VIP | 6 Months | 98 USDT","en":"VIP | 6 Months | 98 USDT","usdt":"98","price_usdt":"98","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
+            "VIP12M": {"days":365,"duration_days":365,"fa":"VIP | 1 Year | 182 USDT","en":"VIP | 1 Year | 182 USDT","usdt":"182","price_usdt":"182","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"signal","vip_access":True,"autotrade_access":False,"active":True},
+            # Standalone AutoTrade Expert products remain on the existing 5 USDT monthly base.
             "AEX1M": {"days":30,"duration_days":30,"fa":"AutoTrade | 1 Month | 5 USDT","en":"AutoTrade | 1 Month | 5 USDT","usdt":"5","price_usdt":"5","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":False,"autotrade_access":True,"active":True},
             "AEX3M": {"days":90,"duration_days":90,"fa":"AutoTrade | 3 Months | 14 USDT","en":"AutoTrade | 3 Months | 14 USDT","usdt":"14","price_usdt":"14","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":False,"autotrade_access":True,"active":True},
             "AEX6M": {"days":180,"duration_days":180,"fa":"AutoTrade | 6 Months | 27 USDT","en":"AutoTrade | 6 Months | 27 USDT","usdt":"27","price_usdt":"27","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":False,"autotrade_access":True,"active":True},
             "AEX12M": {"days":365,"duration_days":365,"fa":"AutoTrade | 1 Year | 49 USDT","en":"AutoTrade | 1 Year | 49 USDT","usdt":"49","price_usdt":"49","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":False,"autotrade_access":True,"active":True},
-            # Legacy AUTO codes remain the commercial bundle to avoid changing existing prices/entitlements.
-            "AUTO1M": {"days":30,"duration_days":30,"fa":"VIP + AutoTrade | 1 Month | 30 USDT","en":"VIP + AutoTrade | 1 Month | 30 USDT","usdt":"30","price_usdt":"30","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
-            "AUTO3M": {"days":90,"duration_days":90,"fa":"VIP + AutoTrade | 3 Months | 83 USDT","en":"VIP + AutoTrade | 3 Months | 83 USDT","usdt":"83","price_usdt":"83","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
-            "AUTO6M": {"days":180,"duration_days":180,"fa":"VIP + AutoTrade | 6 Months | 155 USDT","en":"VIP + AutoTrade | 6 Months | 155 USDT","usdt":"155","price_usdt":"155","setup_fee_usdt":"0","setup_fee_discount_percent":50,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
-            "AUTO12M": {"days":365,"duration_days":365,"fa":"VIP + AutoTrade | 1 Year | 289 USDT","en":"VIP + AutoTrade | 1 Year | 289 USDT","usdt":"289","price_usdt":"289","setup_fee_usdt":"0","setup_fee_discount_percent":100,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
+            # Legacy AUTO codes remain the VIP + AutoTrade commercial bundle and keep entitlements unchanged.
+            "AUTO1M": {"days":30,"duration_days":30,"fa":"VIP + AutoTrade | 1 Month | 24 USDT","en":"VIP + AutoTrade | 1 Month | 24 USDT","usdt":"24","price_usdt":"24","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
+            "AUTO3M": {"days":90,"duration_days":90,"fa":"VIP + AutoTrade | 3 Months | 66 USDT","en":"VIP + AutoTrade | 3 Months | 66 USDT","usdt":"66","price_usdt":"66","setup_fee_usdt":"0","setup_fee_discount_percent":0,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
+            "AUTO6M": {"days":180,"duration_days":180,"fa":"VIP + AutoTrade | 6 Months | 125 USDT","en":"VIP + AutoTrade | 6 Months | 125 USDT","usdt":"125","price_usdt":"125","setup_fee_usdt":"0","setup_fee_discount_percent":50,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
+            "AUTO12M": {"days":365,"duration_days":365,"fa":"VIP + AutoTrade | 1 Year | 231 USDT","en":"VIP + AutoTrade | 1 Year | 231 USDT","usdt":"231","price_usdt":"231","setup_fee_usdt":"0","setup_fee_discount_percent":100,"service_type":"auto_trade","vip_access":True,"autotrade_access":True,"active":True},
         }
 
 
