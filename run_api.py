@@ -20,10 +20,14 @@ install_risk_firewall()
 from app.autotrade.live_event_runtime import install_live_snapshot_event_bridge
 install_live_snapshot_event_bridge()
 
+from app.autotrade.api import app
+from app.miniapp_runtime import install_miniapp
+install_miniapp(app)
+
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app.autotrade.api:app",
+        app,
         host=os.getenv("AUTOTRADE_API_HOST", "127.0.0.1"),
         port=int(os.getenv("AUTOTRADE_API_PORT", "8080")),
         reload=False,
