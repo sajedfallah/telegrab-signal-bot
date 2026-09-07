@@ -13,8 +13,15 @@ from .config import settings
 log = logging.getLogger("nexus.telegram-topic-routing")
 
 # FREE remains the logical NEXUS destination everywhere in the bot, API and MT5
-# contract. When the two variables below are configured, the physical Telegram
-# destination is transparently remapped to one forum topic in the community.
+# contract. When the two variables below are configured, publishing operations
+# are transparently remapped to one forum topic in the community.
+#
+# IMPORTANT SAFETY RULE:
+# Message-id mutating/destructive methods (edit/delete/pin/etc.) are deliberately
+# NOT wrapped here. Message ids are scoped to a Telegram chat. Historical rows
+# may contain ids created in the former logical FREE channel; remapping those ids
+# to the community supergroup can collide with unrelated messages in ANY topic
+# because forum topics share the parent chat's message-id namespace.
 _FREE_TOPIC_METHODS = (
     "get_chat",
     "send_message",
@@ -35,15 +42,6 @@ _FREE_TOPIC_METHODS = (
     "send_chat_action",
     "copy_message",
     "forward_message",
-    "edit_message_text",
-    "edit_message_caption",
-    "edit_message_media",
-    "edit_message_reply_markup",
-    "delete_message",
-    "delete_messages",
-    "stop_poll",
-    "pin_chat_message",
-    "unpin_chat_message",
 )
 
 
@@ -106,11 +104,14 @@ def _wrap_bot_method(method_name: str, physical_chat: int | str, topic_id: int) 
 
 
 def install_free_topic_routing() -> bool:
-    """Install process-wide logical FREE -> community topic routing for aiogram Bot.
+    """Install process-wide logical FREE -> community topic routing for publishing.
 
     This is intentionally installed by both run.py and run_api.py so signals
     created from the Telegram admin flow and signals created by the MT5 admin
-    authority use the exact same Telegram destination and lifecycle thread.
+    authority publish to the exact same Telegram destination.
+
+    Destructive/message-id lifecycle operations must use the physical chat id
+    explicitly and are intentionally excluded from this process-wide remapper.
     """
     route = configured_free_topic_route()
     if route is None:
@@ -126,7 +127,7 @@ def install_free_topic_routing() -> bool:
 
     Bot.__nexus_free_topic_routing_installed__ = True
     log.info(
-        "FREE Telegram destination routed to chat=%s topic=%s (%s Bot methods wrapped)",
+        "FREE Telegram publishing destination routed to chat=%s topic=%s (%s safe Bot methods wrapped)",
         physical_chat,
         topic_id,
         wrapped,
