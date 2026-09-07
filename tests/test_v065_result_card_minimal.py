@@ -20,7 +20,8 @@ def test_broker_close_result_card_contains_only_required_fields():
     assert "🏁 Exit: <code>4481.66</code>" in card
     assert "💰 Broker P/L: <b>-10.64</b>" in card
     assert "⏱️ Duration: <b>00:46:16</b>" in card
-    assert "🚪 Exit Reason: <b>STOP LOSS</b>" in card
+    assert "Exit Reason:" not in card
+    assert "STOP LOSS" not in card
     assert "📌 Status: <b>CLOSED</b>" in card
 
     # Explicit product rule: these details belong to the original signal or
@@ -50,6 +51,7 @@ def test_manual_result_keeps_required_shape_without_fake_broker_pnl():
     assert "🏁 Exit: <code>101</code>" in card
     assert "💰 Broker P/L: <b>—</b>" in card
     assert "⏱️ Duration: <b>—</b>" in card
-    assert "🚪 Exit Reason: <b>MANUAL CLOSE</b>" in card
+    assert "Exit Reason:" not in card
+    assert "MANUAL CLOSE" not in card
     assert "📌 Status: <b>CLOSED</b>" in card
     assert "+10 PIPS" not in card
