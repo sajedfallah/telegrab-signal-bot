@@ -32,11 +32,21 @@ def test_mt5_compact_close_becomes_canonical_minimal_result_card():
 
     assert "<b>NX-0004</b>  <b>🟢 WIN</b>" in card
     assert "🏁 Exit: <code>4383.23</code>" in card
-    assert "💰 Broker P/L: <b>+2.61</b>" in card
+    assert "💰 Broker P/L: <b>+$2.61</b>" in card
     assert "⏱️ Duration: <b>00:06:54</b>" in card
     assert "MANUAL CLOSE" not in card
     assert "TRADE CLOSED |" not in card
     _assert_minimal_shape(card)
+
+
+def test_broker_pnl_negative_value_keeps_sign_before_dollar_symbol():
+    compact = (
+        "TRADE CLOSED | NX-0004 | XAUUSD | direction=SELL | exit=4385.10 | "
+        "pnl=-3.25 | result=LOSS | duration=00:03:10"
+    )
+
+    card = format_result_card(_row(), compact)
+    assert "💰 Broker P/L: <b>-$3.25</b>" in card
 
 
 def test_manual_english_result_becomes_same_minimal_card_without_fake_broker_pnl():
