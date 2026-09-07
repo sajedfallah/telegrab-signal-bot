@@ -30,7 +30,9 @@ from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
 from app.services.market_brief_service import install as install_market_brief_runtime
 from app.services.market_public_channel_runtime import install as install_market_public_channel_runtime
+from app.services.news_quota_runtime import install as install_news_quota_runtime
 from app.services.public_content_runtime import install as install_public_content_runtime
+from app.services.performance_marketing_runtime import install as install_performance_marketing_runtime
 from app.services.market_content_route_runtime import install as install_market_content_route_runtime
 from app.services.open_access_runtime import install as install_open_access_runtime
 from app.portal_runtime import install_nexus_hub
@@ -56,7 +58,9 @@ install_account_runtime(main_module)
 install_report_runtime(main_module)
 install_market_brief_runtime(main_module)
 install_market_public_channel_runtime(main_module)
+install_news_quota_runtime(main_module)
 install_public_content_runtime(main_module)
+install_performance_marketing_runtime(main_module)
 install_market_content_route_runtime(main_module)
 install_open_access_runtime(main_module)
 install_nexus_hub(main_module)
