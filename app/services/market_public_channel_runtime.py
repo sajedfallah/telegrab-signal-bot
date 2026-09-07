@@ -19,6 +19,7 @@ Product policy:
 import asyncio
 import html
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -147,8 +148,7 @@ def _professionalize_text(text: str, item: market.NewsItem, decision: pro_news.N
         lines.insert(0, _professional_header(decision.category))
         lines.insert(1, "")
 
-    assets_fa = {"GOLD": "GOLD", "BTC": "BTC", "DOW": "DOW"}
-    impact_lines = [f"• {assets_fa[x]} — <b>{decision.impact_level}</b>" for x in decision.assets]
+    impact_lines = [f"• {x} — <b>{decision.impact_level}</b>" for x in decision.assets]
     lines += ["", "<b>Market Impact</b>", *impact_lines]
     return "\n".join(lines)
 
