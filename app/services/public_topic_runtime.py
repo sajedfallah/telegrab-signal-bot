@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-"""Route public NEXUS content to a Telegram forum topic.
+"""Route the logical NEXUS public destination to one Telegram forum topic."""
 
-The product's "public channel" may physically be a topic inside the NEXUS
-community forum.  This runtime keeps existing public-channel business logic
-unchanged while adding an explicit message_thread_id for daily stickers and
-public market editorial.
-"""
-
+import functools
+import inspect
 import logging
 import os
 from datetime import date
 from typing import Any
+
+from aiogram import Bot
 
 from app.daily_stickers import router as daily_router
 from app.daily_stickers import service as daily_service
@@ -41,12 +39,48 @@ def _topic_id() -> int | None:
     return value
 
 
+def _same_target(left: Any, right: Any) -> bool:
+    return str(left).strip().casefold() == str(right).strip().casefold()
+
+
+def _wrap_public_method(method_name: str, target: int | str, topic_id: int) -> bool:
+    original = getattr(Bot, method_name, None)
+    if original is None or not inspect.iscoroutinefunction(original):
+        return False
+    if getattr(original, "__nexus_public_topic_wrapped__", False):
+        return False
+    signature = inspect.signature(original)
+    if "chat_id" not in signature.parameters or "message_thread_id" not in signature.parameters:
+        return False
+
+    @functools.wraps(original)
+    async def routed(*args, **kwargs):
+        bound = signature.bind_partial(*args, **kwargs)
+        chat_id = bound.arguments.get("chat_id")
+        if _same_target(chat_id, target) and not bound.arguments.get("message_thread_id"):
+            bound.arguments["message_thread_id"] = topic_id
+            return await original(*bound.args, **bound.kwargs)
+        return await original(*args, **kwargs)
+
+    routed.__nexus_public_topic_wrapped__ = True
+    setattr(Bot, method_name, routed)
+    return True
+
+
 def install(main: Any) -> None:
     target = _target(main)
     topic_id = _topic_id()
     if topic_id is None:
         log.info("[NEXUS][PUBLIC_TOPIC] disabled; PUBLIC_CHANNEL_TOPIC_ID is empty")
         return
+
+    # Process-wide protection: any normal public text/photo/sticker routed to the
+    # logical public chat lands in the configured forum topic.  This also covers
+    # public copies of FREE/VIP reports.
+    wrapped = 0
+    for method_name in ("send_message", "send_photo", "send_sticker", "send_video", "send_animation", "send_document"):
+        if _wrap_public_method(method_name, target, topic_id):
+            wrapped += 1
 
     async def send_for_date_topic(bot, day: date, *, force: bool = False, store=None):
         store = store or daily_service.get_store()
@@ -75,21 +109,10 @@ def install(main: Any) -> None:
                     caption=text,
                     parse_mode="HTML",
                 )
-                log.info(
-                    "market public-topic delivery: reason=%s target=%s topic=%s status=sent_with_image",
-                    reason,
-                    target,
-                    topic_id,
-                )
+                log.info("market public-topic delivery: reason=%s target=%s topic=%s status=sent_with_image", reason, target, topic_id)
                 return True
             except Exception as exc:
-                log.info(
-                    "market public-topic image unavailable; fallback to text: reason=%s target=%s topic=%s error=%s",
-                    reason,
-                    target,
-                    topic_id,
-                    exc,
-                )
+                log.info("market public-topic image unavailable; fallback to text: reason=%s target=%s topic=%s error=%s", reason, target, topic_id, exc)
         try:
             await bot.send_message(
                 chat_id=target,
@@ -98,24 +121,13 @@ def install(main: Any) -> None:
                 parse_mode="HTML",
                 disable_web_page_preview=True,
             )
-            log.info(
-                "market public-topic delivery: reason=%s target=%s topic=%s status=sent",
-                reason,
-                target,
-                topic_id,
-            )
+            log.info("market public-topic delivery: reason=%s target=%s topic=%s status=sent", reason, target, topic_id)
             return True
         except Exception as exc:
-            log.warning(
-                "market public-topic delivery failed: reason=%s target=%s topic=%s error=%s",
-                reason,
-                target,
-                topic_id,
-                exc,
-            )
+            log.warning("market public-topic delivery failed: reason=%s target=%s topic=%s error=%s", reason, target, topic_id, exc)
             return False
 
-    # Patch every imported binding that may already hold the original function.
+    # Patch imported bindings that were captured before this runtime installed.
     daily_service.send_for_date = send_for_date_topic
     daily_service.target_chat = lambda: target
     daily_router.send_for_date = send_for_date_topic
@@ -124,7 +136,8 @@ def install(main: Any) -> None:
     public_runtime._send_public = send_public_topic
 
     log.info(
-        "[NEXUS][PUBLIC_TOPIC][INSTALLED] target=%s topic=%s morning=daily-sticker+brief+gold+btc",
+        "[NEXUS][PUBLIC_TOPIC][INSTALLED] target=%s topic=%s wrapped=%s morning=daily-sticker+brief+gold+btc",
         target,
         topic_id,
+        wrapped,
     )
