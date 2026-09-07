@@ -14,10 +14,15 @@ from app.content.runner import main as content_main
 from app.daily_stickers.router import router as daily_sticker_router
 from app.daily_stickers.runner import main as daily_sticker_main
 from app.analysis_center import install_analysis_center, router as analysis_center_router
+from app.analysis_quadrant_patch import install_quadrant_rules
 
 # Customer FAQ, NEXUS folder entry, VIP entitlement gate and post-purchase
 # AutoTrade delivery are attached to the canonical core router.
 install_customer_experience(core)
+
+# Teach Analysis Center the canonical Daily Quadrant definition (25/50/75)
+# and inherit FREE signal Telegram routing when ANALYSIS_TARGET_* is unset.
+install_quadrant_rules()
 
 # Add the multi-symbol AI Analysis Center to the existing admin dashboard.
 # Each symbol owns an independent ACTIVE session and update history.
