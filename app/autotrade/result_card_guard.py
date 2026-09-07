@@ -39,6 +39,18 @@ def _price(value: Any) -> str:
     return f"<code>{_esc(text)}</code>"
 
 
+def _broker_pnl(value: Any) -> str:
+    """Render broker P/L with an explicit USD symbol while preserving signs."""
+    text = str(value or "—").strip() or "—"
+    if text == "—":
+        return text
+    if "$" in text:
+        return text
+    if text.startswith(("+", "-")):
+        return f"{text[0]}${text[1:]}"
+    return f"${text}"
+
+
 def _plain(caption: str) -> str:
     return html.unescape(_TAG_RE.sub("", caption or "")).strip()
 
@@ -89,7 +101,7 @@ def _build_card(
         "BREAK EVEN": "⚪ BREAK EVEN",
     }.get(result, "⚪ CLOSED")
 
-    pnl = str(broker_pnl or "—").strip() or "—"
+    pnl = _broker_pnl(broker_pnl)
     duration_text = str(duration or "—").strip() or "—"
 
     return "\n".join(
