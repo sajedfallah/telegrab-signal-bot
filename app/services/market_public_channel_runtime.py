@@ -4,20 +4,22 @@ from __future__ import annotations
 
 Product policy:
   * Public editorial is Persian-only and durable.
-  * Market news is strictly limited to GOLD/XAU, Bitcoin/BTC and Dow Jones/DJI/US30.
+  * Market news is professionally scored for GOLD/XAU, Bitcoin/BTC and Dow Jones/DJI/US30.
+  * Systemic macro headlines (Fed/CPI/NFP/yields/geopolitics) may affect all focus assets.
   * Source names/article links are never shown in public copy.
   * Every morning is one ordered, retry-safe three-message suite:
       1) NEXUS Morning Brief
       2) XAU/USD ICT analysis/scenarios
       3) BTC/USD ICT analysis/scenarios
   * Routine standalone news/economic alerts are quiet during the morning window;
-    only extraordinary focused breaking news can bypass that quiet window.
-  * Related news imagery is best-effort when article metadata provides it.
+    only confirmed professional-news BREAKING items can bypass that quiet window.
+  * Related imagery is used only when the professional image-confidence gate passes.
 """
 
 import asyncio
 import html
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -26,6 +28,7 @@ from zoneinfo import ZoneInfo
 from app.services import market_brief_service as market
 from app.services import market_editorial_service as editorial
 from app.services import market_ict_service as ict
+from app.services import professional_news_engine as pro_news
 
 
 log = logging.getLogger(__name__)
@@ -40,12 +43,6 @@ _FOCUS_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
             re.I,
         ),
     ),
-)
-_EXTRAORDINARY_RE = re.compile(
-    r"(?:\bbreaking\b|\burgent\b|\bflash\b|\bemergency\b|\bcrash\w*\b|\bplung\w*\b|"
-    r"\bsurg\w*\b|\bspik\w*\b|\battack\w*\b|\bwar\b|\bintervention\b|\bhalt\w*\b|"
-    r"\brecord\s+high\b|\brecord\s+low\b)",
-    re.I,
 )
 _KNOWN_SOURCE_NAMES = (
     "FXStreet",
@@ -72,11 +69,11 @@ def _channel_lang(main: Any) -> str:
 
 def _focus_score(title: str) -> int:
     text = str(title or "")
-    return 8 if any(pattern.search(text) for _, pattern in _FOCUS_PATTERNS) else 0
+    return 8 if pro_news.detect_assets(text) else 0
 
 
 def _is_focus_news(item: market.NewsItem) -> bool:
-    return _focus_score(item.title) > 0
+    return bool(pro_news.detect_assets(item.title))
 
 
 def _focused_important_recent_news(
@@ -86,18 +83,23 @@ def _focused_important_recent_news(
     minimum_score: int = 5,
     max_age_minutes: int = 180,
 ) -> list[market.NewsItem]:
-    """Return only direct GOLD/BTC/Dow headlines while preserving freshness gates."""
+    """Return focus/systemic headlines while preserving freshness gates.
+
+    The final publish decision is made later by Professional News Engine. This
+    selector only prevents the legacy worker from discarding systemic macro news
+    before the professional scoring layer sees it.
+    """
     now = now_utc or datetime.now(timezone.utc)
     cutoff = now - timedelta(minutes=max(1, int(max_age_minutes)))
     ranked: list[tuple[int, datetime, market.NewsItem]] = []
     for item in items:
-        focus = _focus_score(item.title)
-        if focus <= 0:
-            continue
-        effective_score = max(int(item.score), focus)
-        if effective_score < max(1, int(minimum_score)):
+        if not pro_news.detect_assets(item.title):
             continue
         if item.published_at and item.published_at < cutoff:
+            continue
+        decision = pro_news.evaluate(item, now_utc=now)
+        effective_score = max(int(item.score), decision.score)
+        if effective_score < max(1, int(minimum_score)):
             continue
         ranked.append((effective_score, item.published_at or now, item))
     ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
@@ -108,12 +110,6 @@ def _morning_quiet(main: Any, now_utc: datetime | None = None) -> bool:
     now = now_utc or datetime.now(timezone.utc)
     local = now.astimezone(ZoneInfo(main.settings.timezone))
     return 0 <= local.hour < 12
-
-
-def _extraordinary_focus_news(item: market.NewsItem) -> bool:
-    return _is_focus_news(item) and bool(_EXTRAORDINARY_RE.search(str(item.title or ""))) and max(
-        int(item.score), _focus_score(item.title)
-    ) >= 8
 
 
 def _sanitize_public_news_text(text: str, item: market.NewsItem) -> str:
@@ -132,6 +128,28 @@ def _sanitize_public_news_text(text: str, item: market.NewsItem) -> str:
         lines.append(cleaned)
     while lines and not lines[-1].strip():
         lines.pop()
+    return "\n".join(lines)
+
+
+def _professional_header(category: str) -> str:
+    if category == "breaking_news":
+        return "<b>🚨 NEXUS | BREAKING</b>"
+    if category == "important_news":
+        return "<b>⚠️ NEXUS | IMPORTANT NEWS</b>"
+    return "<b>📊 NEXUS | MARKET UPDATE</b>"
+
+
+def _professionalize_text(text: str, item: market.NewsItem, decision: pro_news.NewsDecision) -> str:
+    cleaned = _sanitize_public_news_text(text, item)
+    lines = cleaned.splitlines()
+    if lines and "خبر مهم بازار" in re.sub(r"<[^>]+>", "", lines[0]):
+        lines[0] = _professional_header(decision.category)
+    else:
+        lines.insert(0, _professional_header(decision.category))
+        lines.insert(1, "")
+
+    impact_lines = [f"• {x} — <b>{decision.impact_level}</b>" for x in decision.assets]
+    lines += ["", "<b>Market Impact</b>", *impact_lines]
     return "\n".join(lines)
 
 
@@ -276,8 +294,6 @@ async def _broadcast_brief(
     """Publish the ordered 3-message morning suite with per-component retry safety."""
     today_key = now_utc.astimezone(ZoneInfo(main.settings.timezone)).date().isoformat()
 
-    # Prepare all content before the first Telegram send. A temporary market-data
-    # failure therefore cannot intentionally produce a one-message morning pack.
     try:
         brief_task = asyncio.create_task(_render_persian_morning_brief(main, events, news, now_utc))
         gold_task = asyncio.create_task(
@@ -318,20 +334,38 @@ async def _broadcast_brief(
 
     complete = all(_component_done(main, component, today_key) for component, _, _ in messages)
     if complete:
-        # The core worker can now safely set morning_brief_last_date.
         return (3, 0)
-    # Returning sent=0 prevents the legacy worker from falsely marking the suite
-    # complete when one Telegram send succeeded but a later component failed.
     return (0, max(1, failed))
 
 
 async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tuple[int, int]:
-    if not _is_focus_news(item):
-        log.info("market news suppressed by GOLD/BTC/Dow focus policy: key=%s", item.key)
+    decision = pro_news.evaluate(item, main=main)
+    log.info(
+        "[NEXUS][NEWS][SCORED] story=%s score=%s category=%s assets=%s tier=%s publish=%s reason=%s",
+        decision.story_id,
+        decision.score,
+        decision.category,
+        ",".join(decision.assets) or "none",
+        decision.source_tier,
+        decision.publish,
+        decision.reason,
+    )
+
+    if not decision.publish:
+        log.info(
+            "[NEXUS][NEWS][SUPPRESSED] story=%s score=%s reason=%s",
+            decision.story_id,
+            decision.score,
+            decision.reason,
+        )
         return (0, 0)
 
-    if _morning_quiet(main) and not _extraordinary_focus_news(item):
-        log.info("routine focused news suppressed during morning quiet window: key=%s", item.key)
+    if _morning_quiet(main) and not decision.is_breaking:
+        log.info(
+            "[NEXUS][NEWS][SUPPRESSED] story=%s score=%s reason=morning_quiet",
+            decision.story_id,
+            decision.score,
+        )
         return (0, 0)
 
     payload = await editorial.prepare_persian_news_payload(
@@ -340,21 +374,39 @@ async def _broadcast_news_item(main: Any, bot: Any, item: market.NewsItem) -> tu
     )
     if payload is None:
         log.warning(
-            "market news suppressed because Persian editorial translation was unavailable: key=%s source=%s",
-            item.key,
+            "[NEXUS][NEWS][SUPPRESSED] story=%s reason=persian_editorial_unavailable source=%s",
+            decision.story_id,
             item.source,
         )
         return (0, 1)
 
-    public_text = _sanitize_public_news_text(payload.text, item)
+    public_text = _professionalize_text(payload.text, item, decision)
+    image_url = payload.image_url if pro_news.image_allowed(item, payload.image_url, decision) else ""
+    log.info(
+        "[NEXUS][NEWS][IMAGE_MATCH] story=%s score=%s allowed=%s",
+        decision.story_id,
+        pro_news.image_score(item, payload.image_url, decision),
+        bool(image_url),
+    )
+
     ok = await _send_public(
         main,
         bot,
         public_text,
-        reason="market_news_extraordinary" if _morning_quiet(main) else "market_news",
-        image_url=payload.image_url,
+        reason=decision.category,
+        image_url=image_url,
     )
-    return (1, 0) if ok else (0, 1)
+    if ok:
+        pro_news.mark_story_seen(main, decision.story_id)
+        log.info(
+            "[NEXUS][NEWS][PUBLISHED] story=%s score=%s category=%s image=%s",
+            decision.story_id,
+            decision.score,
+            decision.category,
+            bool(image_url),
+        )
+        return (1, 0)
+    return (0, 1)
 
 
 async def _broadcast_event_alert(
@@ -363,7 +415,6 @@ async def _broadcast_event_alert(
     event: market.CalendarEvent,
     minutes_left: int,
 ) -> tuple[int, int]:
-    # Morning high-impact events are already consolidated into message #1.
     if _morning_quiet(main):
         log.info("routine economic alert suppressed during morning quiet window: event=%s", event.key)
         return (0, 0)
@@ -388,13 +439,20 @@ async def _broadcast_event_alert(
 
 def install(main: Any) -> None:
     """Replace private market broadcasts with focused Persian public editorial."""
-    # The worker calls market.important_recent_news before dispatching items. Patch
-    # that selector too, so unrelated assets are discarded before publication.
     market.important_recent_news = _focused_important_recent_news
     market._broadcast_brief = _broadcast_brief
     market._broadcast_news_item = _broadcast_news_item
     market._broadcast_event_alert = _broadcast_event_alert
+    minimum, important, breaking = pro_news.thresholds()
     log.info(
-        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa focus=GOLD,BTC,DOW morning_suite=3 morning_quiet=true source_hidden=true image_enrichment=true",
+        "[NEXUS][MARKET_PUBLIC_CHANNEL][INSTALLED] target=%s language=fa focus=GOLD,BTC,DOW morning_suite=3 morning_quiet=true source_hidden=true image_enrichment=true professional_news=true",
         getattr(main.settings, "public_channel_id", None),
+    )
+    log.info(
+        "[NEXUS][PRO_NEWS][STARTED] enabled=%s min_score=%s important=%s breaking=%s images=%s duplicate_guard=true focus=GOLD,BTC,DOW",
+        pro_news.enabled(),
+        minimum,
+        important,
+        breaking,
+        str(os.getenv("NEWS_IMAGES_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "on"},
     )
