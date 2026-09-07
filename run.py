@@ -24,6 +24,7 @@ from app.autotrade.result_card_guard import install_result_card_formatter
 from app.ux_runtime_patch import install as install_user_ux_hardening
 from app.services.chat_hygiene_runtime import install as install_chat_hygiene_runtime
 from app.services.signal_channel_runtime import install as install_signal_channel_runtime
+from app.services.commercial_pricing_runtime import install as install_commercial_pricing_runtime
 from app.services.pricing_admin_runtime import install as install_pricing_admin_runtime
 from app.services.account_runtime import install as install_account_runtime
 from app.services.report_runtime import install as install_report_runtime
@@ -49,6 +50,7 @@ install_result_card_formatter()
 install_user_ux_hardening(main_module)
 install_signal_channel_runtime(main_module)
 install_chat_hygiene_runtime(main_module)
+install_commercial_pricing_runtime(main_module)
 install_pricing_admin_runtime(main_module)
 install_account_runtime(main_module)
 install_report_runtime(main_module)
