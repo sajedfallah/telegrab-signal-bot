@@ -10,6 +10,7 @@ Policy:
 - durable slot/day state through app_settings so restarts do not duplicate sends.
 """
 
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -19,6 +20,7 @@ from app.services import market_public_channel_runtime as market_public
 from app.services import professional_news_engine as pro_news
 
 _INSTALLED = False
+_SEND_LOCK = asyncio.Lock()
 
 
 def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
@@ -118,38 +120,39 @@ def install(main: Any) -> None:
             )
             return (0, 0)
 
-        local = _local_now(runtime_main)
-        daily_max = _env_int("NEWS_DAILY_MAX", 5, 1, 5)
-        if _daily_count(runtime_main, local) >= daily_max:
-            market_public.log.info(
-                "[NEXUS][NEWS_QUOTA][SUPPRESSED] story=%s score=%s reason=daily_limit",
-                decision.story_id,
-                decision.score,
-            )
-            return (0, 0)
+        async with _SEND_LOCK:
+            local = _local_now(runtime_main)
+            daily_max = _env_int("NEWS_DAILY_MAX", 5, 1, 5)
+            if _daily_count(runtime_main, local) >= daily_max:
+                market_public.log.info(
+                    "[NEXUS][NEWS_QUOTA][SUPPRESSED] story=%s score=%s reason=daily_limit",
+                    decision.story_id,
+                    decision.score,
+                )
+                return (0, 0)
 
-        slot = _due_slot(runtime_main)
-        if slot is None:
-            market_public.log.info(
-                "[NEXUS][NEWS_QUOTA][SUPPRESSED] story=%s score=%s reason=outside_news_slot",
-                decision.story_id,
-                decision.score,
-            )
-            return (0, 0)
+            slot = _due_slot(runtime_main)
+            if slot is None:
+                market_public.log.info(
+                    "[NEXUS][NEWS_QUOTA][SUPPRESSED] story=%s score=%s reason=outside_news_slot",
+                    decision.story_id,
+                    decision.score,
+                )
+                return (0, 0)
 
-        sent, failed = await original(runtime_main, bot, item)
-        if sent > 0:
-            _mark_sent(runtime_main, local, slot)
-            market_public.log.info(
-                "[NEXUS][NEWS_QUOTA][PUBLISHED] story=%s score=%s slot=%02d:%02d count=%s/%s",
-                decision.story_id,
-                decision.score,
-                slot[0],
-                slot[1],
-                _daily_count(runtime_main, local),
-                daily_max,
-            )
-        return sent, failed
+            sent, failed = await original(runtime_main, bot, item)
+            if sent > 0:
+                _mark_sent(runtime_main, local, slot)
+                market_public.log.info(
+                    "[NEXUS][NEWS_QUOTA][PUBLISHED] story=%s score=%s slot=%02d:%02d count=%s/%s",
+                    decision.story_id,
+                    decision.score,
+                    slot[0],
+                    slot[1],
+                    _daily_count(runtime_main, local),
+                    daily_max,
+                )
+            return sent, failed
 
     market_public._broadcast_news_item = _quota_broadcast_news_item
     _INSTALLED = True
