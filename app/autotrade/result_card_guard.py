@@ -76,10 +76,10 @@ def _build_card(
 ) -> str:
     """Render the intentionally minimal final-result flash card.
 
-    Product rule: final CLOSE replies must contain only the signal/result identity,
-    exit price, broker P/L, holding duration, exit reason and final status.  Symbol,
-    direction, entry, performance/pips and broker ticket belong to the original
-    signal or internal execution history and must not clutter the result reply.
+    Product rule: final CLOSE replies contain only signal/result identity, exit
+    price, broker P/L, holding duration and final status. Exit reason remains
+    available internally for execution history/analytics but is intentionally
+    hidden from the public result card.
     """
     code = _esc(_row_get(row, "code", "—"))
     result = _normalize_result(result)
@@ -91,7 +91,6 @@ def _build_card(
 
     pnl = str(broker_pnl or "—").strip() or "—"
     duration_text = str(duration or "—").strip() or "—"
-    reason_text = str(reason or "—").strip().upper() or "—"
 
     return "\n".join(
         [
@@ -100,7 +99,6 @@ def _build_card(
             f"🏁 Exit: {_price(exit_price)}",
             f"💰 Broker P/L: <b>{_esc(pnl)}</b>",
             f"⏱️ Duration: <b>{_esc(duration_text)}</b>",
-            f"🚪 Exit Reason: <b>{_esc(reason_text)}</b>",
             "📌 Status: <b>CLOSED</b>",
         ]
     )
