@@ -11,6 +11,7 @@ from .miniapp_home import router as miniapp_home_router
 from .miniapp_signals import router as miniapp_signals_router
 from .miniapp_performance import router as miniapp_performance_router
 from .miniapp_trades import router as miniapp_trades_router
+from .miniapp_checkout import router as miniapp_checkout_router
 
 
 # The existing AutoTrade API stays the root FastAPI application/source of truth.
@@ -22,6 +23,7 @@ app.include_router(miniapp_home_router)
 app.include_router(miniapp_signals_router)
 app.include_router(miniapp_performance_router)
 app.include_router(miniapp_trades_router)
+app.include_router(miniapp_checkout_router)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
