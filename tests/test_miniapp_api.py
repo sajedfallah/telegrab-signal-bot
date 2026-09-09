@@ -87,6 +87,10 @@ def test_experience_guest_gets_plans_navigation():
     assert ctx["segment"] == "GUEST"
     assert ctx["lifecycle"] == "GUEST"
     assert _third_route(ctx) == "subscriptions"
+    assert ctx["navigation"][0]["icon"] == "home"
+    assert ctx["navigation"][1]["icon"] == "signals"
+    assert ctx["navigation"][2]["icon"] == "plans"
+    assert ctx["navigation"][3]["icon"] == "account"
     assert ctx["features"]["trades"] is False
 
 
@@ -99,6 +103,7 @@ def test_experience_vip_gets_upgrade_navigation():
     assert ctx["segment"] == "VIP"
     assert ctx["lifecycle"] == "ACTIVE"
     assert ctx["navigation"][2]["label_en"] == "Upgrade"
+    assert ctx["navigation"][2]["icon"] == "plans"
     assert _third_route(ctx) == "subscriptions"
 
 
@@ -111,6 +116,7 @@ def test_experience_autotrade_gets_trades_navigation():
     assert ctx["segment"] == "AUTOTRADE"
     assert ctx["lifecycle"] == "ACTIVE"
     assert _third_route(ctx) == "trades"
+    assert ctx["navigation"][2]["icon"] == "trades"
     assert ctx["features"]["trades"] is True
 
 
@@ -182,6 +188,7 @@ def test_closed_vip_home_preview_can_show_result_metadata_without_actionable_fie
     assert item["locked"] is False
     assert item["direction"] == "SELL"
     assert item["result"] == "WIN"
+    assert item["result_label_fa"] == "سود +25 PIPS"
     assert "entry_price" not in item
     assert "stop_loss" not in item
 
@@ -216,6 +223,7 @@ def test_closed_vip_signal_defaults_to_public_result_metadata_without_entry_leak
     item = serialize_signal(_signal_row(destination="VIP", status="CLOSED", result_value=12), has_vip=False, include_timeline=True)
     assert item["locked"] is False
     assert item["result"] == "WIN"
+    assert item["result_label_fa"] == "سود +12 PIPS"
     assert item["direction"] == "BUY"
     assert "entry_price" not in item
     assert "targets" not in item
