@@ -4728,6 +4728,10 @@ async def mt5_publication_retry_worker(bot: Bot):
     Receipt success and Telegram delivery are separate durable states. A transient
     Telegram/API failure must not require a new MT5 receipt to trigger publication.
     """
+    # Local import avoids an undefined name in this worker scope and also
+    # minimizes circular-import risk during module initialization.
+    from .autotrade.api import _publish_mt5_admin_signal_async
+
     while True:
         try:
             for row in db.list_mt5_publication_retries(50):

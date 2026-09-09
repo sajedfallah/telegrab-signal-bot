@@ -9,7 +9,11 @@ os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
 os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
 
 from app.telegram_topic_routing import install_free_topic_routing
+from app.telegram_safety_guard import install_telegram_safety_guard
+from app.telegram_delete_guard import install_telegram_delete_guard
 install_free_topic_routing()
+install_telegram_safety_guard()
+install_telegram_delete_guard()
 
 from app.signal_code_runtime import install_two_digit_signal_codes
 install_two_digit_signal_codes()
@@ -32,3 +36,5 @@ if __name__ == "__main__":
         port=int(os.getenv("AUTOTRADE_API_PORT", "8080")),
         reload=False,
     )
+
+

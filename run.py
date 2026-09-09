@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 from aiogram import Bot
 import os
 from pathlib import Path
@@ -14,7 +14,11 @@ from app.payment_display_sanitizer import repair_payment_owner_env
 repair_payment_owner_env()
 
 from app.telegram_topic_routing import install_free_topic_routing
+from app.telegram_safety_guard import install_telegram_safety_guard
+from app.telegram_delete_guard import install_telegram_delete_guard
 install_free_topic_routing()
+install_telegram_safety_guard()
+install_telegram_delete_guard()
 
 from app.signal_code_runtime import install_two_digit_signal_codes
 install_two_digit_signal_codes()
@@ -322,3 +326,5 @@ def _acquire_single_instance_lock():
 if __name__ == "__main__":
     _LOCK_HANDLE = _acquire_single_instance_lock()
     asyncio.run(main())
+
+

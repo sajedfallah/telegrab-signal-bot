@@ -102,10 +102,24 @@ def _parse_hm(value: str, default: str = "13:30") -> tuple[int, int]:
 
 
 def _public_target(main: Any) -> Any:
+    # Public-content routing must prefer the forum-supergroup target.
+    # Legacy PUBLIC_CHANNEL_ID remains only as fallback compatibility.
+    raw = os.getenv("PUBLIC_CONTENT_CHAT_ID", "").strip()
+    if raw and raw not in {"0", "None"}:
+        return int(raw)
+
     target = getattr(main.settings, "public_channel_id", None)
     if target is None or str(target).strip() in {"", "0", "None"}:
         raise RuntimeError("NEXUS public channel is not configured")
     return target
+
+
+def _public_topic_id() -> int | None:
+    raw = os.getenv("PUBLIC_CONTENT_TOPIC_ID", "").strip()
+    if not raw or raw in {"0", "None"}:
+        return None
+    topic_id = int(raw)
+    return topic_id if topic_id > 0 else None
 
 
 def _tip_for_date(local_now: datetime) -> tuple[str, str, str]:
@@ -133,6 +147,7 @@ async def _publish_quick_tip(main: Any, bot: Any, local_now: datetime) -> bool:
             text,
             parse_mode="HTML",
             disable_web_page_preview=True,
+            message_thread_id=_public_topic_id(),
         )
         log.info(
             "[NEXUS][PUBLIC_CONTENT][PUBLISHED] category=quick_tip date=%s",
