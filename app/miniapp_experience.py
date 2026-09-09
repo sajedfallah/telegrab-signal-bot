@@ -39,16 +39,16 @@ def _segment(vip: bool, autotrade: bool) -> str:
 
 def _navigation(segment: str, lifecycle: str) -> list[dict[str, str]]:
     if lifecycle != "EXPIRED" and segment in {"AUTOTRADE", "BUNDLE"}:
-        third = {"route": "trades", "label_fa": "معاملات", "label_en": "Trades", "icon": "◉"}
+        third = {"route": "trades", "label_fa": "معاملات", "label_en": "Trades", "icon": "trades"}
     elif segment == "VIP" and lifecycle != "EXPIRED":
-        third = {"route": "subscriptions", "label_fa": "ارتقا", "label_en": "Upgrade", "icon": "◆"}
+        third = {"route": "subscriptions", "label_fa": "ارتقا", "label_en": "Upgrade", "icon": "plans"}
     else:
-        third = {"route": "subscriptions", "label_fa": "پلن‌ها", "label_en": "Plans", "icon": "◆"}
+        third = {"route": "subscriptions", "label_fa": "پلن‌ها", "label_en": "Plans", "icon": "plans"}
     return [
-        {"route": "home", "label_fa": "خانه", "label_en": "Home", "icon": "⌂"},
-        {"route": "signals", "label_fa": "سیگنال‌ها", "label_en": "Signals", "icon": "◈"},
+        {"route": "home", "label_fa": "خانه", "label_en": "Home", "icon": "home"},
+        {"route": "signals", "label_fa": "سیگنال‌ها", "label_en": "Signals", "icon": "signals"},
         third,
-        {"route": "account", "label_fa": "حساب من", "label_en": "Account", "icon": "◎"},
+        {"route": "account", "label_fa": "حساب من", "label_en": "Account", "icon": "account"},
     ]
 
 
