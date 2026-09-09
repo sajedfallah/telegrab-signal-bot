@@ -82,12 +82,11 @@ function hydrateSignals() {
   if (!vipButton) return;
   if (ent.vip) {
     vipButton.textContent = 'ورود به کانال VIP';
-    vipButton.dataset.action = 'vip-signals';
-    delete vipButton.dataset.go;
     vipButton.onclick = () => handleAction('vip-signals', vipButton);
     cards[1].querySelector('.lock').textContent = '✓';
   } else {
     vipButton.textContent = 'فعال‌سازی VIP';
+    vipButton.onclick = () => render('subscriptions');
   }
 }
 
