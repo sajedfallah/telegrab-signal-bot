@@ -14,6 +14,8 @@ from app.config import settings
 from app.miniapp_api import _validate_init_data
 from app.miniapp_experience import build_experience_context
 from app.miniapp_home import _autotrade_health, _safe_signal, _section_order
+from app import miniapp_signals
+from app.miniapp_signals import serialize_signal
 from app.services import analytics_service
 
 
@@ -42,6 +44,28 @@ def _entitlements(*, vip: bool = False, autotrade: bool = False, vip_expiry: str
 
 def _third_route(ctx: dict) -> str:
     return str(ctx["navigation"][2]["route"])
+
+
+def _signal_row(*, destination: str = "FREE", status: str = "ACTIVE", result_value=None) -> dict:
+    return {
+        "id": 77,
+        "code": "77",
+        "market_type": "FOREX",
+        "symbol": "XAUUSD",
+        "timeframe": "5M",
+        "direction": "BUY",
+        "entry_price": 3500.0,
+        "stop_loss": 3490.0,
+        "risk_percent": 1.0,
+        "rr_ratio": 2.0,
+        "destination": destination,
+        "order_type": "MARKET",
+        "status": status,
+        "created_at": "2026-09-10T00:00:00+00:00",
+        "closed_at": "2026-09-10T01:00:00+00:00" if status == "CLOSED" else None,
+        "result_value": result_value,
+        "result_unit": "PIPS" if result_value is not None else None,
+    }
 
 
 def test_miniapp_init_data_signature_accepts_valid_user():
@@ -162,6 +186,42 @@ def test_closed_vip_home_preview_can_show_result_metadata_without_actionable_fie
     assert "stop_loss" not in item
 
 
+def test_active_vip_signal_api_omits_actionable_fields_and_timeline_for_non_vip():
+    item = serialize_signal(_signal_row(destination="VIP"), has_vip=False, include_timeline=True)
+    assert item["locked"] is True
+    assert "direction" not in item
+    assert "entry_price" not in item
+    assert "stop_loss" not in item
+    assert "targets" not in item
+    assert "risk_percent" not in item
+    assert "timeline" not in item
+
+
+def test_free_active_signal_api_exposes_structured_details_and_timeline(monkeypatch):
+    monkeypatch.setattr(miniapp_signals, "_targets", lambda signal_id: [{"target_no": 1, "price": 3520.0}])
+    monkeypatch.setattr(miniapp_signals.db, "signal_updates", lambda signal_id: [{
+        "action": "PUBLISHED", "detail_fa": "منتشر شد", "detail_en": "Published", "value": None, "created_at": "2026-09-10T00:00:00+00:00"
+    }])
+    item = serialize_signal(_signal_row(destination="FREE"), has_vip=False, include_timeline=True)
+    assert item["locked"] is False
+    assert item["direction"] == "BUY"
+    assert item["entry_price"] == 3500.0
+    assert item["stop_loss"] == 3490.0
+    assert item["targets"][0]["target_no"] == 1
+    assert item["timeline"][0]["action"] == "PUBLISHED"
+
+
+def test_closed_vip_signal_defaults_to_public_result_metadata_without_entry_leak(monkeypatch):
+    monkeypatch.setattr(miniapp_signals, "PUBLIC_CLOSED_VIP_DETAILS", False)
+    item = serialize_signal(_signal_row(destination="VIP", status="CLOSED", result_value=12), has_vip=False, include_timeline=True)
+    assert item["locked"] is False
+    assert item["result"] == "WIN"
+    assert item["direction"] == "BUY"
+    assert "entry_price" not in item
+    assert "targets" not in item
+    assert "timeline" not in item
+
+
 def test_autotrade_health_requires_meaningful_heartbeat_staleness():
     now = datetime(2026, 9, 10, 0, 10, tzinfo=timezone.utc)
     fresh = {
@@ -201,6 +261,8 @@ def test_combined_api_exposes_miniapp_routes_and_static_mount():
     assert "/miniapp/api/experience" in paths
     assert "/miniapp/api/home" in paths
     assert "/miniapp/api/performance" in paths
+    assert "/miniapp/api/signals" in paths
+    assert "/miniapp/api/signals/{signal_id}" in paths
     assert "/miniapp/api/invoices" in paths
     assert "/miniapp/api/receipts" in paths
     assert "/miniapp" in paths
