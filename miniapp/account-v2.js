@@ -5,6 +5,14 @@
     }[c]));
   }
 
+  function icon(name, className = 'nexus-inline-icon') {
+    return window.NexusIcons?.svg?.(name, className) || '';
+  }
+
+  function normalizeText(value) {
+    return String(value ?? '').replace(/[\u200E\u200F]/g, '').trim();
+  }
+
   function dt(value) {
     if (!value) return '—';
     try { return new Date(value).toLocaleString('fa-IR'); } catch (_) { return String(value); }
@@ -60,24 +68,24 @@
     </article>`;
   }
 
-  function profile(data) {
+  function profile() {
     const user = state.bootstrap?.user || {};
-    const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'کاربر NEXUS';
+    const name = normalizeText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'کاربر NEXUS';
     const handle = user.username ? `@${user.username}` : `Telegram ID: ${user.id || '—'}`;
     const level = user.level?.en || 'MEMBER';
     return `<section class="profile-card account-v2-profile">
-      <div class="avatar">N</div>
-      <div><h2>${h(name)}</h2><p>${h(handle)}</p></div>
+      <img class="account-brand-avatar" src="./assets/brand/nexus-logo.svg" alt="NEXUS" />
+      <div class="account-profile-copy"><h2 class="bidi-auto" dir="auto">${h(name)}</h2><p dir="ltr">${h(handle)}</p></div>
       <span class="badge muted">${h(level)}</span>
     </section>`;
   }
 
   function utilityGrid(data) {
     return `<section class="account-v2-utilities">
-      <button class="menu-card" data-account-action="payments"><span>▤</span><div><b>پرداخت‌های من</b><small>${h(data?.payments_count ?? 0)} رکورد پرداخت</small></div></button>
-      <button class="menu-card" data-account-action="referral"><span>↗</span><div><b>دعوت دوستان</b><small>Referral</small></div></button>
-      <button class="menu-card" data-account-action="support"><span>?</span><div><b>پشتیبانی</b><small>کمک در پرداخت، اشتراک یا AutoTrade</small></div></button>
-      <button class="menu-card" data-account-action="language"><span>文</span><div><b>زبان</b><small>فارسی / English</small></div></button>
+      <button class="menu-card" data-account-action="payments"><span>${icon('wallet')}</span><div><b>پرداخت‌های من</b><small>${h(data?.payments_count ?? 0)} رکورد پرداخت</small></div></button>
+      <button class="menu-card" data-account-action="referral"><span>${icon('community')}</span><div><b>دعوت دوستان</b><small>Referral</small></div></button>
+      <button class="menu-card" data-account-action="support"><span>${icon('support')}</span><div><b>پشتیبانی</b><small>کمک در پرداخت، اشتراک یا AutoTrade</small></div></button>
+      <button class="menu-card" data-account-action="language"><span>${icon('account')}</span><div><b>زبان</b><small>فارسی / English</small></div></button>
     </section>`;
   }
 
@@ -100,7 +108,7 @@
     try {
       if (!state.bootstrap) state.bootstrap = await api('/bootstrap');
       const data = await api('/account/status');
-      view.innerHTML = `${profile(data)}
+      view.innerHTML = `${profile()}
         <section class="page-head account-v2-head"><div><div class="eyebrow">STATUS CENTER</div><h1>حساب من</h1></div></section>
         <div class="account-v2-services">${serviceCard('vip', data.vip)}${serviceCard('autotrade', data.autotrade)}</div>
         ${utilityGrid(data)}
