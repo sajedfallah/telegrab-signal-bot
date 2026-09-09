@@ -15,6 +15,8 @@ router = APIRouter(prefix="/miniapp/api", tags=["NEXUS Mini App Home"])
 
 AUTOTRADE_STALE_SECONDS = max(120, min(int(os.getenv("MINIAPP_AUTOTRADE_STALE_SECONDS", "300")), 3600))
 PERFORMANCE_PERIODS = {"7", "30", "90", "all"}
+NEXUS_ENTRY_URL = "https://t.me/nexus_publicc"
+CUSTOMER_INACTIVE_STATUSES = {"DRAFT", "REJECTED", "CANCELLED", "EXPIRED", "PUBLISH_FAILED"}
 
 
 def _safe_performance(key: str) -> dict[str, Any]:
@@ -37,6 +39,25 @@ def _safe_performance(key: str) -> dict[str, Any]:
     }
 
 
+def _result_meta(item: dict[str, Any]) -> tuple[str | None, float | None, str | None, str | None]:
+    if str(item.get("status") or "").upper() != "CLOSED":
+        return None, None, None, None
+    raw = item.get("result_value")
+    unit = str(item.get("result_unit") or "").strip().upper() or None
+    if raw is None:
+        return "UNKNOWN", None, unit, "نتیجه ثبت نشده"
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return "UNKNOWN", None, unit, "نتیجه ثبت نشده"
+    suffix = f" {unit}" if unit else ""
+    if value > 0:
+        return "WIN", value, unit, f"سود +{value:g}{suffix}"
+    if value < 0:
+        return "LOSS", value, unit, f"ضرر {value:g}{suffix}"
+    return "BE", value, unit, f"سر‌به‌سر 0{suffix}"
+
+
 def _safe_signal(row: Any, *, has_vip: bool) -> dict[str, Any]:
     item = dict(row)
     destination = str(item.get("destination") or "FREE").upper()
@@ -44,20 +65,7 @@ def _safe_signal(row: Any, *, has_vip: bool) -> dict[str, Any]:
     closed = status == "CLOSED"
     vip_only = destination == "VIP"
     locked = bool(vip_only and not has_vip and not closed)
-    result_value = item.get("result_value")
-    try:
-        numeric_result = float(result_value) if result_value is not None else None
-    except (TypeError, ValueError):
-        numeric_result = None
-    if closed:
-        if numeric_result is None or numeric_result == 0:
-            result = "BE"
-        elif numeric_result > 0:
-            result = "WIN"
-        else:
-            result = "LOSS"
-    else:
-        result = None
+    result, result_value, result_unit, result_label_fa = _result_meta(item)
     return {
         "id": int(item["id"]),
         "code": str(item.get("code") or ""),
@@ -68,21 +76,28 @@ def _safe_signal(row: Any, *, has_vip: bool) -> dict[str, Any]:
         "published_at": item.get("created_at"),
         "closed_at": item.get("closed_at"),
         "result": result,
+        "result_value": result_value,
+        "result_unit": result_unit,
+        "result_label_fa": result_label_fa,
         "locked": locked,
     }
 
 
 def _recent_signals(*, has_vip: bool, limit: int = 3) -> list[dict[str, Any]]:
+    cycle = db.current_cycle_id()
+    visibility = "1=1" if has_vip else "NOT (UPPER(COALESCE(destination,'FREE'))='VIP' AND UPPER(COALESCE(status,''))<>'CLOSED')"
     with db.conn() as con:
         rows = con.execute(
-            """
+            f"""
             SELECT id,code,symbol,direction,destination,status,created_at,closed_at,result_value,result_unit
             FROM signals
             WHERE COALESCE(cycle_id, ?) = ?
+              AND UPPER(COALESCE(status,'')) NOT IN ('DRAFT','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
+              AND {visibility}
             ORDER BY id DESC
             LIMIT ?
             """,
-            (db.current_cycle_id(), db.current_cycle_id(), max(1, min(limit, 10))),
+            (cycle, cycle, max(1, min(limit, 10))),
         ).fetchall()
     return [_safe_signal(row, has_vip=has_vip) for row in rows]
 
@@ -93,11 +108,13 @@ def _today() -> dict[str, Any]:
     cycle = db.current_cycle_id()
     with db.conn() as con:
         active = int(con.execute(
-            "SELECT COUNT(*) FROM signals WHERE status<>'CLOSED' AND COALESCE(cycle_id,?)=?",
+            """SELECT COUNT(*) FROM signals
+               WHERE UPPER(COALESCE(status,'')) NOT IN ('DRAFT','CLOSED','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
+                 AND COALESCE(cycle_id,?)=?""",
             (cycle, cycle),
         ).fetchone()[0])
         closed = int(con.execute(
-            "SELECT COUNT(*) FROM signals WHERE status='CLOSED' AND closed_at>=? AND COALESCE(cycle_id,?)=?",
+            "SELECT COUNT(*) FROM signals WHERE UPPER(COALESCE(status,''))='CLOSED' AND closed_at>=? AND COALESCE(cycle_id,?)=?",
             (start, cycle, cycle),
         ).fetchone()[0])
     return {"active_signals": active, "closed_signals": closed, "as_of": now.isoformat()}
@@ -258,6 +275,7 @@ def build_home_payload(uid: int) -> dict[str, Any]:
     attention = _attention(experience, health)
     return {
         "experience": experience,
+        "enter_nexus_url": NEXUS_ENTRY_URL,
         "section_order": _section_order(experience, attention),
         "needs_attention": attention,
         "spotlight": _spotlight(experience, health),
