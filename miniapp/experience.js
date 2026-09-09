@@ -7,6 +7,10 @@
     }[c]));
   }
 
+  function icon(name, className = 'nexus-nav-icon') {
+    return window.NexusIcons?.svg?.(name, className) || '<span class="nexus-icon-fallback"></span>';
+  }
+
   function dateTime(value) {
     if (!value) return '—';
     try { return new Date(value).toLocaleString('fa-IR'); } catch (_) { return String(value); }
@@ -35,7 +39,7 @@
       const button = document.createElement('button');
       button.className = `nav-item${item.route === state.route ? ' active' : ''}`;
       button.dataset.route = item.route;
-      button.innerHTML = `<span>${html(item.icon || '•')}</span><small>${html(item.label_fa || item.label_en || item.route)}</small>`;
+      button.innerHTML = `<span class="nav-icon-wrap">${icon(item.icon || 'sparkle')}</span><small>${html(item.label_fa || item.label_en || item.route)}</small>`;
       button.addEventListener('click', () => {
         if (item.route === 'trades') renderTrades();
         else render(item.route);
@@ -144,7 +148,6 @@
       renderNavigation(experience.navigation);
     } catch (err) {
       console.error('NEXUS experience context failed', err);
-      // Keep the legacy four-item navigation as a safe fallback.
     }
   }
 
