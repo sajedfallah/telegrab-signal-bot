@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from . import db
 from .miniapp_api import _auth_user, _autotrade, _entitlements
 from .miniapp_experience import _parse_dt, build_experience_context
+from .miniapp_signals import _active_truth_clause
 from .services import analytics_service
 
 router = APIRouter(prefix="/miniapp/api", tags=["NEXUS Mini App Home"])
@@ -22,8 +23,6 @@ CUSTOMER_INACTIVE_STATUSES = {"DRAFT", "REJECTED", "CANCELLED", "EXPIRED", "PUBL
 def _safe_performance(key: str) -> dict[str, Any]:
     data = analytics_service.overview(key)
     p = data["period"]
-    # Deliberately exclude net_pct/crypto_pct/forex_pips from the commercial
-    # snapshot. They are signal movement/result-unit metrics, not account return.
     return {
         "period": p.key,
         "label_fa": p.label_fa,
@@ -86,18 +85,21 @@ def _safe_signal(row: Any, *, has_vip: bool) -> dict[str, Any]:
 def _recent_signals(*, has_vip: bool, limit: int = 3) -> list[dict[str, Any]]:
     cycle = db.current_cycle_id()
     visibility = "1=1" if has_vip else "NOT (UPPER(COALESCE(destination,'FREE'))='VIP' AND UPPER(COALESCE(status,''))<>'CLOSED')"
+    live_sql, live_args = _active_truth_clause("ACTIVE")
     with db.conn() as con:
         rows = con.execute(
             f"""
-            SELECT id,code,symbol,direction,destination,status,created_at,closed_at,result_value,result_unit
+            SELECT id,code,symbol,direction,destination,status,created_at,closed_at,result_value,result_unit,
+                   issuer_type,issuer_account
             FROM signals
             WHERE COALESCE(cycle_id, ?) = ?
               AND UPPER(COALESCE(status,'')) NOT IN ('DRAFT','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
               AND {visibility}
+              AND (UPPER(COALESCE(status,''))='CLOSED' OR ({live_sql}))
             ORDER BY id DESC
             LIMIT ?
             """,
-            (cycle, cycle, max(1, min(limit, 10))),
+            (cycle, cycle, *live_args, max(1, min(limit, 10))),
         ).fetchall()
     return [_safe_signal(row, has_vip=has_vip) for row in rows]
 
@@ -106,12 +108,14 @@ def _today() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     cycle = db.current_cycle_id()
+    live_sql, live_args = _active_truth_clause("ACTIVE")
     with db.conn() as con:
         active = int(con.execute(
-            """SELECT COUNT(*) FROM signals
+            f"""SELECT COUNT(*) FROM signals
                WHERE UPPER(COALESCE(status,'')) NOT IN ('DRAFT','CLOSED','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
+                 AND ({live_sql})
                  AND COALESCE(cycle_id,?)=?""",
-            (cycle, cycle),
+            (*live_args, cycle, cycle),
         ).fetchone()[0])
         closed = int(con.execute(
             "SELECT COUNT(*) FROM signals WHERE UPPER(COALESCE(status,''))='CLOSED' AND closed_at>=? AND COALESCE(cycle_id,?)=?",
