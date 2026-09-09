@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - feature/nexus-miniapp-ui-v1
+      - feature/miniapp-cx-v2-p0-shell
 
 jobs:
   miniapp-tests:
@@ -36,6 +37,11 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -45,5 +51,18 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q app run_api.py
 
-      - name: Run Mini App integration tests
-        run: python -m pytest tests/test_miniapp_api.py -q
+      - name: Check Mini App JavaScript syntax
+        run: |
+          for file in miniapp/*.js; do
+            node --check "$file"
+          done
+
+      - name: Run Mini App integration and regression tests
+        run: |
+          python -m pytest \
+            tests/test_miniapp_api.py \
+            tests/test_miniapp_checkout.py \
+            tests/test_miniapp_performance.py \
+            tests/test_miniapp_trades.py \
+            tests/test_miniapp_access_ui_fixes.py \
+            -q
