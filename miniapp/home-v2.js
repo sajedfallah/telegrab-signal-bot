@@ -1,11 +1,16 @@
 (() => {
   const tgWebApp = window.Telegram?.WebApp;
+  const DEFAULT_NEXUS_ENTRY_URL = 'https://t.me/nexus_publicc';
   let homeRequest = 0;
 
   function h(value) {
     return String(value ?? '').replace(/[&<>'"]/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
     }[c]));
+  }
+
+  function icon(name, className = 'nexus-inline-icon') {
+    return window.NexusIcons?.svg?.(name, className) || '';
   }
 
   function dt(value) {
@@ -30,7 +35,6 @@
     }
     if (['home', 'signals', 'subscriptions', 'account', 'guide', 'support'].includes(destination)) {
       render(destination);
-      return;
     }
   }
 
@@ -40,11 +44,20 @@
 
   function spotlight(data) {
     if (!data) return '';
-    return `<section class="hero home-v2-spotlight">
+    return `<section class="hero home-v2-spotlight nexus-animated-hero">
+      <div class="nexus-motion-orb orb-a" aria-hidden="true"></div>
+      <div class="nexus-motion-orb orb-b" aria-hidden="true"></div>
+      <div class="home-brand-lockup">
+        <img class="home-brand-logo" src="./assets/brand/nexus-logo.svg" alt="NEXUS" />
+        <div><span class="eyebrow">NEXUS CUSTOMER CENTER</span><b>Trading Intelligence</b></div>
+      </div>
       <div class="eyebrow">${h(data.kind || 'NEXUS')}</div>
       <h1>${h(data.title_fa || '')}</h1>
       <p>${h(data.subtitle_fa || '')}</p>
-      ${data.cta_fa ? `<div class="hero-actions"><button class="btn primary" data-home-go="${h(data.destination || '')}">${h(data.cta_fa)}</button></div>` : ''}
+      <div class="hero-actions home-v2-actions">
+        <button class="btn primary nexus-enter-btn" data-enter-nexus>${icon('arrowUpRight')}<span>ورود به نکسوس</span></button>
+        ${data.cta_fa ? `<button class="btn ghost" data-home-go="${h(data.destination || '')}">${h(data.cta_fa)}</button>` : ''}
+      </div>
     </section>`;
   }
 
@@ -72,17 +85,25 @@
       <p class="home-disclaimer">${h(data.disclaimer_fa || '')}</p>`, 'home-v2-performance');
   }
 
+  function resultBadge(item) {
+    if (item.status !== 'CLOSED') return '';
+    const result = String(item.result || 'UNKNOWN').toLowerCase();
+    const label = item.result_label_fa || (result === 'win' ? 'سود' : result === 'loss' ? 'ضرر' : result === 'be' ? 'سر‌به‌سر' : 'نتیجه ثبت نشده');
+    return `<div class="home-result ${h(result)}">${h(label)}</div>`;
+  }
+
   function recentSignals(rows) {
-    if (!rows?.length) return section('سیگنال‌های اخیر', '<div class="empty-state">هنوز سیگنالی برای نمایش وجود ندارد.</div>');
+    if (!rows?.length) {
+      return section('سیگنال‌های اخیر', `<div class="empty-state nexus-empty-state">${icon('signals')}<b>سیگنالی برای نمایش وجود ندارد</b><span>فقط سیگنال‌های معتبر و قابل نمایش در این بخش نشان داده می‌شوند.</span></div>`);
+    }
     return section('سیگنال‌های اخیر', `<div class="home-signal-list">${rows.map(item => `
       <article class="home-signal-card ${item.locked ? 'locked' : ''}">
         <div class="signal-top">
           <span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span>
           <span class="status-pill ${item.status === 'CLOSED' ? 'success' : ''}">${h(item.status || 'ACTIVE')}</span>
         </div>
-        <div class="home-signal-main"><div><h3>${h(item.symbol)}</h3><small>${h(dt(item.published_at))}</small></div><b>${item.locked ? '🔒' : h(item.direction || '')}</b></div>
-        ${item.result ? `<div class="home-result ${item.result.toLowerCase()}">${h(item.result)}</div>` : ''}
-        ${item.locked ? '<p class="modal-muted">جزئیات عملیاتی این سیگنال برای اعضای VIP نمایش داده می‌شود.</p>' : ''}
+        <div class="home-signal-main"><div><h3>${h(item.symbol)}</h3><small>${h(dt(item.published_at))}</small></div><b>${item.locked ? icon('lock', 'nexus-lock-icon') : h(item.direction || '')}</b></div>
+        ${resultBadge(item)}
       </article>`).join('')}</div>
       <button class="text-btn home-section-cta" data-home-go="signals">مشاهده همه سیگنال‌ها</button>`);
   }
@@ -94,14 +115,14 @@
 
   function whyNexus() {
     return section('چرا NEXUS؟', `<div class="home-why-grid">
-      <article><b>شفافیت</b><span>نتایج برد، باخت و BE در Track Record ثبت می‌شوند.</span></article>
-      <article><b>سیگنال ساختاریافته</b><span>Entry، SL، TP و وضعیت چرخه معامله در یک ساختار مشخص.</span></article>
-      <article><b>AutoTrade</b><span>سیگنال‌های واجد شرایط روی MT5 متصل اجرا می‌شوند.</span></article>
+      <article><span class="nexus-card-icon">${icon('shield')}</span><b>شفافیت</b><span>نتایج برد، باخت و BE در Track Record ثبت می‌شوند.</span></article>
+      <article><span class="nexus-card-icon">${icon('signals')}</span><b>سیگنال ساختاریافته</b><span>Entry، SL، TP و وضعیت چرخه معامله در یک ساختار مشخص.</span></article>
+      <article><span class="nexus-card-icon">${icon('trades')}</span><b>AutoTrade</b><span>سیگنال‌های واجد شرایط روی MT5 متصل اجرا می‌شوند.</span></article>
     </div>`);
   }
 
   function community() {
-    return section('NEXUS Community', `<div class="info-strip"><div><span class="dot live"></span><b>کانال عمومی و جامعه NEXUS</b></div><button class="text-btn" data-action="public-channel">عضویت</button></div>`);
+    return section('NEXUS Community', `<div class="info-strip"><div><span class="nexus-card-icon small">${icon('community')}</span><b>کانال عمومی و جامعه NEXUS</b></div><button class="text-btn" data-enter-nexus>ورود</button></div>`);
   }
 
   function today(data) {
@@ -128,7 +149,7 @@
   function tradePreview(data) {
     if (!data) return '';
     const rows = [...(data.open || []).map(x => ({...x, _kind:'OPEN'})), ...(data.history || []).map(x => ({...x, _kind:x.status || x.event_type || 'HISTORY'}))].slice(0, 3);
-    if (!rows.length) return section('معاملات من', '<div class="empty-state">در حال حاضر معامله یا سابقه‌ای برای پیش‌نمایش وجود ندارد.</div>');
+    if (!rows.length) return section('معاملات من', `<div class="empty-state nexus-empty-state">${icon('trades')}<b>معامله فعالی وجود ندارد</b><span>وقتی اجرای واقعی جدیدی ثبت شود این بخش بروزرسانی می‌شود.</span></div>`);
     return section('معاملات من', `<div class="home-trade-list">${rows.map(row => `
       <article><div><b>${h(row.symbol || '—')}</b><small>${h(row.direction || row.event_type || '')}</small></div><span>${h(row._kind)}</span><em>${row.profit != null ? h(Number(row.profit).toFixed(2) + ' $') : '—'}</em></article>`).join('')}</div>
       <button class="text-btn home-section-cta" data-home-go="trades">مشاهده همه معاملات</button>`);
@@ -175,10 +196,16 @@
     }
   }
 
+  function enterNexus() {
+    const url = state.home?.enter_nexus_url || DEFAULT_NEXUS_ENTRY_URL;
+    openTelegramLink(url);
+  }
+
   function bindHomeActions() {
     view.querySelectorAll('[data-home-go]').forEach(el => el.addEventListener('click', () => go(el.dataset.homeGo)));
     view.querySelectorAll('[data-go]').forEach(el => el.addEventListener('click', () => render(el.dataset.go)));
     view.querySelectorAll('[data-action]').forEach(el => el.addEventListener('click', () => handleAction(el.dataset.action, el)));
+    view.querySelectorAll('[data-enter-nexus]').forEach(el => el.addEventListener('click', enterNexus));
     view.querySelectorAll('[data-performance-period]').forEach(el => el.addEventListener('click', () => switchPerformance(el.dataset.performancePeriod)));
   }
 
