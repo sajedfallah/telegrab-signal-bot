@@ -7,6 +7,7 @@
   <title>NEXUS Mini App</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./runtime.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -71,7 +72,7 @@
         <div class="signal-top"><span class="badge vip-badge">VIP</span><span class="lock">◆</span></div>
         <h3>VIP Signal Channel</h3>
         <p>دسترسی به سیگنال‌های ویژه، مدیریت دقیق‌تر و محتوای اختصاصی اعضا.</p>
-        <button class="btn primary full" data-go="subscriptions">فعال‌سازی VIP</button>
+        <button class="btn primary full" id="vipSignalBtn">فعال‌سازی VIP</button>
       </article>
     </div>
   </template>
@@ -82,17 +83,12 @@
       <button class="tab active">VIP</button><button class="tab">AutoTrade</button><button class="tab">Bundle</button>
     </div>
     <div class="pricing-card featured">
-      <div class="pricing-kicker">پیشنهاد اصلی</div>
-      <h3>VIP Membership</h3>
+      <div class="pricing-kicker">در حال دریافت</div>
+      <h3>پلن‌های NEXUS</h3>
       <div class="price"><span>—</span><small>USDT</small></div>
-      <ul>
-        <li>دسترسی به کانال VIP</li>
-        <li>تمدید از طریق حساب کاربری</li>
-        <li>پرداخت ریالی یا تتر</li>
-      </ul>
-      <button class="btn primary full" data-action="load-plans">مشاهده پلن‌ها</button>
+      <p class="modal-muted">قیمت‌ها از backend خوانده می‌شوند.</p>
     </div>
-    <div class="note-card">قیمت و مدت پلن‌ها از backend پروژه خوانده می‌شود و در UI هاردکد نمی‌شود.</div>
+    <div class="note-card">قیمت، مدت، نوع دسترسی و فاکتور از backend پروژه خوانده می‌شود و در UI هاردکد نمی‌شود.</div>
   </template>
 
   <template id="accountTpl">
