@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 from dotenv import load_dotenv
 import uvicorn
@@ -24,9 +24,7 @@ install_risk_firewall()
 from app.autotrade.live_event_runtime import install_live_snapshot_event_bridge
 install_live_snapshot_event_bridge()
 
-from app.autotrade.api import app
-from app.miniapp_runtime import install_miniapp
-install_miniapp(app)
+from app.combined_api import app
 
 
 if __name__ == "__main__":
