@@ -148,5 +148,6 @@
     }
   }
 
+  window.NexusExperience = { renderTrades, loadExperience, renderNavigation };
   loadExperience();
 })();
