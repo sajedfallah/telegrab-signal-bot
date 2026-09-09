@@ -13,6 +13,8 @@ from fastapi import HTTPException
 from app.config import settings
 from app.miniapp_api import _validate_init_data
 from app.miniapp_experience import build_experience_context
+from app.miniapp_home import _autotrade_health, _safe_signal, _section_order
+from app.services import analytics_service
 
 
 def _signed_init_data(user_id: int = 123456789) -> str:
@@ -120,6 +122,76 @@ def test_experience_expired_customer_returns_to_plans():
     assert ctx["features"]["trades"] is False
 
 
+def test_active_vip_home_preview_masks_direction_for_unauthorized_user():
+    row = {
+        "id": 42,
+        "code": "42",
+        "symbol": "XAUUSD",
+        "direction": "BUY",
+        "destination": "VIP",
+        "status": "ACTIVE",
+        "created_at": "2026-09-10T00:00:00+00:00",
+        "closed_at": None,
+        "result_value": None,
+        "result_unit": None,
+    }
+    item = _safe_signal(row, has_vip=False)
+    assert item["locked"] is True
+    assert item["direction"] is None
+    assert "entry_price" not in item
+
+
+def test_closed_vip_home_preview_can_show_result_metadata_without_actionable_fields():
+    row = {
+        "id": 43,
+        "code": "43",
+        "symbol": "XAUUSD",
+        "direction": "SELL",
+        "destination": "VIP",
+        "status": "CLOSED",
+        "created_at": "2026-09-09T10:00:00+00:00",
+        "closed_at": "2026-09-09T11:00:00+00:00",
+        "result_value": 25,
+        "result_unit": "PIPS",
+    }
+    item = _safe_signal(row, has_vip=False)
+    assert item["locked"] is False
+    assert item["direction"] == "SELL"
+    assert item["result"] == "WIN"
+    assert "entry_price" not in item
+    assert "stop_loss" not in item
+
+
+def test_autotrade_health_requires_meaningful_heartbeat_staleness():
+    now = datetime(2026, 9, 10, 0, 10, tzinfo=timezone.utc)
+    fresh = {
+        "entitled": True,
+        "mt5": {"account_number": "1234", "status": "ACTIVE", "last_seen_at": (now - timedelta(seconds=30)).isoformat()},
+        "open_positions": [],
+        "pending_orders": [],
+    }
+    stale = {
+        **fresh,
+        "mt5": {"account_number": "1234", "status": "ACTIVE", "last_seen_at": (now - timedelta(hours=1)).isoformat()},
+    }
+    assert _autotrade_health(fresh, now=now)["state"] == "HEALTHY"
+    assert _autotrade_health(stale, now=now)["state"] == "DISCONNECTED"
+
+
+def test_guest_home_order_prioritizes_trust_and_does_not_include_autotrade_widgets():
+    experience = build_experience_context(_entitlements(), now=datetime(2026, 9, 10, tzinfo=timezone.utc))
+    order = _section_order(experience, [])
+    assert order[:3] == ["spotlight", "performance", "recent_signals"]
+    assert "autotrade_health" not in order
+    assert "trades_preview" not in order
+
+
+def test_analytics_supports_90_day_period_for_track_record_filters():
+    p = analytics_service.period("90")
+    assert p.key == "90"
+    assert p.label_en == "Last 90 days"
+
+
 def test_combined_api_exposes_miniapp_routes_and_static_mount():
     from app.combined_api import app
 
@@ -127,6 +199,8 @@ def test_combined_api_exposes_miniapp_routes_and_static_mount():
     assert "/miniapp/api/health" in paths
     assert "/miniapp/api/bootstrap" in paths
     assert "/miniapp/api/experience" in paths
+    assert "/miniapp/api/home" in paths
+    assert "/miniapp/api/performance" in paths
     assert "/miniapp/api/invoices" in paths
     assert "/miniapp/api/receipts" in paths
     assert "/miniapp" in paths
