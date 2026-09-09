@@ -9,6 +9,10 @@
     }[c]));
   }
 
+  function icon(name, className = 'nexus-inline-icon') {
+    return window.NexusIcons?.svg?.(name, className) || '';
+  }
+
   function durationLabel(days) {
     return ({30:'1 ماه',90:'3 ماه',180:'6 ماه',365:'1 سال'})[Number(days)] || `${days} روز`;
   }
@@ -33,7 +37,7 @@
       [plan.autotrade_access, 'وضعیت معاملات شخصی'],
       [plan.autotrade_access, 'Execution History'],
     ];
-    return features.map(([yes, label]) => `<li class="${yes ? 'yes' : 'no'}"><span>${yes ? '✓' : '–'}</span>${h(label)}</li>`).join('');
+    return features.map(([yes, label]) => `<li class="${yes ? 'yes' : 'no'}"><span>${yes ? icon('check', 'nexus-inline-icon') : '–'}</span>${h(label)}</li>`).join('');
   }
 
   function planFor(category, days) {
@@ -55,13 +59,17 @@
     </article>`;
   }
 
+  function mark(yes) {
+    return yes ? icon('check', 'nexus-inline-icon') : '–';
+  }
+
   function comparison() {
     return `<section class="price-v2-comparison"><div class="section-head"><h2>مقایسه قابلیت‌ها</h2></div>
       <div class="compare-row head"><span>قابلیت</span><b>VIP</b><b>AutoTrade</b><b>Bundle</b></div>
-      <div class="compare-row"><span>VIP Signals</span><b>✓</b><b>–</b><b>✓</b></div>
-      <div class="compare-row"><span>Automatic MT5</span><b>–</b><b>✓</b><b>✓</b></div>
-      <div class="compare-row"><span>My Trades</span><b>–</b><b>✓</b><b>✓</b></div>
-      <div class="compare-row"><span>Execution History</span><b>–</b><b>✓</b><b>✓</b></div>
+      <div class="compare-row"><span>VIP Signals</span><b>${mark(true)}</b><b>${mark(false)}</b><b>${mark(true)}</b></div>
+      <div class="compare-row"><span>Automatic MT5</span><b>${mark(false)}</b><b>${mark(true)}</b><b>${mark(true)}</b></div>
+      <div class="compare-row"><span>My Trades</span><b>${mark(false)}</b><b>${mark(true)}</b><b>${mark(true)}</b></div>
+      <div class="compare-row"><span>Execution History</span><b>${mark(false)}</b><b>${mark(true)}</b><b>${mark(true)}</b></div>
     </section>`;
   }
 
