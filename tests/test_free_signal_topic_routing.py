@@ -22,7 +22,8 @@ def test_bot_and_autotrade_api_install_same_topic_router_before_runtime():
     assert "install_free_topic_routing()" in bot_runner
     assert bot_runner.index("install_free_topic_routing()") < bot_runner.index("from app.main import")
     assert "install_free_topic_routing()" in api_runner
-    assert api_runner.index("install_free_topic_routing()") < api_runner.index('"app.autotrade.api:app"')
+    app_target = '"app.combined_api:app"' if '"app.combined_api:app"' in api_runner else '"app.autotrade.api:app"'
+    assert api_runner.index("install_free_topic_routing()") < api_runner.index(app_target)
 
 
 def test_topic_id_admin_command_is_registered():
