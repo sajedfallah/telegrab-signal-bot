@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .autotrade.api import app
 from .miniapp_api import router as miniapp_router
 from .miniapp_experience import router as miniapp_experience_router
+from .miniapp_home import router as miniapp_home_router
 
 
 # The existing AutoTrade API stays the root FastAPI application/source of truth.
@@ -14,6 +15,7 @@ from .miniapp_experience import router as miniapp_experience_router
 # SQLite database, subscription engine, pricing service and bot configuration.
 app.include_router(miniapp_router)
 app.include_router(miniapp_experience_router)
+app.include_router(miniapp_home_router)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
