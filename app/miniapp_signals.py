@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -12,6 +13,7 @@ router = APIRouter(prefix="/miniapp/api", tags=["NEXUS Mini App Signals"])
 
 PUBLIC_CLOSED_VIP_DETAILS = os.getenv("MINIAPP_PUBLIC_CLOSED_VIP_DETAILS", "false").strip().lower() in {"1", "true", "yes", "on"}
 CUSTOMER_INACTIVE_STATUSES = {"DRAFT", "REJECTED", "CANCELLED", "EXPIRED", "PUBLISH_FAILED"}
+ACTIVE_TRUTH_STALE_SECONDS = max(120, min(int(os.getenv("MINIAPP_ACTIVE_TRUTH_STALE_SECONDS", "600")), 3600))
 
 
 def _access_class(row: dict[str, Any]) -> str:
@@ -54,6 +56,65 @@ def _customer_visible_status(status: Any) -> bool:
     return key == "CLOSED" or (bool(key) and key not in CUSTOMER_INACTIVE_STATUSES)
 
 
+def _live_cutoff() -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=ACTIVE_TRUTH_STALE_SECONDS)).isoformat()
+
+
+def _active_truth_clause(state: str) -> tuple[str, tuple[Any, ...]]:
+    if str(state or "").upper() != "ACTIVE":
+        return "1=1", ()
+    # MT5-admin signals are customer-visible as ACTIVE only while the broker
+    # snapshot proves an OPEN/PENDING NEXUS-managed position/order. Matching by
+    # execution ticket also covers brokers that clear the position comment.
+    return """
+        (
+          UPPER(COALESCE(signals.issuer_type,'')) <> 'MT5_ADMIN'
+          OR EXISTS (
+            SELECT 1
+            FROM mt5_live_state live
+            WHERE live.account_number = signals.issuer_account
+              AND live.nexus_managed = 1
+              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
+              AND live.last_seen_at >= ?
+              AND (
+                UPPER(COALESCE(live.signal_code,'')) = UPPER(COALESCE(signals.code,''))
+                OR EXISTS (
+                  SELECT 1 FROM autotrade_trade_executions exec
+                  WHERE exec.signal_id = signals.id
+                    AND exec.ticket = live.ticket
+                )
+              )
+          )
+        )
+    """, (_live_cutoff(),)
+
+
+def _mt5_admin_is_live(data: dict[str, Any]) -> bool:
+    if str(data.get("issuer_type") or "").upper() != "MT5_ADMIN":
+        return True
+    with db.conn() as con:
+        row = con.execute(
+            """
+            SELECT 1
+            FROM mt5_live_state live
+            WHERE live.account_number=?
+              AND live.nexus_managed=1
+              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
+              AND live.last_seen_at>=?
+              AND (
+                UPPER(COALESCE(live.signal_code,''))=UPPER(COALESCE(?,''))
+                OR EXISTS (
+                  SELECT 1 FROM autotrade_trade_executions exec
+                  WHERE exec.signal_id=? AND exec.ticket=live.ticket
+                )
+              )
+            LIMIT 1
+            """,
+            (str(data.get("issuer_account") or ""), _live_cutoff(), str(data.get("code") or ""), int(data["id"])),
+        ).fetchone()
+    return row is not None
+
+
 def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False) -> dict[str, Any]:
     data = dict(row)
     access = _access_class(data)
@@ -74,8 +135,6 @@ def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False)
         **result_meta,
     }
 
-    # Closed VIP transparency is intentionally limited to safe performance
-    # metadata unless the explicit backend policy flag enables old entry detail.
     if closed and access == "VIP" and not has_vip and not PUBLIC_CLOSED_VIP_DETAILS:
         result.update({"direction": str(data.get("direction") or "")})
         return result
@@ -159,21 +218,20 @@ def signals(
     access_key = access.upper()
     state_sql, state_args = _state_clause(state_key)
     access_sql, access_args = _access_clause(access_key)
+    truth_sql, truth_args = _active_truth_clause(state_key)
 
-    # Active VIP-only signals are not teaser content. They are omitted by the
-    # server for non-VIP users, so the client never receives an active VIP card.
     if state_key == "ACTIVE" and not has_vip:
         visibility_sql = "UPPER(COALESCE(destination,'FREE')) <> 'VIP'"
     else:
         visibility_sql = "1=1"
 
     cycle = db.current_cycle_id()
-    params = (*state_args, *access_args, cycle, cycle, limit, offset)
+    params = (*state_args, *access_args, *truth_args, cycle, cycle, limit, offset)
     with db.conn() as con:
         rows = con.execute(
             f"""
             SELECT * FROM signals
-            WHERE {state_sql} AND {access_sql} AND {visibility_sql}
+            WHERE {state_sql} AND {access_sql} AND {visibility_sql} AND {truth_sql}
               AND COALESCE(cycle_id, ?) = ?
             ORDER BY id DESC LIMIT ? OFFSET ?
             """,
@@ -202,6 +260,8 @@ def signal_detail(
     data = dict(row)
     if not _customer_visible_status(data.get("status")):
         raise HTTPException(status_code=404, detail="signal not found")
+    if str(data.get("status") or "").upper() != "CLOSED" and not _mt5_admin_is_live(data):
+        raise HTTPException(status_code=404, detail="signal is no longer active")
     if _access_class(data) == "VIP" and str(data.get("status") or "").upper() != "CLOSED" and not has_vip:
         raise HTTPException(status_code=403, detail="VIP access required")
     item = serialize_signal(row, has_vip=has_vip, include_timeline=True)
