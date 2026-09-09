@@ -26,6 +26,9 @@ def period(key: str) -> Period:
     if key == "30":
         start = now - timedelta(days=30)
         return Period("30", start.isoformat(), now.isoformat(), "۳۰ روز اخیر", "Last 30 days")
+    if key == "90":
+        start = now - timedelta(days=90)
+        return Period("90", start.isoformat(), now.isoformat(), "۹۰ روز اخیر", "Last 90 days")
     return Period("all", "2000-01-01T00:00:00+00:00", now.isoformat(), "کل دوره", "All time")
 
 
