@@ -30,6 +30,11 @@
     return 'muted';
   }
 
+  function accountLevel(user) {
+    const key = String(user?.level?.key || 'member').toLowerCase();
+    return ({diamond:'DIAMOND',gold:'GOLD',silver:'SILVER',member:'MEMBER'})[key] || 'MEMBER';
+  }
+
   function serviceCta(kind, data) {
     const stateName = String(data?.state || 'INACTIVE').toUpperCase();
     if (kind === 'vip') {
@@ -72,11 +77,11 @@
     const user = state.bootstrap?.user || {};
     const name = normalizeText([user.first_name, user.last_name].filter(Boolean).join(' ')) || 'کاربر NEXUS';
     const handle = user.username ? `@${user.username}` : `Telegram ID: ${user.id || '—'}`;
-    const level = user.level?.en || 'MEMBER';
+    const level = accountLevel(user);
     return `<section class="profile-card account-v2-profile">
       <img class="account-brand-avatar" src="./assets/brand/nexus-logo.svg" alt="NEXUS" />
       <div class="account-profile-copy"><h2 class="bidi-auto" dir="auto">${h(name)}</h2><p dir="ltr">${h(handle)}</p></div>
-      <span class="badge muted">${h(level)}</span>
+      <span class="badge muted account-level-badge">${icon('shield', 'nexus-level-icon')}${h(level)}</span>
     </section>`;
   }
 
