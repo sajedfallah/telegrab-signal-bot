@@ -86,8 +86,14 @@ def overview(key: str = "30") -> dict:
     p = period(key)
     rows = _rows(p)
     summary = _summarize(rows)
+    cycle = db.current_cycle_id()
     with db.conn() as con:
-        active = int(con.execute("SELECT COUNT(*) FROM signals WHERE status<>'CLOSED' AND COALESCE(cycle_id,?)=?", (db.current_cycle_id(), db.current_cycle_id())).fetchone()[0])
+        active = int(con.execute(
+            """SELECT COUNT(*) FROM signals
+               WHERE UPPER(COALESCE(status,'')) NOT IN ('DRAFT','CLOSED','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
+                 AND COALESCE(cycle_id,?)=?""",
+            (cycle, cycle),
+        ).fetchone()[0])
     return {"period": p, "active": active, **summary}
 
 
