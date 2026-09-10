@@ -9,7 +9,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BASE_DIR = PROJECT_ROOT / "assets"
-LOGO_PATH = BASE_DIR / "branding" / "NEXUS_logo.png"
+LOGO_PATH = BASE_DIR / "branding" / "NEXUS_logo_2026.jpg"
+
+BRAND_CYAN = (18, 229, 205)
+BRAND_BLUE = (17, 105, 255)
+BRAND_NAVY = (3, 9, 20)
 
 W, H = 1080, 1600
 BG = (7, 8, 10)
@@ -127,6 +131,7 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int, start_size: 
     return _font(min_size, bold, fa), min_size
 
 
+@lru_cache(maxsize=1)
 def _open_logo() -> Image.Image | None:
     """Load the NEXUS logo, with a deterministic branded fallback.
 
@@ -136,7 +141,14 @@ def _open_logo() -> Image.Image | None:
     """
     try:
         if LOGO_PATH.exists():
-            return Image.open(LOGO_PATH).convert("RGBA")
+            logo = Image.open(LOGO_PATH).convert("RGBA")
+            # Official source artwork is supplied on black. Trim its generous
+            # outer margin so the mark remains legible in Telegram thumbnails.
+            mask = logo.convert("L").point(lambda value: 255 if value > 15 else 0)
+            bbox = mask.getbbox()
+            if bbox:
+                logo = logo.crop(bbox)
+            return logo
     except Exception:
         pass
 
@@ -161,6 +173,7 @@ def _paste_logo(canvas: Image.Image, box: tuple[int, int, int, int]) -> None:
     logo = _open_logo()
     if logo is None:
         return
+    logo = logo.copy()
     x1, y1, x2, y2 = box
     max_w, max_h = max(1, x2 - x1), max(1, y2 - y1)
     logo.thumbnail((max_w, max_h), Image.Resampling.LANCZOS)
@@ -178,8 +191,29 @@ def _load_chart(raw: bytes | None) -> Image.Image:
         return Image.new("RGB", (900, 600), (12, 12, 12))
 
 
+def _brand_gradient(width: int, height: int) -> Image.Image:
+    """Build the dark blue/cyan NEXUS background without network assets."""
+    # Calculate a compact field, then let Pillow scale it. This keeps card
+    # generation fast enough for Telegram publication workload bursts.
+    field_w, field_h = 160, 100
+    gradient = Image.new("RGB", (field_w, field_h), BRAND_NAVY)
+    px = gradient.load()
+    for y in range(field_h):
+        for x in range(field_w):
+            horizontal = x / (field_w - 1)
+            vertical = y / (field_h - 1)
+            cyan_glow = max(0.0, 1.0 - (((horizontal - .88) / .42) ** 2 + ((vertical - .18) / .58) ** 2))
+            blue_glow = max(0.0, 1.0 - (((horizontal - .12) / .55) ** 2 + ((vertical - .95) / .72) ** 2))
+            px[x, y] = (
+                min(255, int(BRAND_NAVY[0] + 2 * cyan_glow + 4 * blue_glow)),
+                min(255, int(BRAND_NAVY[1] + 22 * cyan_glow + 10 * blue_glow)),
+                min(255, int(BRAND_NAVY[2] + 28 * cyan_glow + 35 * blue_glow)),
+            )
+    return gradient.resize((width, height), Image.Resampling.BILINEAR)
+
+
 def build_chart_frame(chart_bytes: bytes | None) -> bytes:
-    """Simple NEXUS chart frame. The chart is contained, never cropped."""
+    """Premium NEXUS 2026 chart frame. The MT5 chart is never cropped."""
     chart = _load_chart(chart_bytes)
     max_chart_w, max_chart_h = 1280, 900
     scale = min(max_chart_w / chart.width, max_chart_h / chart.height, 1.0)
@@ -189,30 +223,69 @@ def build_chart_frame(chart_bytes: bytes | None) -> bytes:
             Image.Resampling.LANCZOS,
         )
 
-    side_w = 260
-    margin = 36
-    chart_border = 3
+    side_w = 310
+    margin = 30
+    header_h = 74
+    chart_border = 2
     canvas_w = chart.width + side_w + margin * 3
-    canvas_h = max(chart.height + margin * 2, 640)
-    canvas = Image.new("RGB", (canvas_w, canvas_h), (0, 0, 0))
+    canvas_h = max(chart.height + header_h + margin * 2, 700)
+    canvas = _brand_gradient(canvas_w, canvas_h)
     draw = ImageDraw.Draw(canvas)
 
     chart_x = margin
-    chart_y = (canvas_h - chart.height) // 2
-    draw.rectangle(
+    chart_y = header_h + margin
+    chart_bottom = chart_y + chart.height
+
+    # Header and brand rail establish the new blue/cyan identity while keeping
+    # the chart pixels authoritative and untouched.
+    draw.line((margin, header_h, canvas_w - margin, header_h), fill=BRAND_CYAN, width=2)
+    draw.ellipse((margin, 26, margin + 16, 42), fill=BRAND_CYAN)
+    _text(draw, (margin + 30, 19), "NEXUS", 24, bold=True, fill=TEXT)
+    _text(draw, (margin + 132, 23), "MARKET INTELLIGENCE", 17, bold=True, fill=(113, 152, 182))
+    _text(draw, (canvas_w - margin, 22), "CHART AUTHORITY  •  MT5", 16, bold=True,
+          fill=BRAND_CYAN, anchor="ra")
+
+    draw.rounded_rectangle(
         (
             chart_x - chart_border,
             chart_y - chart_border,
             chart_x + chart.width + chart_border,
-            chart_y + chart.height + chart_border,
+            chart_bottom + chart_border,
         ),
-        outline=(55, 55, 55),
+        radius=8,
+        fill=(1, 4, 10),
+        outline=(44, 103, 143),
         width=chart_border,
     )
     canvas.paste(chart, (chart_x, chart_y))
 
     logo_x1 = chart_x + chart.width + margin
-    _paste_logo(canvas, (logo_x1, margin, canvas_w - margin, canvas_h - margin))
+    rail_x2 = canvas_w - margin
+    rail_y1 = header_h + margin
+    rail_y2 = canvas_h - margin
+    draw.rounded_rectangle((logo_x1, rail_y1, rail_x2, rail_y2), radius=18,
+                           fill=(2, 7, 16), outline=(21, 76, 111), width=2)
+    _paste_logo(canvas, (logo_x1 + 24, rail_y1 + 70, rail_x2 - 24, rail_y1 + 390))
+    draw.line((logo_x1 + 35, rail_y1 + 420, rail_x2 - 35, rail_y1 + 420),
+              fill=BRAND_CYAN, width=2)
+    _text(draw, ((logo_x1 + rail_x2) // 2, rail_y1 + 452), "NEXUS SIGNAL", 23,
+          bold=True, fill=TEXT, anchor="ma")
+    _text(draw, ((logo_x1 + rail_x2) // 2, rail_y1 + 490), "PRECISION  •  DISCIPLINE", 13,
+          bold=True, fill=(112, 153, 183), anchor="ma")
+    badge_y = min(rail_y2 - 82, rail_y1 + 550)
+    draw.rounded_rectangle((logo_x1 + 42, badge_y, rail_x2 - 42, badge_y + 40),
+                           radius=20, fill=(4, 36, 49), outline=BRAND_CYAN, width=1)
+    _text(draw, ((logo_x1 + rail_x2) // 2, badge_y + 11), "VERIFIED CHART", 14,
+          bold=True, fill=BRAND_CYAN, anchor="ma")
+
+    # Cyan corner signatures make the frame recognizable even at small size.
+    corner = 32
+    draw.line((chart_x, chart_y, chart_x + corner, chart_y), fill=BRAND_CYAN, width=4)
+    draw.line((chart_x, chart_y, chart_x, chart_y + corner), fill=BRAND_CYAN, width=4)
+    draw.line((chart_x + chart.width - corner, chart_bottom,
+               chart_x + chart.width, chart_bottom), fill=BRAND_BLUE, width=4)
+    draw.line((chart_x + chart.width, chart_bottom - corner,
+               chart_x + chart.width, chart_bottom), fill=BRAND_BLUE, width=4)
 
     out = BytesIO()
     canvas.save(out, format="PNG", optimize=True)

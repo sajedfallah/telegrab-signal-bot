@@ -112,11 +112,15 @@ def _rounded(draw: ImageDraw.ImageDraw, box, radius: int, fill, outline=None, wi
 
 
 def _load_logo() -> Image.Image | None:
-    logo_path = Path(__file__).resolve().parents[2] / "assets" / "branding" / "NEXUS_logo.png"
+    logo_path = Path(__file__).resolve().parents[2] / "assets" / "branding" / "NEXUS_logo_2026.jpg"
     if not logo_path.exists():
         return None
     try:
         logo = Image.open(logo_path).convert("RGBA")
+        mask = logo.convert("L").point(lambda value: 255 if value > 15 else 0)
+        bbox = mask.getbbox()
+        if bbox:
+            logo = logo.crop(bbox)
         logo.thumbnail((138, 78), Image.Resampling.LANCZOS)
         return logo
     except Exception:
