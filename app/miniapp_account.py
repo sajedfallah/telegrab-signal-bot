@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Header
 
 from . import db
+from .config import settings
 from .miniapp_api import _auth_user, _autotrade, _entitlements
 from .miniapp_experience import EXPIRING_DAYS, _parse_dt
 from .miniapp_home import _autotrade_health
@@ -131,6 +132,7 @@ def build_account_status(uid: int) -> dict[str, Any]:
             "last_seen_at": mt5_data.get("last_seen_at") if mt5_data else None,
         },
         "payments_count": payment_count,
+        "is_admin": uid in settings.admin_ids,
     }
 
 
