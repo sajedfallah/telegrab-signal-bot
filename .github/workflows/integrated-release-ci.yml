@@ -46,6 +46,11 @@ jobs:
       - name: Compile integrated runtime
         run: python -m compileall -q app run.py run_api.py
 
+      - name: Admin Mini App release checks
+        run: |
+          node --check miniapp/admin-signal.js
+          git diff --check
+
       - name: Focused new feature tests
         run: |
           python -m pytest tests/test_agentic_content_mvp.py -q
