@@ -16,7 +16,8 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 from . import db
-from .autotrade.symbol_registry import infer_category, normalize_symbol
+from .autotrade.symbol_registry import CANONICAL_SYMBOLS, infer_category, normalize_symbol
+from .autotrade.trailing_profiles import TRAILING_GUIDE_FA, TRAILING_PROFILES, profile_snapshot
 
 
 router = APIRouter(prefix="/miniapp/api/admin", tags=["miniapp-admin-signal-center"])
@@ -103,7 +104,7 @@ def _digits_for(symbol: str, requested: int | None = None) -> int:
             pass
     if symbol.endswith("JPY"):
         return 3
-    if symbol.startswith(("XAU", "XAG", "BTC", "ETH")) or symbol in {"US30", "US100", "SPX500"}:
+    if symbol.startswith(("XAU", "XAG", "BTC", "ETH")) or symbol in {"US30", "US100", "DOWJONES", "NASDAQ", "SPX500"}:
         return 2
     return 5
 
@@ -245,6 +246,29 @@ def _admin_mt5_status() -> dict[str, Any]:
             "last_seen_at": str(row["last_seen_at"]) if row else None, "age_seconds": age}
 
 
+def _symbol_catalog() -> list[dict[str, Any]]:
+    labels = {"GOLD": "فلزات", "INDEX": "شاخص‌ها", "FOREX": "Forex", "CRYPTO": "Crypto"}
+    order = ("GOLD", "INDEX", "FOREX", "CRYPTO")
+    return [
+        {"key": key, "label": labels[key], "symbols": list(CANONICAL_SYMBOLS[key])}
+        for key in order
+        if key in CANONICAL_SYMBOLS
+    ]
+
+
+def _trailing_catalog() -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for code in sorted(TRAILING_PROFILES):
+        snapshot = profile_snapshot(code)
+        items.append({
+            "code": code,
+            "name": str(snapshot.get("name") or code),
+            "guide": TRAILING_GUIDE_FA.get(code, ""),
+            "config": snapshot,
+        })
+    return items
+
+
 class CalculateRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=32)
     direction: str = Field(pattern="^(?:BUY|SELL)$")
@@ -270,6 +294,8 @@ class CreateSignalRequest(CalculateRequest):
     risk_percent: float = Field(default=0.0, ge=0, le=100)
     lot_size: float | None = Field(default=None, gt=0)
     trailing_enabled: bool = False
+    trailing_profile_code: str | None = Field(default=None, pattern="^NEXUS_TRAIL_0[1-7]$")
+    # Legacy V2 numeric trailing overrides remain accepted for backward compatibility.
     trailing_break_even_r: float | None = Field(default=None, gt=0, le=100)
     trailing_step_r: float | None = Field(default=None, gt=0, le=100)
     trailing_lock_r: float | None = Field(default=None, gt=0, le=100)
@@ -286,6 +312,14 @@ class CreateSignalRequest(CalculateRequest):
     @classmethod
     def normalize_create_enums(cls, value: str) -> str:
         return str(value or "").strip().upper()
+
+    @field_validator("trailing_profile_code", mode="before")
+    @classmethod
+    def normalize_trailing_profile(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = str(value).strip().upper()
+        return normalized or None
 
 
 class PositionCommandRequest(BaseModel):
@@ -309,6 +343,15 @@ def _resolve_sizing(req: CreateSignalRequest) -> tuple[str, float, float | None]
 def _resolve_trailing(req: CreateSignalRequest) -> tuple[str | None, str | None, dict[str, Any] | None]:
     if not req.trailing_enabled:
         return None, None, None
+
+    if req.trailing_profile_code:
+        snapshot = profile_snapshot(req.trailing_profile_code)
+        code = str(snapshot["code"])
+        name = str(snapshot.get("name") or code)
+        return code, name, snapshot
+
+    # Backward-compatible V2 fallback: old clients can still submit explicit
+    # step values. New V3 UI always submits trailing_profile_code instead.
     break_even = float(req.trailing_break_even_r) if req.trailing_break_even_r is not None else 1.0
     step = float(req.trailing_step_r) if req.trailing_step_r is not None else 0.50
     lock = float(req.trailing_lock_r) if req.trailing_lock_r is not None else 0.30
@@ -364,9 +407,17 @@ def _sync_request(row) -> dict[str, Any]:
 @router.get("/bootstrap")
 def bootstrap(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     user = _admin(x_telegram_init_data)
-    return {"ok": True, "user": user, "mt5_admin": _admin_mt5_status(),
-            "destinations": ["FREE", "VIP", "BOTH"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4"],
-            "level_modes": ["AUTO", "MANUAL"], "volume_modes": ["RISK", "FIXED"]}
+    return {
+        "ok": True,
+        "user": user,
+        "mt5_admin": _admin_mt5_status(),
+        "destinations": ["FREE", "VIP", "BOTH"],
+        "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4"],
+        "level_modes": ["AUTO", "MANUAL"],
+        "volume_modes": ["RISK", "FIXED"],
+        "symbol_catalog": _symbol_catalog(),
+        "trailing_profiles": _trailing_catalog(),
+    }
 
 
 @router.post("/signals/calculate")
@@ -438,6 +489,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
             "risk_percent": risk_percent,
             "lot_size": lot_size,
             "trailing_enabled": bool(req.trailing_enabled),
+            "trailing_profile_code": req.trailing_profile_code,
             "trailing_code": trailing_code,
             "trailing_config": trailing_config,
         }
