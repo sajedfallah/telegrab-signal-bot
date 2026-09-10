@@ -40,9 +40,9 @@ def test_signal_creation_flow_has_market_and_limit_choice():
     assert 'order_type=str(data.get("signal_order_type") or "MARKET")' in main
 
 def test_mt5_limit_and_absolute_deviation_support_present():
-    tm=(ROOT/'mt5/NEXUS_AutoTrade/Include/TradeManager.mqh').read_text(encoding='utf-8')
-    parser=(ROOT/'mt5/NEXUS_AutoTrade/Include/SignalParser.mqh').read_text(encoding='utf-8')
-    ea=(ROOT/'mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5').read_text(encoding='utf-8')
+    tm=(ROOT/'mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh').read_text(encoding='utf-8')
+    parser=(ROOT/'mt5/NEXUS_AutoTrade_UI65/Core/Include/SignalParser.mqh').read_text(encoding='utf-8')
+    ea=(ROOT/'mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5').read_text(encoding='utf-8')
     assert 'ORDER_TYPE_BUY_LIMIT' in tm and 'ORDER_TYPE_SELL_LIMIT' in tm
     assert 'TRADE_ACTION_PENDING' in tm and 'OrderSend(req,res)' in tm
     assert 'max_entry_deviation_abs' in tm

@@ -26,6 +26,11 @@ def test_mt5_signal_publication_fails_closed_without_accepted_receipt(
         return {"receipt_status": receipt_status} if receipt_status is not None else {}
 
     monkeypatch.setattr(api.db, "mt5_signal_live_state", fake_live_state)
+    monkeypatch.setattr(
+        api.db,
+        "get_signal",
+        lambda _signal_id: (_ for _ in ()).throw(AssertionError("DB lookup must follow receipt gate")),
+    )
 
     result = asyncio.run(
         api._publish_mt5_admin_signal_async({"id": 999999})

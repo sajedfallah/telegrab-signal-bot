@@ -110,8 +110,8 @@ def test_rejected_receipt_never_queues_publication(monkeypatch, tmp_path):
 def test_source_contracts_for_v062_live_truth():
     api=(ROOT/"app/autotrade/api.py").read_text(encoding="utf-8")
     db=(ROOT/"app/db.py").read_text(encoding="utf-8")
-    ea=(ROOT/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
-    client=(ROOT/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
+    ea=(ROOT/"mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
+    client=(ROOT/"mt5/NEXUS_AutoTrade_UI65/Core/Include/APIClient.mqh").read_text(encoding="utf-8")
     main=(ROOT/"app/main.py").read_text(encoding="utf-8")
     assert 'API_VERSION = "0.6.5"' in api
     assert '@app.post("/api/v1/autotrade/live-state")' in api

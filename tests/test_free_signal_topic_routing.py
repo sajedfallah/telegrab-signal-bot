@@ -33,7 +33,7 @@ def test_bot_and_autotrade_api_install_same_topic_router_before_runtime():
     assert bot_runner.index("install_free_topic_routing()") < min(core_import_positions)
 
     assert "install_free_topic_routing()" in api_runner
-    app_target = '"app.combined_api:app"' if '"app.combined_api:app"' in api_runner else '"app.autotrade.api:app"'
+    app_target = "from app.combined_api import app"
     assert api_runner.index("install_free_topic_routing()") < api_runner.index(app_target)
 
 
@@ -47,7 +47,7 @@ def test_topic_id_admin_command_is_registered():
 
 
 def test_mt5_free_destination_contract_stays_logical_and_backend_routed():
-    ea = _text("mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5")
+    ea = _text("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
     api = _text("app/autotrade/api.py")
     assert 'g_manual_destination="FREE"' in ea
     assert 'g_manual_destination!="FREE"' in ea

@@ -59,7 +59,7 @@ class V056AccessTests(unittest.TestCase):
 
 class V056StaticTests(unittest.TestCase):
     def test_ea_has_access_state_machine_and_standard_startup(self):
-        src = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+        src = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
         for token in [
             "NEXUS_STANDARD", "NEXUS_LICENSED", "NEXUS_ADMIN",
 "LICENSED USER", "ADMIN MODE",
@@ -69,7 +69,7 @@ class V056StaticTests(unittest.TestCase):
             self.assertIn(token, src)
 
     def test_manual_publish_is_admin_only(self):
-        src = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+        src = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
         self.assertIn('g_access_mode==NEXUS_ADMIN', src)
         self.assertIn('if(magic!=InpMagicNumber && g_access_mode==NEXUS_ADMIN)', src)
 

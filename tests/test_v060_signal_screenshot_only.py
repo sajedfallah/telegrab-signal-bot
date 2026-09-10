@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_ea_screenshot_only_at_signal_issue():
-    p = Path(__file__).resolve().parents[1] / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5"
+    p = Path(__file__).resolve().parents[1] / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5"
     s = p.read_text(encoding="utf-8")
     assert s.count("CaptureChartBase64(") == 2  # declaration + signal issuance call
     assert 'CaptureChartBase64(symbol,"SIGNAL")' in s

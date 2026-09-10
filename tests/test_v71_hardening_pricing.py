@@ -25,8 +25,8 @@ class V71PricingTests(unittest.TestCase):
 
     def test_exact_catalog(self):
         expected = {
-            "VIP1M": ("25", "0"), "VIP3M": ("69", "0"), "VIP6M": ("129", "0"), "VIP12M": ("239", "0"),
-            "AUTO1M": ("30", "0"), "AUTO3M": ("83", "0"), "AUTO6M": ("155", "0"), "AUTO12M": ("289", "0"),
+            "VIP1M": ("19", "0"), "VIP3M": ("52", "0"), "VIP6M": ("98", "0"), "VIP12M": ("182", "0"),
+            "AUTO1M": ("24", "0"), "AUTO3M": ("66", "0"), "AUTO6M": ("125", "0"), "AUTO12M": ("231", "0"),
         }
         for code, (price, setup) in expected.items():
             p = db.plan_dict(db.get_plan(code))
@@ -36,7 +36,7 @@ class V71PricingTests(unittest.TestCase):
     def test_rial_rounds_up_and_expires(self):
         db.set_setting("usdt_rial_manual_rate", "1234567")
         invoice = asyncio.run(pricing_service.create_invoice_quote(1, "AUTO6M", "rial"))
-        self.assertEqual(invoice["final_amount_rial"], 191357885)
+        self.assertEqual(invoice["final_amount_rial"], 154320875)
         exp = datetime.fromisoformat(invoice["expires_at"])
         self.assertGreater(exp, datetime.now(timezone.utc))
         self.assertLessEqual(exp, datetime.now(timezone.utc) + timedelta(minutes=16))
@@ -57,14 +57,14 @@ class V71PricingTests(unittest.TestCase):
         self.assertEqual(invoice["payment_method"], "usdt")
         self.assertEqual(invoice["usdt_rial_rate"], None)
         self.assertEqual(invoice["final_amount_rial"], None)
-        self.assertEqual(invoice["total_usdt"], 155)
+        self.assertEqual(invoice["total_usdt"], 125)
 
     def test_upgrade_credit_uses_remaining_value(self):
         first = db.create_or_extend_license(1, None, 30, plan_code="VIP1M", source="admin", vip_access=True, autotrade_access=False)
         q = pricing_service.quote_purchase(1, "AUTO6M")
         self.assertEqual(q["mode"], "upgrade")
         self.assertGreater(q["upgrade_credit_usdt"], 0)
-        self.assertLess(q["total_usdt"], 155)
+        self.assertLess(q["total_usdt"], 125)
 
 
 class V71AutoTradeSecurityTests(unittest.TestCase):

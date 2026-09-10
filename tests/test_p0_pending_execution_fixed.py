@@ -11,8 +11,8 @@ ROOT=Path(__file__).resolve().parents[1]
 
 class P0PendingExecutionFixedTests(unittest.TestCase):
     def test_mt5_pending_execution_path_is_not_limit_market_only(self):
-        ea=(ROOT/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
-        tm=(ROOT/"mt5/NEXUS_AutoTrade/Include/TradeManager.mqh").read_text(encoding="utf-8")
+        ea=(ROOT/"mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
+        tm=(ROOT/"mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh").read_text(encoding="utf-8")
         for token in ("BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"):
             self.assertIn(token, tm)
         self.assertIn("TRADE_ACTION_PENDING", tm)

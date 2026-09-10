@@ -56,7 +56,7 @@ class V058FinalHardeningNextTests(unittest.TestCase):
 
     def test_catalog_prices_are_numeric_and_consistent(self):
         db.ensure_default_plans(settings.plans)
-        for code, expected in {"VIP12M":"239", "AEX1M":"5", "AEX3M":"14", "AEX6M":"27", "AEX12M":"49"}.items():
+        for code, expected in {"VIP12M":"182", "AEX1M":"5", "AEX3M":"14", "AEX6M":"27", "AEX12M":"49"}.items():
             row = db.get_plan(code)
             self.assertEqual(str(row["price_usdt"]), expected)
             self.assertEqual(str(row["canonical_price_usdt"]), expected)
@@ -88,17 +88,17 @@ def test_manual_mt5_events_use_unified_caption_engine():
 
 def test_mt5_supports_all_pending_order_types_and_signal_timeframe():
     root = Path(__file__).resolve().parents[1]
-    ea = (root / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
-    tm = (root / "mt5" / "NEXUS_AutoTrade" / "Include" / "TradeManager.mqh").read_text(encoding="utf-8")
-    parser = (root / "mt5" / "NEXUS_AutoTrade" / "Include" / "SignalParser.mqh").read_text(encoding="utf-8")
+    ea = (root / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
+    tm = (root / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh").read_text(encoding="utf-8")
+    parser = (root / "mt5/NEXUS_AutoTrade_UI65/Core/Include/SignalParser.mqh").read_text(encoding="utf-8")
     for token in ["BUY_LIMIT", "SELL_LIMIT", "BUY_STOP", "SELL_STOP", "BUY_STOP_LIMIT", "SELL_STOP_LIMIT"]:
         assert token in ea or token in tm
     assert 's.timeframe=NexusJsonString(obj,"timeframe","M5")' in parser
     assert 'NexusTimeframeFromString(s.timeframe)' in tm
-    assert 'timeframe_code' in (root / "mt5" / "NEXUS_AutoTrade" / "Include" / "TradeManager.mqh").read_text(encoding="utf-8")
+    assert 'timeframe_code' in (root / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh").read_text(encoding="utf-8")
 
 
 def test_mt5_license_config_is_terminal_local_not_common():
-    ea = (Path(__file__).resolve().parents[1] / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    ea = (Path(__file__).resolve().parents[1] / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
     config_block = ea[ea.index('bool SaveUserConfig'):ea.index('void UISetLabel')]
     assert 'FILE_COMMON' not in config_block

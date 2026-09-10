@@ -18,7 +18,7 @@ def test_broker_close_result_card_contains_only_required_fields():
 
     assert "<b>NX-0001</b>  <b>🔴 LOSS</b>" in card
     assert "🏁 Exit: <code>4481.66</code>" in card
-    assert "💰 Broker P/L: <b>-10.64</b>" in card
+    assert "💰 Broker P/L: <b>-$10.64</b>" in card
     assert "⏱️ Duration: <b>00:46:16</b>" in card
     assert "Exit Reason:" not in card
     assert "STOP LOSS" not in card

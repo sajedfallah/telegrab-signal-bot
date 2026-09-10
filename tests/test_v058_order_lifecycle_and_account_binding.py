@@ -8,8 +8,8 @@ def read(rel): return (ROOT/rel).read_text(encoding="utf-8")
 def test_all_five_order_types_are_supported_end_to_end():
     ui=read("app/ui.py")
     main=read("app/main.py")
-    tm=read("mt5/NEXUS_AutoTrade/Include/TradeManager.mqh")
-    ea=read("mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5")
+    tm=read("mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh")
+    ea=read("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
     for t in ["MARKET","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP"]:
         assert f"sigorder:{t}" in ui or t=="MARKET"
         assert t in tm or t=="MARKET"
@@ -20,7 +20,7 @@ def test_pending_lifecycle_has_cancel_and_expire_events():
     api=read("app/autotrade/api.py")
     db=read("app/db.py")
     main=read("app/main.py")
-    ea=read("mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5")
+    ea=read("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
     for token in ['"CANCEL"', '"EXPIRE"']:
         assert token in api
         assert token in db
@@ -49,7 +49,7 @@ def test_payment_approval_requests_account_before_autotrade_license_delivery():
 def test_mt5_pending_payload_preserves_selected_order_type():
     api=read("app/autotrade/api.py")
     main=read("app/main.py")
-    ea=read("mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5")
+    ea=read("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
     assert "BUY_STOP_LIMIT|SELL_STOP_LIMIT" in api
     assert 'order_type=PendingOrderTypeName(ot)' in ea
     assert '"order_type"' in main

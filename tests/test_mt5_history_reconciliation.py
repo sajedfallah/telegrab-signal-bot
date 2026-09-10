@@ -185,7 +185,7 @@ def test_reconciliation_schema_contains_execution_truth_fields():
     from pathlib import Path
     root=Path(__file__).resolve().parents[1]
     api=(root/"app/autotrade/api.py").read_text(encoding="utf-8")
-    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    ea=(root/"mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
     guard=(root/"app/autotrade/history_reconcile_guard.py").read_text(encoding="utf-8")
     assert "gross_profit" in api and "commission" in api and "swap" in api
     assert "position_id" in api and "deal_id" in api and "cycle_id" in api

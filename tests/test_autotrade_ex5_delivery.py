@@ -4,7 +4,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_current_mt5_source_is_packaged_and_compile_is_explicit():
-    src = ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5"
+    src = ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5"
     note = ROOT / "MT5_COMPILE_REQUIRED.md"
     assert src.is_file() and src.stat().st_size > 0
     assert note.is_file() and note.stat().st_size > 0

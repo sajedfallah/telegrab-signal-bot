@@ -122,13 +122,13 @@ class SourceHardeningTests(unittest.TestCase):
     ROOT = Path(__file__).parents[1]
 
     def test_mq5_contains_no_embedded_admin_secret(self):
-        src = (self.ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+        src = (self.ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
         self.assertNotIn("#define NEXUS_ADMIN_TOKEN", src)
         self.assertNotIn("#define NEXUS_ADMIN_MT5_ACCOUNT", src)
         self.assertIn("EffectiveAdminToken", src)
 
     def test_network_reporting_is_not_called_from_on_tick(self):
-        src = (self.ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+        src = (self.ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
         on_tick = src.split("void OnTick()", 1)[1].split("void OnTradeTransaction", 1)[0]
         self.assertNotIn("DetectPositionModifications();", on_tick)
 
