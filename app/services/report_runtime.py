@@ -2,12 +2,20 @@ from __future__ import annotations
 
 """Unified NEXUS channel-report runtime.
 
-The legacy report split performance into CRYPTO and FOREX buckets.  XAUUSD is
+The legacy report split performance into CRYPTO and FOREX buckets. XAUUSD is
 stored by the execution pipeline as market_type=GOLD, so a valid closed Gold
 trade was excluded from both buckets and the public report incorrectly showed
-zero trades.  This runtime replaces that market-type-dependent aggregation with
+zero trades. This runtime replaces that market-type-dependent aggregation with
 publication-channel truth: every actually published signal is counted in one
 unified report regardless of market_type.
+
+Public-channel policy:
+- FREE keeps its own daily/weekly report in the FREE signal channel.
+- VIP keeps its own daily/weekly report in the VIP signal channel.
+- Every daily cycle also publishes one public comparison post with two clearly
+  separated FREE and VIP sections, each calculated from that channel's own
+  durable publication truth.
+- The existing weekly VIP public report is preserved for backward compatibility.
 """
 
 import asyncio
@@ -121,6 +129,10 @@ def _period_labels(kind: str, start_local: datetime, end_local: datetime) -> tup
     )
 
 
+def _pnl_label(stats: dict[str, Any]) -> str:
+    return f"{stats['broker_pnl']:+.2f}" if stats["broker_pnl_available"] else "—"
+
+
 def render_channel_report(
     main: Any,
     kind: str,
@@ -137,8 +149,7 @@ def render_channel_report(
     audience_en = audience_fa
     title_fa = "گزارش روزانه" if kind == "daily" else "گزارش هفتگی"
     title_en = "Daily Report" if kind == "daily" else "Weekly Report"
-    pnl_fa = f"{st['broker_pnl']:+.2f}" if st["broker_pnl_available"] else "—"
-    pnl_en = pnl_fa
+    pnl = _pnl_label(st)
 
     fa = (
         f"<b>📊 NEXUS {title_fa} — {audience_fa}</b>\n"
@@ -149,7 +160,7 @@ def render_channel_report(
         f"🔴 LOSS: <b>{st['losses']}</b>\n"
         f"⚪ BREAK EVEN: <b>{st['be']}</b>\n"
         f"🎯 Win Rate: <b>{st['win_rate']}%</b>\n"
-        f"💰 Broker P/L: <b>{html.escape(pnl_fa)}</b>"
+        f"💰 Broker P/L: <b>{html.escape(pnl)}</b>"
     )
     en = (
         f"<b>📊 NEXUS {title_en} — {audience_en}</b>\n"
@@ -160,7 +171,72 @@ def render_channel_report(
         f"🔴 LOSS: <b>{st['losses']}</b>\n"
         f"⚪ BREAK EVEN: <b>{st['be']}</b>\n"
         f"🎯 Win Rate: <b>{st['win_rate']}%</b>\n"
-        f"💰 Broker P/L: <b>{html.escape(pnl_en)}</b>"
+        f"💰 Broker P/L: <b>{html.escape(pnl)}</b>"
+    )
+    return main.tr(lang, fa, en)
+
+
+def render_public_daily_report(
+    main: Any,
+    start_local: datetime,
+    end_local: datetime,
+    lang: str,
+) -> str:
+    """Render one public daily post with independent FREE and VIP sections."""
+    start_iso, end_iso = main._period_utc(start_local, end_local)
+    free = unified_report_stats(main, start_iso, end_iso, "FREE")
+    vip = unified_report_stats(main, start_iso, end_iso, "VIP")
+    period_fa, period_en = _period_labels("daily", start_local, end_local)
+    free_pnl = html.escape(_pnl_label(free))
+    vip_pnl = html.escape(_pnl_label(vip))
+
+    fa = (
+        "<b>📊 NEXUS | گزارش روزانه کانال‌های سیگنال</b>\n"
+        f"📅 {period_fa}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<b>🆓 NEXUS FREE SIGNAL</b>\n\n"
+        f"📨 سیگنال‌های صادرشده: <b>{free['issued']}</b>\n"
+        f"🏁 معاملات بسته‌شده: <b>{free['closed']}</b>\n"
+        f"🟢 WIN: <b>{free['wins']}</b>\n"
+        f"🔴 LOSS: <b>{free['losses']}</b>\n"
+        f"⚪ BREAK EVEN: <b>{free['be']}</b>\n"
+        f"🎯 Win Rate: <b>{free['win_rate']}%</b>\n"
+        f"💰 Broker P/L: <b>{free_pnl}</b>\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<b>👑 NEXUS VIP SIGNAL</b>\n\n"
+        f"📨 سیگنال‌های صادرشده: <b>{vip['issued']}</b>\n"
+        f"🏁 معاملات بسته‌شده: <b>{vip['closed']}</b>\n"
+        f"🟢 WIN: <b>{vip['wins']}</b>\n"
+        f"🔴 LOSS: <b>{vip['losses']}</b>\n"
+        f"⚪ BREAK EVEN: <b>{vip['be']}</b>\n"
+        f"🎯 Win Rate: <b>{vip['win_rate']}%</b>\n"
+        f"💰 Broker P/L: <b>{vip_pnl}</b>\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<i>آمار FREE و VIP به‌صورت مستقل و فقط بر اساس سیگنال‌های واقعاً منتشرشده در همان کانال محاسبه می‌شود.</i>"
+    )
+    en = (
+        "<b>📊 NEXUS | Daily Signal Channel Report</b>\n"
+        f"📅 {period_en}\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<b>🆓 NEXUS FREE SIGNAL</b>\n\n"
+        f"📨 Signals issued: <b>{free['issued']}</b>\n"
+        f"🏁 Closed trades: <b>{free['closed']}</b>\n"
+        f"🟢 WIN: <b>{free['wins']}</b>\n"
+        f"🔴 LOSS: <b>{free['losses']}</b>\n"
+        f"⚪ BREAK EVEN: <b>{free['be']}</b>\n"
+        f"🎯 Win Rate: <b>{free['win_rate']}%</b>\n"
+        f"💰 Broker P/L: <b>{free_pnl}</b>\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<b>👑 NEXUS VIP SIGNAL</b>\n\n"
+        f"📨 Signals issued: <b>{vip['issued']}</b>\n"
+        f"🏁 Closed trades: <b>{vip['closed']}</b>\n"
+        f"🟢 WIN: <b>{vip['wins']}</b>\n"
+        f"🔴 LOSS: <b>{vip['losses']}</b>\n"
+        f"⚪ BREAK EVEN: <b>{vip['be']}</b>\n"
+        f"🎯 Win Rate: <b>{vip['win_rate']}%</b>\n"
+        f"💰 Broker P/L: <b>{vip_pnl}</b>\n\n"
+        "━━━━━━━━━━━━━━\n"
+        "<i>FREE and VIP statistics are calculated independently from signals actually published in each channel.</i>"
     )
     return main.tr(lang, fa, en)
 
@@ -182,7 +258,7 @@ def render_admin_report(
     if partial:
         period_fa += " — تا این لحظه"
         period_en += " — so far"
-    pnl = f"{st['broker_pnl']:+.2f}" if st["broker_pnl_available"] else "—"
+    pnl = _pnl_label(st)
 
     fa = (
         f"<b>📊 گزارش {'روزانه' if kind == 'daily' else 'هفتگی'} NEXUS</b>\n"
@@ -222,10 +298,14 @@ def render_admin_report(
 
 
 def channel_targets(main: Any, audience: str) -> tuple[Any, ...]:
-    """Canonical report routing required by product policy.
+    """Canonical report routing for existing per-channel reports.
 
     FREE report -> Free channel only.
     VIP report  -> VIP channel and NEXUS public channel.
+
+    For DAILY delivery, send_channel_report suppresses the standalone VIP copy
+    to the public channel and sends one combined FREE+VIP public report instead.
+    Weekly behavior remains unchanged.
     """
     audience = audience.upper().strip()
     raw = (
@@ -244,6 +324,51 @@ def channel_targets(main: Any, audience: str) -> tuple[Any, ...]:
     return tuple(unique)
 
 
+async def _send_claimed_report(
+    main: Any,
+    bot: Any,
+    *,
+    report_type: str,
+    period_key: str,
+    target: Any,
+    start_iso: str,
+    end_iso: str,
+    text: str,
+    log_label: str,
+) -> None:
+    recipient_key = str(target)
+    if not main.db.claim_report_dispatch(
+        report_type,
+        period_key,
+        recipient_key,
+        start_iso,
+        end_iso,
+    ):
+        return
+    try:
+        await bot.send_message(
+            target,
+            text,
+            parse_mode=ParseMode.HTML,
+            protect_content=True,
+        )
+        main.db.mark_report_sent(
+            report_type,
+            period_key,
+            recipient_key,
+            start_iso,
+            end_iso,
+        )
+    except Exception as exc:
+        main.db.release_report_dispatch(report_type, period_key, recipient_key)
+        log.warning(
+            "%s report failed for target=%s: %s",
+            log_label,
+            target,
+            exc,
+        )
+
+
 async def send_channel_report(
     main: Any,
     bot: Any,
@@ -257,6 +382,7 @@ async def send_channel_report(
 
     lang = main.settings.channel_content_language
     start_iso, end_iso = main._period_utc(start_local, end_local)
+    public_key = str(main.settings.public_channel_id)
 
     for audience in ("FREE", "VIP"):
         text = await asyncio.to_thread(
@@ -269,42 +395,42 @@ async def send_channel_report(
             audience,
         )
         for target in channel_targets(main, audience):
-            # v2 key intentionally differs from the legacy dispatch key so a
-            # corrected report can be re-sent for a period that previously got
-            # the broken market-split report.
-            report_type = f"{kind}_channel_v2_{audience.lower()}"
-            recipient_key = str(target)
-            if not main.db.claim_report_dispatch(
-                report_type,
-                period_key,
-                recipient_key,
-                start_iso,
-                end_iso,
-            ):
+            # Daily public delivery is intentionally a single FREE+VIP comparison
+            # post, not a duplicate standalone VIP report.
+            if kind == "daily" and str(target) == public_key:
                 continue
-            try:
-                await bot.send_message(
-                    target,
-                    text,
-                    parse_mode=ParseMode.HTML,
-                    protect_content=True,
-                )
-                main.db.mark_report_sent(
-                    report_type,
-                    period_key,
-                    recipient_key,
-                    start_iso,
-                    end_iso,
-                )
-            except Exception as exc:
-                main.db.release_report_dispatch(report_type, period_key, recipient_key)
-                log.warning(
-                    "%s %s report failed for target=%s: %s",
-                    audience,
-                    kind,
-                    target,
-                    exc,
-                )
+            report_type = f"{kind}_channel_v2_{audience.lower()}"
+            await _send_claimed_report(
+                main,
+                bot,
+                report_type=report_type,
+                period_key=period_key,
+                target=target,
+                start_iso=start_iso,
+                end_iso=end_iso,
+                text=text,
+                log_label=f"{audience} {kind}",
+            )
+
+    if kind == "daily":
+        public_text = await asyncio.to_thread(
+            render_public_daily_report,
+            main,
+            start_local,
+            end_local,
+            lang,
+        )
+        await _send_claimed_report(
+            main,
+            bot,
+            report_type="daily_public_channels_v3",
+            period_key=period_key,
+            target=main.settings.public_channel_id,
+            start_iso=start_iso,
+            end_iso=end_iso,
+            text=public_text,
+            log_label="PUBLIC FREE+VIP daily",
+        )
 
 
 def install(main: Any) -> None:
@@ -325,4 +451,4 @@ def install(main: Any) -> None:
         await send_channel_report(main, bot, kind, period_key, start_local, end_local)
 
     main._send_channel_report = patched_send_channel_report
-    log.info("[NEXUS][REPORT_RUNTIME][INSTALLED] unified market-agnostic channel reports")
+    log.info("[NEXUS][REPORT_RUNTIME][INSTALLED] unified market-agnostic channel reports + public daily FREE/VIP comparison")
