@@ -1,0 +1,32 @@
+:root{
+  --nexus-fa-font:"Geeza Pro","Noto Sans Arabic",Tahoma,"Segoe UI",Arial,sans-serif;
+  --nexus-en-font:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  --nexus-border-v4:rgba(74,213,220,.46);
+  --nexus-border-v4-soft:rgba(74,213,220,.20);
+}
+html[lang="fa"],body,button,input,select,textarea{font-family:var(--nexus-fa-font);font-synthesis:none;text-rendering:optimizeLegibility}
+body{direction:rtl}.brand,.brand-sub,.eyebrow,.badge,.status-pill,code,.ltr{font-family:var(--nexus-en-font)}
+[dir="rtl"],.bidi-safe,.bidi-auto,.payment-owner,.account-owner-name{direction:rtl!important;unicode-bidi:plaintext!important;text-align:right!important;letter-spacing:0!important}
+input,select,textarea{font-size:16px;line-height:1.6}.text-input,.purchase-input,.purchase-select{direction:rtl;text-align:right}
+.purchase-input[type="password"],.purchase-input[data-ltr="1"],.purchase-select[data-ltr="1"]{direction:ltr;text-align:left;font-family:var(--nexus-en-font)}
+
+/* Safari/iOS-safe vector mark: no nested data URI, no crop, no background tile. */
+.brand-logo,.account-brand-avatar,.home-brand-logo{object-fit:contain!important;object-position:center!important;border-radius:0!important;background:transparent!important;filter:none!important;box-shadow:none!important}
+.brand-logo{width:48px!important;height:48px!important}.account-brand-avatar{width:54px!important;height:54px!important}.home-brand-logo{width:64px!important;height:64px!important}
+
+/* Stronger outer frame, quieter inner divisions. */
+.hero,.signal-v2-card,.price-v2-card,.trade-v2-card,.account-v2-service,.home-attention-card,.home-offer-card,.home-health-card,.home-subscription-card,.home-performance-card,.home-community-card,.support-card,.profile-card,.modal-sheet,.purchase-status-card,.admin-payment-card,.license-v4-card{border:2px solid var(--nexus-border-v4)!important}
+.account-v2-service-body>div,.account-v2-mini-grid>div,.home-stat-grid>div,.stats-grid>div,.kv,.payment-row,.purchase-step,.admin-meta-row{border-color:var(--nexus-border-v4-soft)!important}
+
+.purchase-status-card,.license-v4-card,.admin-payment-card{background:linear-gradient(155deg,var(--panel2),var(--panel));border-radius:20px;padding:16px;box-shadow:var(--nexus-card-shadow,0 14px 34px rgba(0,0,0,.28))}
+.purchase-status-card{display:grid;gap:12px}.purchase-state-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.purchase-state-head h3{margin:0;font-size:17px}.purchase-state-copy{color:var(--muted);font-size:13px;line-height:1.9}.purchase-step-list{display:grid;gap:8px}.purchase-step{display:flex;align-items:center;gap:10px;border:1px solid var(--nexus-border-v4-soft);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.018)}.purchase-step i{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-family:var(--nexus-en-font);font-size:11px;border:1px solid var(--nexus-border-v4-soft)}.purchase-step.done i{background:rgba(57,215,196,.12);color:var(--accent)}.purchase-step.current{border-color:var(--nexus-border-v4)}
+.purchase-form{display:grid;gap:12px}.purchase-field{display:grid;gap:6px}.purchase-field label{font-size:12px;color:var(--muted)}.purchase-input,.purchase-select{width:100%;border:1px solid var(--nexus-border-v4-soft);border-radius:14px;padding:12px 13px;background:#0c1118;color:var(--text);outline:none}.purchase-input:focus,.purchase-select:focus{border-color:var(--nexus-border-v4);box-shadow:0 0 0 3px rgba(57,215,196,.08)}.purchase-security-note{font-size:11px;line-height:1.8;color:var(--muted);padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.02)}
+.purchase-loader{display:inline-flex;align-items:center;gap:8px}.purchase-spinner{width:16px;height:16px;border-radius:50%;border:2px solid rgba(255,255,255,.18);border-top-color:var(--accent);animation:nexusSpin .8s linear infinite}@keyframes nexusSpin{to{transform:rotate(360deg)}}
+
+.admin-payment-list{display:grid;gap:12px}.admin-payment-card{display:grid;gap:12px}.admin-payment-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.admin-payment-head h3{margin:0;font-size:15px}.admin-payment-head small{display:block;color:var(--muted);margin-top:4px}.admin-receipt-image{width:100%;max-height:360px;object-fit:contain;border-radius:14px;background:#080b10;border:1px solid var(--nexus-border-v4-soft)}.admin-payment-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.admin-reject-box{display:grid;gap:8px}.admin-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.admin-meta-row{border:1px solid var(--nexus-border-v4-soft);border-radius:12px;padding:9px}.admin-meta-row span,.admin-meta-row b{display:block}.admin-meta-row span{font-size:10px;color:var(--muted)}.admin-meta-row b{margin-top:3px;font-size:12px;word-break:break-word}
+
+.license-v4-card{display:grid;gap:10px;margin-top:12px}.license-v4-key{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--nexus-border-v4-soft);border-radius:14px;padding:10px 12px;background:#0c1118}.license-v4-key code{direction:ltr;text-align:left;font-size:12px;word-break:break-all;color:var(--accent2)}.license-v4-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.license-v4-grid>div{border:1px solid var(--nexus-border-v4-soft);border-radius:12px;padding:9px}.license-v4-grid span,.license-v4-grid b{display:block}.license-v4-grid span{font-size:10px;color:var(--muted)}.license-v4-grid b{font-size:12px;margin-top:3px}
+
+.payment-owner{font-family:var(--nexus-fa-font)!important}.date-fa{direction:rtl;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+@media(max-width:420px){.admin-payment-actions,.admin-meta-grid,.license-v4-grid{grid-template-columns:1fr}.brand-logo{width:44px!important;height:44px!important}}
+@media(prefers-reduced-motion:reduce){.purchase-spinner{animation:none}}
