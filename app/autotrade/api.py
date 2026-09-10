@@ -555,13 +555,13 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     The publication asset is staged before MT5 execution and consumed only here.
     Channel claims make publication idempotent across duplicate receipts/retries.
     """
-    row = db.get_signal(int(row["id"])) or row
     if isinstance(row, dict):
         issuer_type = str(row.get("issuer_type") or "MT5_ADMIN").strip().upper()
     else:
         issuer_type = str(row["issuer_type"] if "issuer_type" in row.keys() else "MT5_ADMIN").strip().upper()
-    receipt = db.mt5_signal_live_state(int(row["id"])) or {}
-    exec_status = str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
+    receipt = db.mt5_signal_live_state(int(row["id"])) or {} if issuer_type == "MT5_ADMIN" else {}
+    exec_status = (str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
+                   if issuer_type == "MT5_ADMIN" else "NOT_APPLICABLE")
 
     # This guard is intentionally inside the publisher itself so EVERY caller
     # (accepted receipt, retry worker, CLOSE anchor recovery, future callers)
@@ -577,6 +577,10 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
             "complete": False,
             "execution_status": exec_status,
         }
+
+    # Resolve canonical data only after the fail-closed receipt gate. This
+    # keeps the gate independent from ambient/runtime database contents.
+    row = db.get_signal(int(row["id"])) or row
 
     chart_job = db.get_signal_chart_capture_job(int(row["id"])) if issuer_type == "WEB_ADMIN" else None
     if issuer_type == "WEB_ADMIN" and not allow_without_chart and (
