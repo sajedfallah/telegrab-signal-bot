@@ -2,9 +2,9 @@ from pathlib import Path
 import importlib
 
 ROOT = Path(__file__).resolve().parents[1]
-MQ = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
-API_CLIENT = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "APIClient.mqh").read_text(encoding="utf-8")
-TRAIL = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "TrailingEngine.mqh").read_text(encoding="utf-8")
+MQ = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
+API_CLIENT = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/APIClient.mqh").read_text(encoding="utf-8")
+TRAIL = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TrailingEngine.mqh").read_text(encoding="utf-8")
 API = (ROOT / "app" / "autotrade" / "api.py").read_text(encoding="utf-8")
 DB = (ROOT / "app" / "db.py").read_text(encoding="utf-8")
 SERVICE = (ROOT / "app" / "autotrade" / "service.py").read_text(encoding="utf-8")

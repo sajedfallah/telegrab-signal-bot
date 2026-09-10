@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from .config import settings
 from . import db
 
@@ -52,7 +52,13 @@ def main_menu(lang: str, is_admin: bool = False) -> InlineKeyboardMarkup:
         ]
         if is_admin:
             rows.append([("🛠 Admin Panel", "admin")])
-    return kb(rows)
+    markup = kb(rows)
+    if is_admin and settings.miniapp_admin_url:
+        label = "⚡ مرکز صدور سیگنال" if lang == "fa" else "⚡ Signal Center"
+        markup.inline_keyboard.append([
+            InlineKeyboardButton(text=label, web_app=WebAppInfo(url=settings.miniapp_admin_url))
+        ])
+    return markup
 
 
 def guide_hub_menu(lang: str) -> InlineKeyboardMarkup:

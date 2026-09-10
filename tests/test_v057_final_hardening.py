@@ -8,13 +8,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_canonical_pricing_catalog():
     # Avoid importing Settings because deployment environment variables are intentionally absent in unit tests.
     text = (ROOT / "app" / "config.py").read_text(encoding="utf-8")
-    assert '"VIP12M"' in text and '"usdt":"239"' in text
+    assert '"VIP12M"' in text and '"usdt":"182"' in text
     assert '"AEX1M"' in text and '"usdt":"5"' in text
     assert '"AEX12M"' in text and '"usdt":"49"' in text
-    assert '"AUTO1M"' in text and '"usdt":"30"' in text
-    assert '"AUTO3M"' in text and '"usdt":"83"' in text
-    assert '"AUTO6M"' in text and '"usdt":"155"' in text
-    assert '"AUTO12M"' in text and '"usdt":"289"' in text
+    assert '"AUTO1M"' in text and '"usdt":"24"' in text
+    assert '"AUTO3M"' in text and '"usdt":"66"' in text
+    assert '"AUTO6M"' in text and '"usdt":"125"' in text
+    assert '"AUTO12M"' in text and '"usdt":"231"' in text
 
 
 def test_subscription_buttons_are_compact_and_unique():
@@ -52,8 +52,8 @@ def test_pending_trade_event_contract_exists():
 
 
 def test_mt5_manual_limit_bridge_and_admin_token():
-    mq = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
-    api = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "APIClient.mqh").read_text(encoding="utf-8")
+    mq = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
+    api = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/APIClient.mqh").read_text(encoding="utf-8")
     assert 'return InpAdminMode || StringLen(EffectiveAdminToken())>0;' in mq
     assert "TRADE_TRANSACTION_ORDER_ADD" in mq
     assert 'TradeEvent("PENDING"' in mq
@@ -62,7 +62,7 @@ def test_mt5_manual_limit_bridge_and_admin_token():
 
 
 def test_tabbed_status_panel_exists():
-    mq = (ROOT / "mt5" / "NEXUS_AutoTrade" / "NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    mq = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
     for tab in ["OVERVIEW", "CONNECTION", "TRADING", "RISK", "SIGNAL", "SYSTEM"]:
         assert tab in mq
     assert "g_panel_minimized" in mq

@@ -48,7 +48,7 @@ def test_unicode_admin_token_is_cleanly_rejected(monkeypatch):
 
 
 def test_close_signal_uses_persisted_ticket_when_comment_is_cleared():
-    source = (ROOT / "mt5" / "NEXUS_AutoTrade" / "Include" / "TradeManager.mqh").read_text(encoding="utf-8")
+    source = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh").read_text(encoding="utf-8")
     close = source[source.index("bool CloseSignal"):source.index("bool ModifySL")]
     assert "ulong saved=SavedTicket(signal_id);" in close
     assert "ticket!=saved" in close

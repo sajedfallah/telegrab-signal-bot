@@ -3,7 +3,7 @@ from pathlib import Path
 
 def _ea_source() -> str:
     root = Path(__file__).resolve().parents[1]
-    return (root / "mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    return (root / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
 
 
 def _build_reconcile_block() -> str:

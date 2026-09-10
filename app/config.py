@@ -97,6 +97,7 @@ class Settings:
     autotrade_ex5_release_enabled: bool = os.getenv("AUTOTRADE_EX5_RELEASE_ENABLED", "false").strip().lower() in {"1","true","yes","on"}
     nexus_admin_mt5_accounts: tuple[str, ...] = tuple(x.strip() for x in os.getenv("NEXUS_ADMIN_MT5_ACCOUNTS", "").split(",") if x.strip())
     nexus_admin_token: str = os.getenv("NEXUS_ADMIN_TOKEN", "").strip()
+    miniapp_admin_url: str = os.getenv("MINIAPP_ADMIN_URL", "").strip()
 
     def forex_pip_size(self, symbol: str) -> float:
         normalized = symbol.upper().replace("/", "").replace("-", "")

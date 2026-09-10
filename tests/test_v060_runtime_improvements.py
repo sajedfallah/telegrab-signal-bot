@@ -1,10 +1,10 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EA = (ROOT / 'mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5').read_text(encoding='utf-8')
-TM = (ROOT / 'mt5/NEXUS_AutoTrade/Include/TradeManager.mqh').read_text(encoding='utf-8')
-RP = (ROOT / 'mt5/NEXUS_AutoTrade/Include/RiskManager.mqh').read_text(encoding='utf-8')
-SP = (ROOT / 'mt5/NEXUS_AutoTrade/Include/SignalParser.mqh').read_text(encoding='utf-8')
+EA = (ROOT / 'mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5').read_text(encoding='utf-8')
+TM = (ROOT / 'mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh').read_text(encoding='utf-8')
+RP = (ROOT / 'mt5/NEXUS_AutoTrade_UI65/Core/Include/RiskManager.mqh').read_text(encoding='utf-8')
+SP = (ROOT / 'mt5/NEXUS_AutoTrade_UI65/Core/Include/SignalParser.mqh').read_text(encoding='utf-8')
 
 
 def test_host_symbol_is_synced_and_canonicalized():

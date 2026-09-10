@@ -1,9 +1,9 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TRAIL = (ROOT / "mt5/NEXUS_AutoTrade/Include/TrailingEngine.mqh").read_text(encoding="utf-8")
-TM = (ROOT / "mt5/NEXUS_AutoTrade/Include/TradeManager.mqh").read_text(encoding="utf-8")
-EA = (ROOT / "mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+TRAIL = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TrailingEngine.mqh").read_text(encoding="utf-8")
+TM = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh").read_text(encoding="utf-8")
+EA = (ROOT / "mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
 PROFILES = (ROOT / "app/autotrade/trailing_profiles.py").read_text(encoding="utf-8")
 
 

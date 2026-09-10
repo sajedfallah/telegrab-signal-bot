@@ -22,9 +22,8 @@ def test_invalid_telegram_init_data_is_rejected():
 def test_miniapp_exposes_persistent_actions():
     html = (ROOT / "miniapp" / "index.html").read_text(encoding="utf-8")
     js = (ROOT / "miniapp" / "app.js").read_text(encoding="utf-8")
-    css = (ROOT / "miniapp" / "styles.css").read_text(encoding="utf-8")
 
-    assert 'id="floating-action"' in html
-    assert "pageActions" in js
-    assert "MainButton" in js
-    assert ".floating-action" in css
+    assert 'class="bottom-nav"' in html
+    for route in ("home", "signals", "subscriptions", "account"):
+        assert f'data-route="{route}"' in html
+    assert "document.querySelectorAll('.nav-item')" in js

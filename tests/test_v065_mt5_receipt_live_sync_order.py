@@ -1,6 +1,6 @@
 ﻿from pathlib import Path
 
-p = Path("mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5")
+p = Path("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
 src = p.read_text(encoding="utf-8")
 
 def test_forced_live_sync_exists():

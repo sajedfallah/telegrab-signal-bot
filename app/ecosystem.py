@@ -4,7 +4,7 @@ import os
 from dataclasses import dataclass
 
 
-DEFAULT_NEXUS_FOLDER_URL = "https://t.me/nexus_publicc"
+DEFAULT_NEXUS_FOLDER_URL = "https://t.me/addlist/ASXi4-91edg2YzA8"
 DEFAULT_ACADEMY_CHANNEL_ID = "-1003994692349"
 DEFAULT_ACADEMY_CHANNEL_URL = "https://t.me/nexus_ict_learning"
 

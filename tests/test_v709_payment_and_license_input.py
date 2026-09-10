@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
 MAIN=(ROOT/"app/main.py").read_text(encoding="utf-8")
-EA=(ROOT/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+EA=(ROOT/"mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5").read_text(encoding="utf-8")
 
 def test_irr_invoice_is_direct_receipt_state():
     block=MAIN.split('@router.callback_query(F.data.startswith("method:"))',1)[1].split('@router.callback_query(F.data.startswith("receipt:"))',1)[0]

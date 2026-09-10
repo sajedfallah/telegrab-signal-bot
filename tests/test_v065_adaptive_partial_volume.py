@@ -5,7 +5,7 @@ import math
 ROOT = Path(__file__).resolve().parents[1]
 TM = (
     ROOT
-    / "mt5/NEXUS_AutoTrade/Include/TradeManager.mqh"
+    / "mt5/NEXUS_AutoTrade_UI65/Core/Include/TradeManager.mqh"
 ).read_text(encoding="utf-8")
 
 
