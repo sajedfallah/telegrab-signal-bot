@@ -68,8 +68,14 @@ def _history_item(row: Any) -> dict[str, Any]:
         "commission": item.get("commission"),
         "swap": item.get("swap"),
         "slippage": item.get("slippage"),
+        "risk_cash": item.get("risk_cash"),
+        "realized_r": item.get("realized_r"),
+        "position_id": item.get("position_id"),
+        "deal_id": item.get("deal_id"),
         "status": item.get("status"),
+        "error_text": item.get("error_text"),
         "created_at": item.get("created_at"),
+        "updated_at": item.get("updated_at"),
     }
 
 
@@ -78,7 +84,8 @@ def _history(uid: int, *, limit: int, offset: int) -> list[dict[str, Any]]:
         rows = con.execute(
             """
             SELECT id,signal_id,ticket,event_type,symbol,direction,volume,entry_price,stop_loss,take_profit,
-                   exit_price,profit,gross_profit,commission,swap,slippage,status,created_at
+                   exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,
+                   status,error_text,created_at,updated_at
             FROM autotrade_trade_executions
             WHERE telegram_id=?
             ORDER BY id DESC LIMIT ? OFFSET ?
@@ -96,6 +103,47 @@ def _snapshot(uid: int) -> tuple[dict[str, Any] | None, list[dict[str, Any]], li
     positions = [_live_item(row) for row in db.mt5_live_positions(account, nexus_only=True)]
     orders = [_live_item(row) for row in db.mt5_live_orders(account, nexus_only=True)]
     return mt5, positions, orders
+
+
+def _execution_timeline(uid: int, ticket: str) -> list[dict[str, Any]]:
+    with db.conn() as con:
+        rows = con.execute(
+            """
+            SELECT id,event_type,status,signal_id,ticket,symbol,direction,volume,entry_price,stop_loss,take_profit,
+                   exit_price,profit,commission,swap,slippage,realized_r,error_text,created_at,updated_at
+            FROM autotrade_trade_executions
+            WHERE telegram_id=? AND ticket=?
+            ORDER BY id ASC
+            """,
+            (uid, ticket),
+        ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "event_type": row["event_type"],
+            "status": row["status"],
+            "signal_id": row["signal_id"],
+            "ticket": row["ticket"],
+            "profit": row["profit"],
+            "stop_loss": row["stop_loss"],
+            "take_profit": row["take_profit"],
+            "error_text": row["error_text"],
+            "created_at": row["created_at"],
+        }
+        for row in rows
+    ]
+
+
+def _signal_by_code(code: Any, *, has_vip: bool) -> dict[str, Any] | None:
+    raw = str(code or "").strip()
+    if not raw:
+        return None
+    with db.conn() as con:
+        row = con.execute(
+            "SELECT * FROM signals WHERE UPPER(COALESCE(code,''))=UPPER(?) AND COALESCE(cycle_id,?)=? ORDER BY id DESC LIMIT 1",
+            (raw, db.current_cycle_id(), db.current_cycle_id()),
+        ).fetchone()
+    return serialize_signal(row, has_vip=has_vip, include_timeline=False) if row is not None else None
 
 
 @router.get("/autotrade/status")
@@ -118,6 +166,8 @@ def autotrade_status(
         },
         "expires_at": ent.get("autotrade_expires_at"),
         "mt5": mt5,
+        "open_count": len(positions),
+        "pending_count": len(orders),
     }
 
 
@@ -149,6 +199,26 @@ def trades(
     }
 
 
+@router.get("/trades/live/{ticket}")
+def live_trade_detail(
+    ticket: str,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+) -> dict[str, Any]:
+    uid = int(_auth_user(x_telegram_init_data)["id"])
+    ent = _require_autotrade(uid)
+    _, positions, orders = _snapshot(uid)
+    item = next((row for row in [*positions, *orders] if str(row.get("ticket") or "") == str(ticket)), None)
+    if item is None:
+        raise HTTPException(status_code=404, detail="live trade not found")
+    source = _signal_by_code(item.get("signal_code"), has_vip=bool(ent.get("vip")))
+    return {
+        "trade": item,
+        "source_signal": source,
+        "timeline": _execution_timeline(uid, str(ticket)),
+        "live": True,
+    }
+
+
 @router.get("/trades/{execution_id}")
 def trade_detail(
     execution_id: int,
@@ -160,7 +230,8 @@ def trade_detail(
         row = con.execute(
             """
             SELECT id,signal_id,ticket,event_type,symbol,direction,volume,entry_price,stop_loss,take_profit,
-                   exit_price,profit,gross_profit,commission,swap,slippage,status,created_at
+                   exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,
+                   status,error_text,created_at,updated_at
             FROM autotrade_trade_executions
             WHERE id=? AND telegram_id=? LIMIT 1
             """,
@@ -176,4 +247,9 @@ def trade_detail(
         source = db.get_signal(int(signal_id))
         if source is not None:
             signal = serialize_signal(source, has_vip=bool(ent.get("vip")), include_timeline=False)
-    return {"trade": item, "source_signal": signal}
+    return {
+        "trade": item,
+        "source_signal": signal,
+        "timeline": _execution_timeline(uid, str(item.get("ticket") or "")),
+        "live": False,
+    }
