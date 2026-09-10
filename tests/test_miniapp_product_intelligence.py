@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app import miniapp_home, miniapp_product_intelligence, miniapp_signals
+from app import miniapp_experience, miniapp_home, miniapp_product_intelligence, miniapp_signals
 
 
 def _text(path: str) -> str:
@@ -105,7 +105,13 @@ def test_shell_loads_notification_center_polish_layer_and_new_cache_key():
 
 
 def test_bottom_nav_remains_server_lifecycle_authoritative():
-    src = _text("app/miniapp_experience.py")
-    assert 'label_fa="معاملات"' in src
-    assert 'label_fa="ارتقا"' in src
-    assert 'label_fa="پلن‌ها"' in src
+    guest = miniapp_experience._navigation("GUEST", "GUEST")
+    vip = miniapp_experience._navigation("VIP", "ACTIVE")
+    autotrade = miniapp_experience._navigation("AUTOTRADE", "ACTIVE")
+
+    assert guest[2]["route"] == "subscriptions"
+    assert guest[2]["label_fa"] == "پلن‌ها"
+    assert vip[2]["route"] == "subscriptions"
+    assert vip[2]["label_fa"] == "ارتقا"
+    assert autotrade[2]["route"] == "trades"
+    assert autotrade[2]["label_fa"] == "معاملات"
