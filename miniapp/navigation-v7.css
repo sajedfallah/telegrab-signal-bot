@@ -1,0 +1,46 @@
+.nexus-page-back {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid rgba(76, 211, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(7, 19, 28, 0.78);
+  color: #e9f9ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.nexus-page-back:active {
+  transform: translateY(1px);
+}
+
+.nexus-page-back .nexus-back-arrow {
+  font-size: 17px;
+  line-height: 1;
+  direction: ltr;
+}
+
+body.landing-active .nexus-page-back {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 380px) {
+  .nexus-page-back {
+    width: 38px;
+    padding: 0;
+    border-radius: 11px;
+  }
+
+  .nexus-page-back .nexus-back-label {
+    display: none;
+  }
+}
