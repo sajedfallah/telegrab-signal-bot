@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "miniapp" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "miniapp" / "landing-v5.css").read_text(encoding="utf-8")
 JS = (ROOT / "miniapp" / "landing-v5.js").read_text(encoding="utf-8")
-POSTER = ROOT / "miniapp" / "assets" / "brand" / "nexus-landing-poster-v6.webp"
+POSTER = ROOT / "miniapp" / "assets" / "brand" / "nexus-landing-approved-v8.webp"
 
 
 def test_landing_is_rendered_before_app_shell_with_approved_poster():
@@ -15,7 +15,7 @@ def test_landing_is_rendered_before_app_shell_with_approved_poster():
     assert landing_pos < app_pos
     assert 'body class="landing-active"' in INDEX
     assert 'class="nexus-landing-poster"' in INDEX
-    assert './assets/brand/nexus-landing-poster-v6.webp?v=20260910-1731' in INDEX
+    assert './assets/brand/nexus-landing-approved-v8.webp?v=20260910-1820' in INDEX
     assert 'fetchpriority="high"' in INDEX
 
 
