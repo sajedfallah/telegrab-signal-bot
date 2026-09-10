@@ -8,11 +8,22 @@
     return;
   }
 
-  appShell.setAttribute('aria-hidden', 'true');
+  let entered = false;
+
+  const showLanding = () => {
+    entered = false;
+    enterButton.disabled = false;
+    landing.hidden = false;
+    landing.classList.remove('is-leaving');
+    appShell.setAttribute('aria-hidden', 'true');
+    document.body.classList.add('landing-active');
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  };
 
   const enterApp = () => {
-    if (enterButton.disabled) return;
+    if (entered || enterButton.disabled) return;
 
+    entered = true;
     enterButton.disabled = true;
     landing.classList.add('is-leaving');
 
@@ -21,6 +32,7 @@
     } catch (_) {}
 
     window.setTimeout(() => {
+      if (!entered) return;
       landing.hidden = true;
       appShell.removeAttribute('aria-hidden');
       document.body.classList.remove('landing-active');
@@ -28,5 +40,21 @@
     }, 220);
   };
 
-  enterButton.addEventListener('click', enterApp, { once: true });
+  // Telegram can keep the WebView/document alive after the Mini App is closed.
+  // Reset the gate whenever the document leaves the foreground, so every new
+  // visible/open session starts from the NEXUS landing page again.
+  const resetForNextOpen = () => {
+    if (entered || landing.hidden) showLanding();
+  };
+
+  enterButton.addEventListener('click', enterApp);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') resetForNextOpen();
+  });
+
+  window.addEventListener('pagehide', resetForNextOpen);
+  window.addEventListener('pageshow', showLanding);
+
+  showLanding();
 })();
