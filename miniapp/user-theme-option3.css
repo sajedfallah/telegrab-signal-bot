@@ -1,0 +1,234 @@
+/* NEXUS User Mini App — Option 3 theme only
+   Carbon + Cobalt + Cyan + Amber
+   IMPORTANT: visual color overrides only. No layout, spacing, routing or behavior changes. */
+
+.app-shell{
+  --bg:#080c12;
+  --panel:#101722;
+  --panel2:#151f2c;
+  --line:rgba(59,130,246,.22);
+  --text:#f5f8fc;
+  --muted:#94a3b8;
+  --accent:#06b6d4;
+  --accent2:#2563eb;
+  --danger:#ff5c6c;
+
+  --nexus-border:rgba(37,99,235,.34);
+  --nexus-border-strong:rgba(6,182,212,.58);
+  --nexus-border-blue:rgba(37,99,235,.56);
+  --nexus-surface-highlight:rgba(255,255,255,.028);
+  --nexus-card-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.03);
+
+  --nexus-border-outer:rgba(37,99,235,.58);
+  --nexus-border-outer-hover:rgba(6,182,212,.78);
+  --nexus-border-inner:rgba(96,165,250,.18);
+  --nexus-text-secondary:#b5c0cf;
+  --nexus-text-tertiary:#8492a6;
+
+  --nexus-border-v4:rgba(37,99,235,.62);
+  --nexus-border-v4-soft:rgba(96,165,250,.20);
+
+  --nexus-buy:#31d6a4;
+  --nexus-sell:#ff8b72;
+  --nexus-warning:#f59e0b;
+  --nexus-neutral:#c7d0dc;
+
+  color:var(--text);
+  background:
+    radial-gradient(circle at 82% 0%,rgba(37,99,235,.14),transparent 30%),
+    radial-gradient(circle at 8% 28%,rgba(6,182,212,.07),transparent 24%),
+    #080c12;
+}
+
+body:not(.landing-active){
+  background:
+    radial-gradient(circle at 80% 0%,rgba(37,99,235,.12),transparent 30%),
+    radial-gradient(circle at 10% 35%,rgba(245,158,11,.035),transparent 24%),
+    #080c12;
+  color:#f5f8fc;
+}
+
+/* Carbon surfaces */
+.app-shell .topbar{
+  background:linear-gradient(to bottom,rgba(8,12,18,.98),rgba(8,12,18,.90),rgba(8,12,18,.08))!important;
+}
+.app-shell .bottom-nav{
+  background:rgba(8,12,18,.96)!important;
+  border-top-color:rgba(37,99,235,.38)!important;
+  box-shadow:0 -12px 34px rgba(0,0,0,.32)!important;
+}
+.app-shell .hero,
+.app-shell .home-v2-section,
+.app-shell .signal-v2-card,
+.app-shell .price-v2-card,
+.app-shell .price-v2-comparison,
+.app-shell .trade-health-v2,
+.app-shell .trade-v2-card,
+.app-shell .account-v2-service,
+.app-shell .profile-card,
+.app-shell .support-card,
+.app-shell .note-card,
+.app-shell .modal-sheet,
+.app-shell .purchase-status-card,
+.app-shell .license-v4-card{
+  background:linear-gradient(155deg,#151f2c,#101722)!important;
+}
+
+/* Cobalt = main structural frame */
+.app-shell .hero,
+.app-shell .home-v2-section,
+.app-shell .signal-v2-card,
+.app-shell .trade-health-v2,
+.app-shell .trade-v2-card{
+  border-color:rgba(37,99,235,.64)!important;
+  box-shadow:0 16px 38px rgba(0,0,0,.34),0 0 0 1px rgba(37,99,235,.05),inset 0 1px 0 rgba(255,255,255,.03)!important;
+}
+
+/* Cyan = account, tools and live information */
+.app-shell .account-v2-service,
+.app-shell .profile-card,
+.app-shell .support-card,
+.app-shell .home-health-card,
+.app-shell .home-community-card{
+  border-color:rgba(6,182,212,.58)!important;
+}
+.app-shell .eyebrow,
+.app-shell .text-btn,
+.app-shell .lock,
+.app-shell .signal-detail-head>b,
+.app-shell .signal-v2-side>b,
+.app-shell .purchase-head span,
+.app-shell .copy-box code,
+.app-shell .license-v4-key code{
+  color:#22d3ee!important;
+}
+.app-shell .nexus-card-icon,
+.app-shell .menu-card>span,
+.app-shell .list-card>span,
+.app-shell .support-icon,
+.app-shell .avatar,
+.app-shell .signal-v2-lock>.nexus-inline-icon,
+.app-shell .nexus-empty-state>.nexus-inline-icon{
+  color:#22d3ee!important;
+  background:rgba(6,182,212,.09)!important;
+  border-color:rgba(6,182,212,.25)!important;
+}
+
+/* Amber = primary action, VIP and premium emphasis */
+.app-shell .primary,
+.app-shell .tab.active{
+  background:linear-gradient(135deg,#fbbf24,#f59e0b)!important;
+  color:#160d02!important;
+  box-shadow:0 10px 28px rgba(245,158,11,.22)!important;
+}
+.app-shell .nav-item.active,
+.app-shell .pricing-kicker,
+.app-shell .vip-badge,
+.app-shell .price-v2-card.recommended .price-v2-kicker,
+.app-shell .featured .pricing-kicker{
+  color:#fbbf24!important;
+}
+.app-shell .nav-item.active .nexus-nav-icon{
+  filter:drop-shadow(0 0 8px rgba(245,158,11,.42))!important;
+}
+.app-shell .featured,
+.app-shell .price-v2-card.recommended,
+.app-shell .home-v2-priority,
+.app-shell .home-offer-card{
+  border-color:rgba(245,158,11,.62)!important;
+  box-shadow:0 16px 38px rgba(0,0,0,.34),0 0 24px rgba(245,158,11,.06)!important;
+}
+.app-shell .vip-badge{
+  border-color:rgba(245,158,11,.38)!important;
+  background:rgba(245,158,11,.08)!important;
+}
+
+/* Strong but restrained interactive states */
+.app-shell .icon-btn,
+.app-shell .tab,
+.app-shell .ghost,
+.app-shell .menu-card,
+.app-shell .list-card,
+.app-shell .quick-card,
+.app-shell .home-signal-card,
+.app-shell .signal-v2-core>div,
+.app-shell .signal-v2-targets>span,
+.app-shell .home-stat-grid>div,
+.app-shell .stats-grid>div,
+.app-shell .account-inline-check,
+.app-shell .account-meta-line,
+.app-shell .trade-v2-grid>div,
+.app-shell .trade-detail-grid>div,
+.app-shell .compare-row,
+.app-shell .purchase-step,
+.app-shell .admin-meta-row{
+  border-color:rgba(96,165,250,.20)!important;
+  background-color:rgba(255,255,255,.018)!important;
+}
+
+@media(hover:hover){
+  .app-shell .quick-card:hover,
+  .app-shell .menu-card:hover,
+  .app-shell .list-card:hover,
+  .app-shell .signal-v2-card:hover,
+  .app-shell .home-signal-card:hover,
+  .app-shell .price-v2-card:hover,
+  .app-shell .trade-v2-card:hover,
+  .app-shell .account-v2-service:hover,
+  .app-shell .home-v2-section:hover{
+    border-color:rgba(6,182,212,.78)!important;
+    box-shadow:0 16px 38px rgba(0,0,0,.34),0 0 22px rgba(6,182,212,.07)!important;
+  }
+}
+
+/* Semantic colors stay semantic; green is no longer the brand color. */
+.app-shell .status-panel.success,
+.app-shell .home-health-card.success,
+.app-shell .signal-execution-panel.success{
+  border-color:rgba(49,214,164,.34)!important;
+  background:rgba(49,214,164,.055)!important;
+}
+.app-shell .status-pill.approved,
+.app-shell .home-result.win,
+.app-shell .signal-v2-result.win,
+.app-shell .signal-result-row b.win,
+.app-shell .account-inline-check.ok,
+.app-shell .trade-checks .ok{
+  color:#31d6a4!important;
+}
+.app-shell .home-result.loss,
+.app-shell .signal-v2-result.loss,
+.app-shell .signal-result-row b.loss,
+.app-shell .negative{
+  color:#ff6b76!important;
+}
+.app-shell .status-pill.pending,
+.app-shell .signal-v2-result.partial,
+.app-shell .home-result.partial,
+.app-shell .execution-reason{
+  color:#fbbf24!important;
+  border-color:rgba(245,158,11,.34)!important;
+}
+
+/* Replace old teal glow language with Cobalt/Cyan. */
+.app-shell .hero:after{
+  background:radial-gradient(circle,rgba(37,99,235,.24),transparent 68%)!important;
+}
+.app-shell .orb-a{
+  background:radial-gradient(circle,rgba(6,182,212,.24),rgba(6,182,212,0) 68%)!important;
+}
+.app-shell .orb-b{
+  background:radial-gradient(circle,rgba(37,99,235,.24),rgba(37,99,235,0) 68%)!important;
+}
+.app-shell .status-dot,
+.app-shell .live,
+.app-shell .signal-timeline article>span{
+  background:#06b6d4!important;
+  box-shadow:0 0 12px rgba(6,182,212,.38)!important;
+}
+.app-shell .price-carousel-dots button.active{
+  background:#f59e0b!important;
+}
+.app-shell .price-v2-card.selected{
+  box-shadow:0 0 0 2px rgba(245,158,11,.22),0 15px 38px rgba(0,0,0,.32)!important;
+}
