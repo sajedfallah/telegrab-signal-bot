@@ -668,7 +668,10 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
         f"🔧 Trailing: <b>{row['trailing_code'] or '—'}</b>"
     )
 
-    free_id = vip_id = None
+    # Preserve already-published destinations so a retry sends only missing
+    # channels and can still determine that the overall publication completed.
+    free_id = int(row["free_message_id"]) if row["free_message_id"] else None
+    vip_id = int(row["vip_message_id"]) if row["vip_message_id"] else None
     async with Bot(settings.bot_token) as bot:
         targets_to_send = []
         if destination in {"FREE", "BOTH"}:
@@ -789,8 +792,19 @@ async def upload_chart_capture_result(
             raw = base64.b64decode(encoded, validate=True)
         except (ValueError, binascii.Error) as exc:
             raise HTTPException(status_code=422, detail="invalid chart base64") from exc
-        if len(raw) < 4096 or len(raw) > 5_000_000 or not raw.startswith(b"\x89PNG\r\n\x1a\n"):
-            raise HTTPException(status_code=422, detail="chart must be a valid 4 KB-5 MB PNG")
+        if len(raw) > 5_000_000 or not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(status_code=422, detail="chart must be a valid PNG up to 5 MB")
+        try:
+            from PIL import Image, UnidentifiedImageError
+            with Image.open(BytesIO(raw)) as image:
+                if image.format != "PNG":
+                    raise ValueError("chart is not PNG")
+                width, height = image.size
+                image.verify()
+                if width <= 0 or height <= 0 or width * height > 20_000_000:
+                    raise ValueError("unsafe chart dimensions")
+        except (UnidentifiedImageError, OSError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail="invalid or unsafe PNG chart") from exc
         digest = hashlib.sha256(raw).hexdigest()
         if req.image_sha256 and not hmac.compare_digest(digest, req.image_sha256.lower()):
             raise HTTPException(status_code=422, detail="chart sha256 mismatch")
@@ -798,7 +812,13 @@ async def upload_chart_capture_result(
         if current_status in {"UPLOADED", "COMPLETED"}:
             if not hmac.compare_digest(str(job["image_sha256"] or ""), digest):
                 raise HTTPException(status_code=409, detail="chart capture job already completed with another image")
-            return {"ok": True, "idempotent": True, "status": current_status, "publication": "ALREADY_QUEUED"}
+            published = str(signal["publication_stage"] or "").upper() == "PUBLISHED"
+            if not published:
+                with db.conn() as con:
+                    con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+                background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None)
+            return {"ok": True, "idempotent": True, "status": current_status,
+                    "publication": "ALREADY_PUBLISHED" if published else "RETRY_QUEUED"}
         if current_status not in {"CLAIMED", "CAPTURING"} or str(job["claimed_by_account"] or "") != account:
             raise HTTPException(status_code=409, detail="chart capture job is not owned by this MT5 account")
         folder = db.DB_PATH.parent / "artifacts" / "signal_charts"

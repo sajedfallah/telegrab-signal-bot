@@ -1941,17 +1941,28 @@ def ensure_default_plans(defaults: dict[str, dict[str, object]]) -> None:
         for code, price in catalog_fix.items():
             con.execute("UPDATE subscription_plans SET usdt_price=?, price_usdt=?, updated_at=? WHERE code=?", (price, price, now, code))
             con.execute("UPDATE plans SET price_usdt=?, updated_at=? WHERE code=?", (price, now, code))
-        # One-time synchronization for the approved 19-USDT VIP catalog. This
-        # supersedes the older VIP12M=239 repair while preserving later admin
-        # edits after this migration marker has been written.
+        # Production already advertises this catalog in Settings. Repair only
+        # known legacy defaults; never overwrite an operator's custom price.
         if get_setting("pricing_catalog_19_v1", "0", con=con) != "1":
-            for code, plan in defaults.items():
+            legacy_prices = {
+                "VIP1M": ("25",), "VIP3M": ("69",), "VIP6M": ("129",), "VIP12M": ("239",),
+                "AUTO1M": ("30",), "AUTO3M": ("83",), "AUTO6M": ("155",), "AUTO12M": ("289",),
+            }
+            for code, old_prices in legacy_prices.items():
+                plan = defaults.get(code)
+                if not plan:
+                    continue
                 price = str(plan.get("usdt", "0"))
+                marks = ",".join("?" for _ in old_prices)
                 con.execute(
-                    "UPDATE subscription_plans SET usdt_price=?,price_usdt=?,updated_at=? WHERE code=?",
-                    (price, price, now, str(code)),
+                    f"UPDATE subscription_plans SET usdt_price=?,price_usdt=?,updated_at=? "
+                    f"WHERE code=? AND usdt_price IN ({marks}) AND price_usdt IN ({marks})",
+                    (price, price, now, str(code), *old_prices, *old_prices),
                 )
-                con.execute("UPDATE plans SET price_usdt=?,updated_at=? WHERE code=?", (price, now, str(code)))
+                con.execute(
+                    f"UPDATE plans SET price_usdt=?,updated_at=? WHERE code=? AND price_usdt IN ({marks})",
+                    (price, now, str(code), *old_prices),
+                )
             con.execute(
                 "INSERT INTO app_settings(key,value,updated_at) VALUES('pricing_catalog_19_v1','1',?) "
                 "ON CONFLICT(key) DO UPDATE SET value='1',updated_at=excluded.updated_at", (now,),
@@ -2374,6 +2385,27 @@ def mt5_live_orders(account_number: str, *, nexus_only: bool = True) -> list[dic
         if nexus_only: q += " AND nexus_managed=1"
         q += " ORDER BY last_seen_at DESC, ticket DESC"
         return [dict(r) for r in con.execute(q,args).fetchall()]
+
+
+def enrich_mt5_live_signals(items: list[dict], account_number: str) -> list[dict]:
+    """Attach an actionable canonical signal id only for this admin MT5 account."""
+    account = str(account_number or "").strip()
+    enriched: list[dict] = []
+    with conn() as con:
+        for source in items:
+            item = dict(source)
+            code = str(item.get("signal_code") or "").strip()
+            row = None
+            if account and code:
+                row = con.execute(
+                    """SELECT id FROM signals
+                       WHERE code=? AND issuer_type IN ('MT5_ADMIN','WEB_ADMIN') AND issuer_account=?
+                       ORDER BY id DESC LIMIT 1""",
+                    (code, account),
+                ).fetchone()
+            item["signal_id"] = int(row["id"]) if row else None
+            enriched.append(item)
+    return enriched
 
 def mt5_live_accounts() -> list[dict]:
     with conn() as con:

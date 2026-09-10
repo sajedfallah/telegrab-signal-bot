@@ -5,11 +5,13 @@ import hashlib
 import hmac
 import json
 import time
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app import db
 from app.config import settings
@@ -72,6 +74,24 @@ def claim_job(client, request_id="chart-job-request"):
     claimed = client.get("/api/v1/autotrade/admin/chart-capture/next", headers=chart_headers())
     assert claimed.status_code == 200, claimed.text
     return created, claimed.json()["job"]
+
+
+def real_png(color=(12, 80, 160)) -> bytes:
+    stream = BytesIO()
+    image = Image.effect_noise((320, 240), 48).convert("RGB")
+    if color != (12, 80, 160):
+        image = Image.merge("RGB", tuple(channel.point(lambda value, offset=offset: (value + offset) % 256)
+                                         for channel, offset in zip(image.split(), color)))
+    image.save(stream, format="PNG")
+    return stream.getvalue()
+
+
+def chart_body(job, image: bytes, field="chart_base64"):
+    return {
+        "signal_db_id": job["signal_db_id"], "signal_code": job["signal_code"],
+        "broker_symbol": job["symbol"], "timeframe": job["timeframe"],
+        field: base64.b64encode(image).decode(), "image_sha256": hashlib.sha256(image).hexdigest(),
+    }
 
 
 def test_buy_tp_calculation():
@@ -205,12 +225,8 @@ def test_chart_upload_accepts_legacy_and_new_image_fields(client, monkeypatch, f
 
     monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", no_publish)
     _, job = claim_job(client, f"upload-{field}")
-    image = b"\x89PNG\r\n\x1a\n" + (b"NEXUS" * 900)
-    body = {
-        "signal_db_id": job["signal_db_id"], "signal_code": job["signal_code"],
-        "broker_symbol": job["symbol"], "timeframe": job["timeframe"],
-        field: base64.b64encode(image).decode(), "image_sha256": hashlib.sha256(image).hexdigest(),
-    }
+    image = real_png()
+    body = chart_body(job, image, field)
     response = client.post(
         f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result",
         headers=chart_headers(), json=body,
@@ -224,6 +240,138 @@ def test_chart_upload_accepts_legacy_and_new_image_fields(client, monkeypatch, f
     )
     assert duplicate.status_code == 200
     assert duplicate.json()["idempotent"] is True
+
+
+@pytest.mark.parametrize("kind", ["truncated", "corrupt"])
+def test_truncated_or_corrupt_png_is_rejected_without_consuming_job(client, kind):
+    image = (
+        real_png()[:-12]
+        if kind == "truncated"
+        else b"\x89PNG\r\n\x1a\n" + b"corrupt payload" * 100
+    )
+    _, job = claim_job(client, f"bad-png-{hashlib.sha1(image).hexdigest()[:8]}")
+    response = client.post(
+        f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result",
+        headers=chart_headers(), json=chart_body(job, image),
+    )
+    assert response.status_code == 422
+    assert db.get_chart_capture_job(job["job_id"])["status"] == "CLAIMED"
+
+
+def test_invalid_base64_is_rejected_without_consuming_job(client):
+    _, job = claim_job(client, "invalid-base64")
+    body = chart_body(job, real_png())
+    body["chart_base64"] = "%%%not-base64%%%"
+    response = client.post(
+        f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result",
+        headers=chart_headers(), json=body,
+    )
+    assert response.status_code == 422
+    assert db.get_chart_capture_job(job["job_id"])["status"] == "CLAIMED"
+
+
+def test_duplicate_different_valid_png_conflicts(client, monkeypatch):
+    from app.autotrade import api
+    async def no_publish(*_args, **_kwargs): return {"complete": True}
+    monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", no_publish)
+    _, job = claim_job(client, "different-image-conflict")
+    url = f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result"
+    assert client.post(url, headers=chart_headers(), json=chart_body(job, real_png())).status_code == 200
+    conflict = client.post(url, headers=chart_headers(), json=chart_body(job, real_png((180, 20, 40))))
+    assert conflict.status_code == 409
+
+
+def test_duplicate_screenshot_recovers_crash_window_and_requeues_publication(client, monkeypatch):
+    from app.autotrade import api
+    calls = []
+    async def crashed(*_args, **_kwargs): return {"complete": False}
+    monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", crashed)
+    created, job = claim_job(client, "crash-after-persist")
+    body = chart_body(job, real_png())
+    url = f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result"
+    assert client.post(url, headers=chart_headers(), json=body).status_code == 200
+    assert db.get_chart_capture_job(job["job_id"])["status"] == "UPLOADED"
+    async def recovered(row, *_args, **_kwargs):
+        calls.append(int(row["id"])); return {"complete": True}
+    monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", recovered)
+    duplicate = client.post(url, headers=chart_headers(), json=body)
+    assert duplicate.status_code == 200
+    assert duplicate.json()["publication"] == "RETRY_QUEUED"
+    assert calls == [created["signal_id"]]
+    with db.conn() as con:
+        assert con.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 1
+        assert con.execute("SELECT COUNT(*) FROM signal_chart_capture_jobs").fetchone()[0] == 1
+
+
+def test_retry_endpoint_requeues_persisted_screenshot_without_new_rows(client, monkeypatch):
+    from app.autotrade import api
+    async def no_publish(*_args, **_kwargs): return {"complete": False}
+    monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", no_publish)
+    created, job = claim_job(client, "retry-persisted-chart")
+    url = f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/result"
+    assert client.post(url, headers=chart_headers(), json=chart_body(job, real_png())).status_code == 200
+    retried = client.post(f"/miniapp/api/admin/signals/{created['request_id']}/retry", headers=headers())
+    assert retried.status_code == 200
+    assert retried.json()["publication"] == "RETRY_QUEUED"
+    with db.conn() as con:
+        assert con.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 1
+        assert con.execute("SELECT COUNT(*) FROM signal_chart_capture_jobs").fetchone()[0] == 1
+
+
+def test_positions_resolve_actionable_signal_id_from_live_state(client):
+    db.ensure_admin_identity(ADMIN_ID)
+    db.record_mt5_heartbeat(ACCOUNT, role="ADMIN", ea_version="0.6.5", payload={"ok": True})
+    created = client.post("/miniapp/api/admin/signals", headers=headers(), json=payload("live-position-link")).json()
+    code = created["signal"]["code"]
+    db.upsert_mt5_live_snapshot(ACCOUNT, positions=[{
+        "identifier": "501", "ticket": "501", "signal_code": code, "symbol": "XAUUSD",
+        "direction": "BUY", "volume": 0.1, "entry_price": 3650, "current_price": 3651,
+        "stop_loss": 3645, "take_profit": 3655, "magic": 65001, "nexus_managed": True,
+    }])
+    response = client.get("/miniapp/api/admin/positions", headers=headers())
+    assert response.status_code == 200
+    assert response.json()["positions"][0]["signal_id"] == created["signal_id"]
+    with db.conn() as con:
+        con.execute("UPDATE signals SET issuer_account='OTHER-ACCOUNT' WHERE id=?", (created["signal_id"],))
+    assert client.get("/miniapp/api/admin/positions", headers=headers()).json()["positions"][0]["signal_id"] is None
+
+
+def test_expired_offline_job_retries_same_signal_and_request(client):
+    created = client.post("/miniapp/api/admin/signals", headers=headers(), json=payload("offline-expired-retry")).json()
+    with db.conn() as con:
+        con.execute("UPDATE signal_chart_capture_jobs SET status='EXPIRED',error_text='job expired' WHERE signal_id=?", (created["signal_id"],))
+    retried = client.post(f"/miniapp/api/admin/signals/{created['request_id']}/retry", headers=headers())
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "WAITING_FOR_MT5"
+    with db.conn() as con:
+        assert con.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 1
+        assert con.execute("SELECT request_id FROM miniapp_admin_signal_requests").fetchone()[0] == created["request_id"]
+
+
+def test_retry_control_is_wired_to_existing_api():
+    js = Path("miniapp/admin-signal.js").read_text(encoding="utf-8")
+    assert "retry-signal" in js
+    assert "/retry" in js
+    for state in ("FAILED", "PUBLISH_FAILED", "EXPIRED", "UPLOADED", "COMPLETED"):
+        assert state in js
+
+
+def test_pricing_catalog_repair_does_not_overwrite_custom_price(tmp_path, monkeypatch):
+    copy_path = tmp_path / "pricing-copy.db"
+    monkeypatch.setattr(db, "DB_PATH", copy_path)
+    db.init_db()
+    db.ensure_default_plans(settings.plans)
+    with db.conn() as con:
+        con.execute("UPDATE subscription_plans SET usdt_price='777',price_usdt='777' WHERE code='VIP1M'")
+        con.execute("UPDATE plans SET price_usdt='777' WHERE code='VIP1M'")
+        con.execute("DELETE FROM app_settings WHERE key='pricing_catalog_19_v1'")
+    db.ensure_default_plans(settings.plans)
+    with db.conn() as con:
+        subscription = con.execute("SELECT usdt_price,price_usdt FROM subscription_plans WHERE code='VIP1M'").fetchone()
+        plan = con.execute("SELECT price_usdt FROM plans WHERE code='VIP1M'").fetchone()
+    assert copy_path.name == "pricing-copy.db"
+    assert tuple(map(str, subscription)) == ("777", "777")
+    assert str(plan[0]) == "777"
 
 
 def test_legacy_failure_payload_and_retry(client):

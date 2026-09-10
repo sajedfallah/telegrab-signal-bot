@@ -207,8 +207,10 @@ def _sync_request(row) -> dict[str, Any]:
                 status = "SCREENSHOT_READY"
             elif job_status in {"CLAIMED", "CAPTURING"}:
                 status = "PROCESSING"
-            elif job_status in {"FAILED", "EXPIRED"}:
+            elif job_status == "FAILED":
                 status, error = "FAILED", str(job["error_text"] or "chart capture failed")
+            elif job_status == "EXPIRED":
+                status, error = "EXPIRED", str(job["error_text"] or "chart capture expired")
             elif job_status == "PENDING":
                 status = "WAITING_FOR_MT5" if not _admin_mt5_status()["online"] else "READY"
         if str(signal["publication_stage"] or "").upper() == "PUBLISH_FAILED":
@@ -317,7 +319,8 @@ def retry(request_id: str, background_tasks: BackgroundTasks,
     try:
         signal = db.get_signal(int(row["signal_id"]))
         existing_job = db.get_signal_chart_capture_job(int(row["signal_id"]))
-        if (signal and existing_job and str(signal["publication_stage"] or "").upper() == "PUBLISH_FAILED"
+        already_published = bool(signal and str(signal["publication_stage"] or "").upper() == "PUBLISHED")
+        if (signal and existing_job and not already_published
                 and str(existing_job["status"] or "").upper() in {"UPLOADED", "COMPLETED"}):
             from .autotrade.api import _publish_mt5_admin_signal_async
             with db.conn() as con:
@@ -341,8 +344,11 @@ def retry(request_id: str, background_tasks: BackgroundTasks,
 def positions(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     _admin(x_telegram_init_data)
     mt5 = _admin_mt5_status(); account = mt5.get("account_number")
-    return {"mt5_admin": mt5, "positions": db.mt5_live_positions(account, nexus_only=True) if account else [],
-            "orders": db.mt5_live_orders(account, nexus_only=True) if account else []}
+    live_positions = db.mt5_live_positions(account, nexus_only=True) if account else []
+    live_orders = db.mt5_live_orders(account, nexus_only=True) if account else []
+    return {"mt5_admin": mt5,
+            "positions": db.enrich_mt5_live_signals(live_positions, account) if account else [],
+            "orders": db.enrich_mt5_live_signals(live_orders, account) if account else []}
 
 
 @router.post("/signals/{signal_id}/command")
