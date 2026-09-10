@@ -3,49 +3,167 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#06101c">
+  <meta name="theme-color" content="#050b13">
   <title>NEXUS Admin Signal Center</title>
-  <link rel="stylesheet" href="/miniapp/admin-signal.css?v=1">
+  <link rel="stylesheet" href="/miniapp/admin-signal.css?v=2">
   <link rel="stylesheet" href="/miniapp/admin-actions.css?v=1">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
   <main class="app">
-    <header class="top"><div class="brand">NE<span>X</span>US<small>ADMIN</small></div><button id="refresh" class="icon">↻</button></header>
-    <section class="hero">
-      <div><small>مرکز عملیات</small><h1>مرکز سیگنال NEXUS</h1></div>
+    <header class="top">
+      <div class="brand">NE<span>X</span>US<small>ADMIN SIGNAL DESK</small></div>
+      <button id="refresh" class="icon" type="button" aria-label="بروزرسانی">↻</button>
+    </header>
+
+    <section class="hero hero-card">
+      <div>
+        <small>EXECUTION CONTROL</small>
+        <h1>مرکز صدور سیگنال</h1>
+        <p>کنترل سطوح، ریسک، حجم و مدیریت معامله در یک مسیر واحد</p>
+      </div>
       <div id="mt5Chip" class="chip offline"><i></i><span>MT5 آفلاین</span></div>
     </section>
 
     <section id="dashboard" class="view active">
-      <button id="newSignal" class="primary large">＋ صدور سیگنال جدید</button>
-      <div class="metrics"><article><b id="openCount">۰</b><span>درخواست فعال</span></article><article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article><article><b id="waitingCount">۰</b><span>منتظر MT5</span></article></div>
-      <div class="section-head"><h2>آخرین درخواست‌ها</h2><button id="reloadSignals">بروزرسانی</button></div>
+      <button id="newSignal" class="primary large" type="button">＋ صدور سیگنال جدید</button>
+      <div class="metrics">
+        <article><b id="openCount">۰</b><span>درخواست فعال</span></article>
+        <article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article>
+        <article><b id="waitingCount">۰</b><span>منتظر MT5</span></article>
+      </div>
+      <div class="section-head"><h2>آخرین درخواست‌ها</h2><button id="reloadSignals" type="button">بروزرسانی</button></div>
       <div id="signalList" class="stack"><div class="empty">هنوز سیگنالی صادر نشده است.</div></div>
     </section>
 
     <section id="create" class="view">
-      <div class="steps"><span class="on">۱<br><small>بازار</small></span><i></i><span>۲<br><small>ریسک</small></span><i></i><span>۳<br><small>انتشار</small></span></div>
-      <form id="signalForm" class="panel form">
-        <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
-        <div class="direction"><button type="button" data-side="BUY" class="selected buy">BUY</button><button type="button" data-side="SELL">SELL</button></div>
-        <div class="grid"><label>قیمت ورود<input id="entry" inputmode="decimal" placeholder="3650.00" required></label><label>حد ضرر<input id="stopLoss" inputmode="decimal" placeholder="3645.00" required></label></div>
-        <div id="riskBox" class="risk"><span>ریسک قیمت</span><b>—</b></div>
-        <div><div class="mini-title">اهداف خودکار</div><div id="targets" class="targets"><p>Entry و Stop Loss را وارد کنید.</p></div></div>
-        <label>مقصد<div class="segments destination"><button type="button" data-value="FREE">FREE</button><button type="button" data-value="VIP">VIP</button><button type="button" data-value="BOTH" class="selected">BOTH</button></div></label>
-        <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
-        <button type="submit" class="outline">پیش‌نمایش سیگنال</button>
+      <div class="steps"><span class="on">۱<br><small>بازار</small></span><i></i><span class="on">۲<br><small>ریسک</small></span><i></i><span class="on">۳<br><small>مدیریت</small></span></div>
+
+      <form id="signalForm" class="form">
+        <section class="control-card accent-cyan">
+          <div class="control-heading">
+            <div><small>01 / MARKET</small><h2>مشخصات بازار</h2></div>
+            <span class="badge">REQUIRED</span>
+          </div>
+          <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
+          <div class="direction">
+            <button type="button" data-side="BUY" class="selected buy">BUY</button>
+            <button type="button" data-side="SELL">SELL</button>
+          </div>
+          <div class="grid">
+            <label>قیمت ورود<input id="entry" inputmode="decimal" placeholder="3650.00" required></label>
+            <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
+          </div>
+        </section>
+
+        <section class="control-card accent-red">
+          <div class="control-heading">
+            <div><small>02 / STOP LOSS</small><h2>حد ضرر</h2></div>
+            <span id="resolvedSlBadge" class="badge muted-badge">—</span>
+          </div>
+          <div class="mode-row">
+            <span>روش تعیین SL</span>
+            <div class="segments two" id="slMode">
+              <button type="button" data-value="MANUAL" class="selected">دستی</button>
+              <button type="button" data-value="AUTO">اتوماتیک</button>
+            </div>
+          </div>
+          <div id="manualSlFields">
+            <label>قیمت Stop Loss<input id="stopLoss" inputmode="decimal" placeholder="3645.00"></label>
+          </div>
+          <div id="autoSlFields" class="conditional" hidden>
+            <label>فاصله SL از Entry<input id="stopDistance" inputmode="decimal" placeholder="5.00"></label>
+            <p class="hint">BUY: Entry − Distance &nbsp; | &nbsp; SELL: Entry + Distance</p>
+          </div>
+          <div id="riskBox" class="risk"><span>ریسک قیمتی Entry تا SL</span><b>—</b></div>
+        </section>
+
+        <section class="control-card accent-green">
+          <div class="control-heading">
+            <div><small>03 / TAKE PROFIT</small><h2>اهداف سود</h2></div>
+            <span class="badge">MULTI TP</span>
+          </div>
+          <div class="mode-row">
+            <span>روش تعیین TP</span>
+            <div class="segments two" id="tpMode">
+              <button type="button" data-value="AUTO" class="selected">اتوماتیک</button>
+              <button type="button" data-value="MANUAL">دستی</button>
+            </div>
+          </div>
+          <div id="autoTpFields">
+            <div class="mini-title">اهداف خودکار · 1R / 1.5R / 2R / 3R</div>
+            <div id="targets" class="targets"><p>Entry و Stop Loss را وارد کنید.</p></div>
+          </div>
+          <div id="manualTpFields" class="conditional" hidden>
+            <div class="grid tp-grid">
+              <label>TP1<input id="manualTp1" inputmode="decimal" placeholder="TP1"></label>
+              <label>TP2<input id="manualTp2" inputmode="decimal" placeholder="TP2"></label>
+              <label>TP3<input id="manualTp3" inputmode="decimal" placeholder="TP3"></label>
+              <label>TP4<input id="manualTp4" inputmode="decimal" placeholder="TP4"></label>
+            </div>
+            <p class="hint">در BUY اهداف باید بالاتر از Entry و صعودی؛ در SELL پایین‌تر از Entry و نزولی باشند.</p>
+            <div id="manualTargetsResolved" class="targets compact"><p>چهار هدف را وارد کنید.</p></div>
+          </div>
+        </section>
+
+        <section class="control-card accent-violet">
+          <div class="control-heading">
+            <div><small>04 / POSITION SIZE</small><h2>مدیریت حجم و ریسک</h2></div>
+            <span class="badge">EXECUTION</span>
+          </div>
+          <div class="segments two" id="volumeMode">
+            <button type="button" data-value="RISK" class="selected">Fixed Risk %</button>
+            <button type="button" data-value="FIXED">Lot Size</button>
+          </div>
+          <div id="riskSizingFields">
+            <label>درصد ریسک ثابت<input id="riskPercent" inputmode="decimal" value="1" placeholder="1.0"></label>
+          </div>
+          <div id="lotSizingFields" class="conditional" hidden>
+            <label>حجم معامله / Lot<input id="lotSize" inputmode="decimal" placeholder="0.01"></label>
+          </div>
+        </section>
+
+        <section class="control-card accent-orange">
+          <div class="control-heading trailing-heading">
+            <div><small>05 / TRAILING</small><h2>Trailing Stop</h2></div>
+            <label class="switch" aria-label="فعال‌سازی تریلینگ">
+              <input id="trailingEnabled" type="checkbox">
+              <span class="switch-track"><i></i></span>
+            </label>
+          </div>
+          <p class="section-copy">تریلینگ مبتنی بر R با همان موتور مدیریت NEXUS. پارامترها فقط در صورت فعال‌سازی به سیگنال اضافه می‌شوند.</p>
+          <div id="trailingFields" class="conditional trailing-fields" hidden>
+            <div class="grid three">
+              <label>فعال‌سازی / BE (R)<input id="trailingBreakEven" inputmode="decimal" value="1.0"></label>
+              <label>فاصله تریل (R)<input id="trailingStep" inputmode="decimal" value="0.50"></label>
+              <label>گام قفل سود (R)<input id="trailingLock" inputmode="decimal" value="0.30"></label>
+            </div>
+            <div class="trail-note"><b>NEXUS STEP TRAIL</b><span>Stop هرگز به عقب حرکت نمی‌کند و تغییرات توسط موتور MT5 مدیریت می‌شوند.</span></div>
+          </div>
+        </section>
+
+        <section class="control-card accent-blue">
+          <div class="control-heading"><div><small>06 / DELIVERY</small><h2>انتشار</h2></div></div>
+          <label>مقصد
+            <div class="segments destination">
+              <button type="button" data-value="FREE">FREE</button>
+              <button type="button" data-value="VIP">VIP</button>
+              <button type="button" data-value="BOTH" class="selected">BOTH</button>
+            </div>
+          </label>
+          <button type="submit" class="outline preview-button">پیش‌نمایش کامل سیگنال</button>
+        </section>
       </form>
     </section>
 
-    <section id="positions" class="view"><div class="section-head"><h2>پوزیشن‌ها و سفارش‌ها</h2><button id="reloadPositions">بروزرسانی</button></div><div id="positionList" class="stack"></div></section>
+    <section id="positions" class="view"><div class="section-head"><h2>پوزیشن‌ها و سفارش‌ها</h2><button id="reloadPositions" type="button">بروزرسانی</button></div><div id="positionList" class="stack"></div></section>
     <section id="logs" class="view"><div class="section-head"><h2>وضعیت صدور</h2></div><div id="logList" class="stack"></div></section>
 
     <nav class="bottom"><button data-view="dashboard" class="selected"><b>⌂</b>خانه</button><button data-view="create"><b>＋</b>صدور</button><button data-view="positions"><b>↗</b>پوزیشن‌ها</button><button data-view="logs"><b>≡</b>لاگ</button></nav>
   </main>
 
-  <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close">×</button><small>تأیید نهایی</small><h2>بررسی و اجرای سیگنال</h2><div id="preview"></div><div class="safety">DRAFT ← VALIDATE ← MT5 ← SCREENSHOT ← TELEGRAM</div><button id="publish" class="primary">ارسال به MT5</button><button id="cancelPreview" class="ghost">بازگشت و ویرایش</button></div></div>
+  <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close" type="button">×</button><small>تأیید نهایی</small><h2>بررسی و اجرای سیگنال</h2><div id="preview"></div><div class="safety">DRAFT ← VALIDATE ← MT5 ← SCREENSHOT ← TELEGRAM</div><button id="publish" class="primary" type="button">ارسال به MT5</button><button id="cancelPreview" class="ghost" type="button">بازگشت و ویرایش</button></div></div>
   <div id="toast" class="toast"></div>
-  <script src="/miniapp/admin-signal.js?v=1"></script>
+  <script src="/miniapp/admin-signal.js?v=2"></script>
 </body>
 </html>
