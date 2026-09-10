@@ -4,6 +4,51 @@
   tg?.expand();
 
   const API = '/miniapp/api/admin';
+  const FALLBACK_TRAILING = [
+    {
+      code: 'NEXUS_TRAIL_01',
+      name: 'اسکالپینگ محافظه‌کارانه',
+      guide: 'در 1R به Break Even می‌رود و سپس حد ضرر را پله‌ای جلو می‌آورد تا سود زودتر محافظت شود.',
+      config: {break_even_r: 1.0, trail_step_r: 0.50, lock_step_r: 0.30},
+    },
+    {
+      code: 'NEXUS_TRAIL_02',
+      name: 'Step Profit Lock',
+      guide: 'قفل سود مرحله‌ای؛ در 1R استاپ روی ورود، در 2R روی +1R و در 3R روی +2R قرار می‌گیرد.',
+      config: {steps: [{trigger_r: 1, lock_r: 0}, {trigger_r: 2, lock_r: 1}, {trigger_r: 3, lock_r: 2}]},
+    },
+    {
+      code: 'NEXUS_TRAIL_03',
+      name: 'Dynamic ATR',
+      guide: 'فاصله Stop بر اساس نوسان ATR تغییر می‌کند؛ در بازار پرنوسان بازتر و در بازار آرام فشرده‌تر می‌شود.',
+      config: {activation_r: 1.0, atr_period: 14, atr_multiplier: 2.0},
+    },
+    {
+      code: 'NEXUS_TRAIL_04',
+      name: 'ساختار بازار',
+      guide: 'در BUY استاپ زیر Swing Low معتبر و در SELL بالای Swing High معتبر حرکت می‌کند و هرگز عقب نمی‌رود.',
+      config: {activation_r: 1.0, swing_left: 2, swing_right: 2, buffer_points: 0},
+    },
+    {
+      code: 'NEXUS_TRAIL_05',
+      name: 'VIP Runner',
+      guide: 'در TP1 و TP2 بخشی از حجم بسته می‌شود و Runner با ساختار بازار و ATR پشتیبان مدیریت می‌شود.',
+      config: {tp1_close_pct: 30, tp2_close_pct: 30, runner_pct: 40, runner_mode: 'MARKET_STRUCTURE_ATR_FALLBACK', atr_period: 14, atr_multiplier: 2},
+    },
+    {
+      code: 'NEXUS_TRAIL_06',
+      name: 'Fast Scalping',
+      guide: 'مدل سریع‌تر اسکالپ؛ Break Even در 0.5R و حرکت‌های تریلینگ فشرده‌تر برای حفاظت سریع سود.',
+      config: {break_even_r: 0.50, trail_step_r: 0.35, lock_step_r: 0.25},
+    },
+    {
+      code: 'NEXUS_TRAIL_07',
+      name: 'NEXUS Smart Hybrid',
+      guide: 'مدل هیبرید اصلی NEXUS؛ Break Even، Partial Close، ساختار بازار و ATR fallback را ترکیب می‌کند.',
+      config: {break_even_r: 1.0, tp1_close_pct: 30, tp2_close_pct: 30, runner_pct: 40, runner_mode: 'MARKET_STRUCTURE_ATR_FALLBACK', atr_period: 14, atr_multiplier: 2, swing_left: 2, swing_right: 2},
+    },
+  ];
+
   const state = {
     side: 'BUY',
     destination: 'BOTH',
@@ -13,6 +58,7 @@
     calculation: null,
     mt5: null,
     preview: null,
+    trailingProfiles: [...FALLBACK_TRAILING],
   };
 
   const $ = (id) => document.getElementById(id);
@@ -48,6 +94,10 @@
     return Number.isFinite(value) ? value : null;
   }
 
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+  }
+
   function show(view) {
     document.querySelectorAll('.view').forEach((x) => x.classList.toggle('active', x.id === view));
     document.querySelectorAll('.bottom button').forEach((x) => x.classList.toggle('selected', x.dataset.view === view));
@@ -62,13 +112,85 @@
     chip.querySelector('span').textContent = mt5?.online ? 'MT5 متصل' : 'MT5 آفلاین';
   }
 
+  function populateSymbols(groups) {
+    if (!Array.isArray(groups) || !groups.length) return;
+    const select = $('symbol');
+    const current = select.value || 'XAUUSD';
+    const labels = {GOLD: 'فلزات', INDEX: 'شاخص‌ها', FOREX: 'Forex', CRYPTO: 'Crypto'};
+    const pretty = {
+      XAUUSD: 'Gold · XAUUSD', XAGUSD: 'Silver · XAGUSD',
+      DOWJONES: 'Dow Jones · DOWJONES', NASDAQ: 'Nasdaq · NASDAQ', SPX500: 'S&P 500 · SPX500',
+      BTCUSD: 'Bitcoin · BTCUSD', ETHUSD: 'Ethereum · ETHUSD', SOLUSD: 'Solana · SOLUSD',
+      BNBUSD: 'BNB · BNBUSD', XRPUSD: 'XRP · XRPUSD', DOGEUSD: 'DOGE · DOGEUSD',
+      AVAXUSD: 'AVAX · AVAXUSD', LTCUSD: 'Litecoin · LTCUSD',
+    };
+    select.innerHTML = groups.map((group) => {
+      const key = String(group.key || group.group || '').toUpperCase();
+      const symbols = Array.isArray(group.symbols) ? group.symbols : [];
+      return `<optgroup label="${esc(group.label || labels[key] || key)}">${symbols.map((symbol) => `<option value="${esc(symbol)}">${esc(pretty[symbol] || symbol)}</option>`).join('')}</optgroup>`;
+    }).join('');
+    if ([...select.options].some((option) => option.value === current)) select.value = current;
+    else if ([...select.options].some((option) => option.value === 'XAUUSD')) select.value = 'XAUUSD';
+  }
+
+  function populateTrailingProfiles(items) {
+    if (Array.isArray(items) && items.length) state.trailingProfiles = items;
+    const select = $('trailingProfile');
+    const current = select.value || 'NEXUS_TRAIL_01';
+    select.innerHTML = state.trailingProfiles.map((profile) => {
+      const number = String(profile.code || '').replace('NEXUS_TRAIL_', '');
+      return `<option value="${esc(profile.code)}">${esc(number)} · ${esc(profile.name)}</option>`;
+    }).join('');
+    if (state.trailingProfiles.some((profile) => profile.code === current)) select.value = current;
+    else select.value = state.trailingProfiles[0]?.code || 'NEXUS_TRAIL_01';
+    renderTrailingPreview();
+  }
+
+  function trailingMechanics(profile) {
+    const c = profile?.config || {};
+    const tags = [];
+    if (Array.isArray(c.steps)) {
+      c.steps.forEach((step) => tags.push(`${step.trigger_r}R → ${Number(step.lock_r) === 0 ? 'BE' : `+${step.lock_r}R`}`));
+    }
+    if (c.break_even_r != null) tags.push(`BE ${c.break_even_r}R`);
+    if (c.trail_step_r != null) tags.push(`STEP ${c.trail_step_r}R`);
+    if (c.lock_step_r != null) tags.push(`LOCK ${c.lock_step_r}R`);
+    if (c.activation_r != null) tags.push(`ACTIVE ${c.activation_r}R`);
+    if (c.atr_period != null) tags.push(`ATR ${c.atr_period}`);
+    if (c.atr_multiplier != null) tags.push(`ATR ×${c.atr_multiplier}`);
+    if (c.swing_left != null || c.swing_right != null) tags.push(`SWING ${c.swing_left ?? 0}/${c.swing_right ?? 0}`);
+    if (c.tp1_close_pct != null) tags.push(`TP1 CLOSE ${c.tp1_close_pct}%`);
+    if (c.tp2_close_pct != null) tags.push(`TP2 CLOSE ${c.tp2_close_pct}%`);
+    if (c.runner_pct != null) tags.push(`RUNNER ${c.runner_pct}%`);
+    if (c.runner_mode) tags.push('STRUCTURE + ATR');
+    return tags;
+  }
+
+  function selectedTrailingProfile() {
+    const code = $('trailingProfile')?.value || 'NEXUS_TRAIL_01';
+    return state.trailingProfiles.find((profile) => profile.code === code) || FALLBACK_TRAILING.find((profile) => profile.code === code) || FALLBACK_TRAILING[0];
+  }
+
+  function renderTrailingPreview() {
+    const profile = selectedTrailingProfile();
+    if (!profile || !$('trailingPreview')) return;
+    const mechanics = trailingMechanics(profile);
+    $('trailingPreview').innerHTML = `
+      <div class="trail-preview-head"><b>${esc(profile.code)}</b><span>${esc(profile.name)}</span></div>
+      <p>${esc(profile.guide || 'این مدل بر اساس Snapshot رسمی NEXUS در Expert اجرا می‌شود.')}</p>
+      <div class="trail-mechanics">${mechanics.map((item) => `<span>${esc(item)}</span>`).join('')}</div>`;
+  }
+
   async function bootstrap() {
     try {
       const data = await api('/bootstrap');
       setMt5(data.mt5_admin);
+      populateSymbols(data.symbol_catalog);
+      populateTrailingProfiles(data.trailing_profiles);
       await Promise.all([loadSignals(), loadPositions()]);
     } catch (e) {
       toast(e.message);
+      populateTrailingProfiles(FALLBACK_TRAILING);
       $('signalList').innerHTML = '<div class="empty">این صفحه فقط از داخل تلگرام و برای ادمین‌های مجاز فعال است.</div>';
     }
   }
@@ -182,23 +304,24 @@
     if (!enabled) {
       return {
         trailing_enabled: false,
+        trailing_profile_code: null,
         trailing_break_even_r: null,
         trailing_step_r: null,
         trailing_lock_r: null,
       };
     }
 
-    const breakEven = numeric('trailingBreakEven');
-    const step = numeric('trailingStep');
-    const lock = numeric('trailingLock');
-    if (!breakEven || breakEven <= 0 || !step || step <= 0 || !lock || lock <= 0) {
-      throw new Error('پارامترهای Trailing باید اعداد مثبت باشند.');
+    const profile = selectedTrailingProfile();
+    if (!profile || !/^NEXUS_TRAIL_0[1-7]$/.test(String(profile.code || ''))) {
+      throw new Error('یک مدل معتبر Trailing انتخاب کنید.');
     }
+
     return {
       trailing_enabled: true,
-      trailing_break_even_r: breakEven,
-      trailing_step_r: step,
-      trailing_lock_r: lock,
+      trailing_profile_code: profile.code,
+      trailing_break_even_r: null,
+      trailing_step_r: null,
+      trailing_lock_r: null,
     };
   }
 
@@ -237,20 +360,21 @@
     const sizingText = sizing.volume_mode === 'RISK'
       ? `${fa(sizing.risk_percent)}% Risk`
       : `${fa(sizing.lot_size)} Lot`;
+    const selectedTrail = selectedTrailingProfile();
     const trailingText = trailing.trailing_enabled
-      ? `ON · BE ${fa(trailing.trailing_break_even_r)}R · STEP ${fa(trailing.trailing_step_r)}R · LOCK ${fa(trailing.trailing_lock_r)}R`
+      ? `${selectedTrail.code} · ${selectedTrail.name}`
       : 'OFF';
 
     $('preview').innerHTML = `
-      <div class="preview-hero"><strong>${c.symbol}</strong><em>${c.direction}</em></div>
+      <div class="preview-hero"><strong>${esc(c.symbol)}</strong><em>${esc(c.direction)}</em></div>
       <div class="preview-grid">
         <div><span>ورود</span><b>${fa(c.entry)}</b></div>
         <div><span>SL · ${state.stopMode}</span><b>${fa(c.stop_loss)}</b></div>
         <div><span>ریسک قیمتی</span><b>${fa(c.risk)}</b></div>
-        <div><span>حجم / ریسک</span><b>${sizingText}</b></div>
+        <div><span>حجم / ریسک</span><b>${esc(sizingText)}</b></div>
         ${c.targets.map((value, index) => `<div><span>TP${index + 1} · ${state.tpMode}</span><b>${fa(value)}</b></div>`).join('')}
-        <div><span>Trailing</span><b>${trailingText}</b></div>
-        <div><span>مقصد</span><b>${state.destination}</b></div>
+        <div><span>Trailing</span><b>${esc(trailingText)}</b></div>
+        <div><span>مقصد</span><b>${esc(state.destination)}</b></div>
         <div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div>
       </div>`;
     $('modal').hidden = false;
@@ -283,7 +407,8 @@
       (['UPLOADED', 'COMPLETED'].includes(job) && item.status !== 'PUBLISHED' && stage !== 'PUBLISHED');
     const retry = retryable ? `<button class="outline retry-signal" data-request-id="${esc(item.request_id)}">تلاش مجدد</button>` : '';
     const sizing = p.volume_mode === 'FIXED' ? `${p.lot_size || '—'} LOT` : `${p.risk_percent ?? '—'}% RISK`;
-    return `<article class="card"><div class="card-head"><strong>${p.symbol || item.signal?.symbol || '—'} · ${p.direction || ''}</strong><span class="status ${item.status}">${item.status}</span></div><div class="levels"><span>ENTRY<b>${p.entry || '—'}</b></span><span>SL<b>${p.stop_loss || '—'}</b></span><span>SIZE<b>${sizing}</b></span></div>${item.error_message ? `<p style="color:var(--red);font-size:10px">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
+    const trail = p.trailing_enabled ? `<p class="hint" style="direction:ltr">TRAIL · ${esc(p.trailing_code || p.trailing_profile_code || 'ON')}</p>` : '';
+    return `<article class="card"><div class="card-head"><strong>${esc(p.symbol || item.signal?.symbol || '—')} · ${esc(p.direction || '')}</strong><span class="status ${esc(item.status)}">${esc(item.status)}</span></div><div class="levels"><span>ENTRY<b>${esc(p.entry || '—')}</b></span><span>SL<b>${esc(p.stop_loss || '—')}</b></span><span>SIZE<b>${esc(sizing)}</b></span></div>${trail}${item.error_message ? `<p style="color:var(--red);font-size:10px">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
   }
 
   async function retrySignal(button) {
@@ -310,10 +435,6 @@
     } catch (e) {
       toast(e.message);
     }
-  }
-
-  function esc(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
   }
 
   function positionCard(p, isOrder = false) {
@@ -379,6 +500,7 @@
     selectSegment('slMode', state.stopMode);
     selectSegment('tpMode', state.tpMode);
     selectSegment('volumeMode', state.volumeMode);
+    renderTrailingPreview();
   }
 
   function scheduleRecalculate() {
@@ -411,8 +533,10 @@
     renderControls();
   });
   $('trailingEnabled').addEventListener('change', renderControls);
+  $('trailingProfile').addEventListener('change', renderTrailingPreview);
+  $('symbol').addEventListener('change', scheduleRecalculate);
 
-  ['symbol', 'entry', 'stopLoss', 'stopDistance', 'manualTp1', 'manualTp2', 'manualTp3', 'manualTp4']
+  ['entry', 'stopLoss', 'stopDistance', 'manualTp1', 'manualTp2', 'manualTp3', 'manualTp4']
     .forEach((id) => $(id).addEventListener('input', scheduleRecalculate));
 
   $('signalForm').onsubmit = (e) => { e.preventDefault(); openPreview(); };
@@ -431,6 +555,7 @@
     if (button) retrySignal(button);
   }));
 
+  populateTrailingProfiles(FALLBACK_TRAILING);
   renderControls();
   bootstrap();
   setInterval(() => { if (document.visibilityState === 'visible') loadSignals(); }, 5000);
