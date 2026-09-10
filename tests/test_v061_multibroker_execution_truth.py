@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -51,4 +52,11 @@ def test_live_admin_signal_center_uses_authoritative_receipt_and_trade_state():
 
 def test_release_keeps_runtime_db_and_reset_is_explicit_only():
     assert (ROOT / "RESET_VNEXT_DB.bat").exists()
-    assert (ROOT / "nexus_bot.db").is_file()
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", "nexus_bot.db"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tracked.returncode != 0, "runtime nexus_bot.db must never be tracked or packaged"
