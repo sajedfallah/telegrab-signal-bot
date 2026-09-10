@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import db
+from app.autotrade.trailing_profiles import TRAILING_PROFILES
 from app.config import settings
 from app.miniapp_admin_api import calculate_signal_levels
 
@@ -95,7 +96,7 @@ def test_manual_tp_prices_are_preserved_and_validated():
         )
 
 
-def test_fixed_lot_and_custom_trailing_are_persisted(client):
+def test_fixed_lot_and_legacy_custom_trailing_remain_backward_compatible(client):
     payload = {
         "symbol": "XAUUSD",
         "direction": "BUY",
@@ -131,6 +132,84 @@ def test_fixed_lot_and_custom_trailing_are_persisted(client):
     assert config["lock_step_r"] == 0.3
 
 
+def test_official_trailing_profile_selection_persists_exact_snapshot(client):
+    payload = {
+        "symbol": "XAUUSD",
+        "direction": "BUY",
+        "entry": 3650,
+        "stop_loss": 3645,
+        "stop_loss_mode": "MANUAL",
+        "take_profit_mode": "AUTO",
+        "destination": "VIP",
+        "request_id": "official-profile-007",
+        "timeframe": "M5",
+        "volume_mode": "RISK",
+        "risk_percent": 1.0,
+        "trailing_enabled": True,
+        "trailing_profile_code": "NEXUS_TRAIL_07",
+        "digits": 2,
+    }
+    response = client.post("/miniapp/api/admin/signals", headers=headers(), json=payload)
+    assert response.status_code == 201, response.text
+    body = response.json()
+    signal = db.get_signal(body["signal_id"])
+    assert signal["trailing_code"] == "NEXUS_TRAIL_07"
+    assert signal["trailing_name"] == TRAILING_PROFILES["NEXUS_TRAIL_07"]["name"]
+    config = json.loads(signal["trailing_config_json"])
+    assert config["code"] == "NEXUS_TRAIL_07"
+    assert config["runner_mode"] == "MARKET_STRUCTURE_ATR_FALLBACK"
+    assert config["tp1_close_pct"] == 30.0
+    assert config["tp2_close_pct"] == 30.0
+    assert config["runner_pct"] == 40.0
+
+
+def test_all_seven_trailing_profiles_are_accepted(client):
+    for number in range(1, 8):
+        code = f"NEXUS_TRAIL_{number:02d}"
+        response = client.post(
+            "/miniapp/api/admin/signals",
+            headers=headers(),
+            json={
+                "symbol": "XAUUSD",
+                "direction": "BUY",
+                "entry": 3650,
+                "stop_loss": 3645,
+                "destination": "VIP",
+                "request_id": f"profile-{number:02d}-accept",
+                "timeframe": "M5",
+                "volume_mode": "RISK",
+                "risk_percent": 1.0,
+                "trailing_enabled": True,
+                "trailing_profile_code": code,
+                "digits": 2,
+            },
+        )
+        assert response.status_code == 201, (code, response.text)
+        body = response.json()
+        signal = db.get_signal(body["signal_id"])
+        assert signal["trailing_code"] == code
+        assert json.loads(signal["trailing_config_json"])["code"] == code
+
+
+def test_bootstrap_exposes_symbol_catalog_and_seven_trailing_profiles(client):
+    response = client.get("/miniapp/api/admin/bootstrap", headers=headers())
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    symbol_groups = {item["key"]: item["symbols"] for item in body["symbol_catalog"]}
+    assert "DOWJONES" in symbol_groups["INDEX"]
+    assert "NASDAQ" in symbol_groups["INDEX"]
+    assert "EURUSD" in symbol_groups["FOREX"]
+    assert "GBPUSD" in symbol_groups["FOREX"]
+    assert "BTCUSD" in symbol_groups["CRYPTO"]
+    assert "ETHUSD" in symbol_groups["CRYPTO"]
+    assert "SOLUSD" in symbol_groups["CRYPTO"]
+
+    profiles = body["trailing_profiles"]
+    assert [item["code"] for item in profiles] == [f"NEXUS_TRAIL_{n:02d}" for n in range(1, 8)]
+    assert all(item["name"] and item["guide"] and item["config"]["code"] == item["code"] for item in profiles)
+
+
 def test_fixed_risk_and_auto_levels_are_persisted(client):
     payload = {
         "symbol": "XAUUSD",
@@ -160,7 +239,7 @@ def test_fixed_risk_and_auto_levels_are_persisted(client):
     assert signal["trailing_code"] is None
 
 
-def test_invalid_fixed_lot_and_aggressive_trailing_are_rejected(client):
+def test_invalid_fixed_lot_and_aggressive_legacy_trailing_are_rejected(client):
     base = {
         "symbol": "XAUUSD", "direction": "BUY", "entry": 3650, "stop_loss": 3645,
         "destination": "BOTH", "timeframe": "M5", "digits": 2,
@@ -188,25 +267,51 @@ def test_invalid_fixed_lot_and_aggressive_trailing_are_rejected(client):
     assert "lock step" in invalid_trail.json()["detail"]
 
 
-def test_admin_ui_exposes_new_control_surface():
+def test_invalid_trailing_profile_code_is_rejected(client):
+    response = client.post(
+        "/miniapp/api/admin/signals",
+        headers=headers(),
+        json={
+            "symbol": "XAUUSD",
+            "direction": "BUY",
+            "entry": 3650,
+            "stop_loss": 3645,
+            "destination": "VIP",
+            "request_id": "bad-profile-code",
+            "timeframe": "M5",
+            "volume_mode": "RISK",
+            "risk_percent": 1,
+            "trailing_enabled": True,
+            "trailing_profile_code": "NEXUS_TRAIL_99",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_admin_ui_exposes_v3_control_surface_and_theme():
     html = Path("miniapp/admin.html").read_text(encoding="utf-8")
     js = Path("miniapp/admin-signal.js").read_text(encoding="utf-8")
     css = Path("miniapp/admin-signal.css").read_text(encoding="utf-8")
 
     for marker in (
+        'id="symbol"', '<option value="DOWJONES">', '<option value="NASDAQ">',
+        '<option value="BTCUSD">', '<option value="ETHUSD">', '<option value="SOLUSD">',
         'id="slMode"', 'id="tpMode"', 'id="stopDistance"', 'id="manualTp1"',
         'id="manualTp4"', 'id="volumeMode"', 'id="riskPercent"', 'id="lotSize"',
-        'id="trailingEnabled"', 'id="trailingBreakEven"', 'id="trailingStep"',
-        'id="trailingLock"',
+        'id="trailingEnabled"', 'id="trailingProfile"', 'id="trailingPreview"',
+        'NEXUS_TRAIL_01', 'NEXUS_TRAIL_07',
     ):
         assert marker in html
 
     for marker in (
         "stop_loss_mode", "take_profit_mode", "volume_mode", "risk_percent",
-        "lot_size", "trailing_enabled", "trailing_break_even_r", "trailing_step_r",
-        "trailing_lock_r", "/signals/calculate",
+        "lot_size", "trailing_enabled", "trailing_profile_code", "/signals/calculate",
+        "populateSymbols", "populateTrailingProfiles", "renderTrailingPreview",
     ):
         assert marker in js
 
-    assert "border:2px solid" in css
-    assert "border-right-width:5px" in css
+    assert "--amber:#ffb020" in css
+    assert "--cyan:#7ddcff" in css
+    assert "border:3px solid" in css
+    assert "border-right-width:7px" in css
+    assert ".trail-profile-preview" in css

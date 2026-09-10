@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#050b13">
+  <meta name="theme-color" content="#08090b">
   <title>NEXUS Admin Signal Center</title>
-  <link rel="stylesheet" href="/miniapp/admin-signal.css?v=2">
+  <link rel="stylesheet" href="/miniapp/admin-signal.css?v=3">
   <link rel="stylesheet" href="/miniapp/admin-actions.css?v=1">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -20,7 +20,7 @@
       <div>
         <small>EXECUTION CONTROL</small>
         <h1>مرکز صدور سیگنال</h1>
-        <p>کنترل سطوح، ریسک، حجم و مدیریت معامله در یک مسیر واحد</p>
+        <p>کنترل بازار، سطوح، ریسک، حجم و مدیریت معامله در یک میز معاملاتی واحد</p>
       </div>
       <div id="mt5Chip" class="chip offline"><i></i><span>MT5 آفلاین</span></div>
     </section>
@@ -45,7 +45,39 @@
             <div><small>01 / MARKET</small><h2>مشخصات بازار</h2></div>
             <span class="badge">REQUIRED</span>
           </div>
-          <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
+          <label>نماد
+            <select id="symbol" required>
+              <optgroup label="فلزات">
+                <option value="XAUUSD" selected>Gold · XAUUSD</option>
+                <option value="XAGUSD">Silver · XAGUSD</option>
+              </optgroup>
+              <optgroup label="شاخص‌ها">
+                <option value="DOWJONES">Dow Jones · DOWJONES</option>
+                <option value="NASDAQ">Nasdaq · NASDAQ</option>
+                <option value="SPX500">S&amp;P 500 · SPX500</option>
+              </optgroup>
+              <optgroup label="Forex">
+                <option value="EURUSD">EUR/USD</option>
+                <option value="GBPUSD">GBP/USD</option>
+                <option value="USDJPY">USD/JPY</option>
+                <option value="USDCHF">USD/CHF</option>
+                <option value="AUDUSD">AUD/USD</option>
+                <option value="USDCAD">USD/CAD</option>
+                <option value="NZDUSD">NZD/USD</option>
+              </optgroup>
+              <optgroup label="Crypto">
+                <option value="BTCUSD">Bitcoin · BTCUSD</option>
+                <option value="ETHUSD">Ethereum · ETHUSD</option>
+                <option value="SOLUSD">Solana · SOLUSD</option>
+                <option value="BNBUSD">BNB · BNBUSD</option>
+                <option value="XRPUSD">XRP · XRPUSD</option>
+                <option value="DOGEUSD">DOGE · DOGEUSD</option>
+                <option value="AVAXUSD">AVAX · AVAXUSD</option>
+                <option value="LTCUSD">Litecoin · LTCUSD</option>
+              </optgroup>
+            </select>
+          </label>
+          <p class="hint catalog-note">نمادها Canonical هستند؛ تبدیل به نام نماد بروکر در لایه اجرای MT5 انجام می‌شود.</p>
           <div class="direction">
             <button type="button" data-side="BUY" class="selected buy">BUY</button>
             <button type="button" data-side="SELL">SELL</button>
@@ -125,20 +157,31 @@
 
         <section class="control-card accent-orange">
           <div class="control-heading trailing-heading">
-            <div><small>05 / TRAILING</small><h2>Trailing Stop</h2></div>
+            <div><small>05 / TRAILING ENGINE</small><h2>Trailing Stop</h2></div>
             <label class="switch" aria-label="فعال‌سازی تریلینگ">
               <input id="trailingEnabled" type="checkbox">
               <span class="switch-track"><i></i></span>
             </label>
           </div>
-          <p class="section-copy">تریلینگ مبتنی بر R با همان موتور مدیریت NEXUS. پارامترها فقط در صورت فعال‌سازی به سیگنال اضافه می‌شوند.</p>
+          <p class="section-copy">در صورت فعال‌سازی، یکی از ۷ مدل رسمی NEXUS که در موتور Expert برنامه‌نویسی شده انتخاب می‌شود.</p>
           <div id="trailingFields" class="conditional trailing-fields" hidden>
-            <div class="grid three">
-              <label>فعال‌سازی / BE (R)<input id="trailingBreakEven" inputmode="decimal" value="1.0"></label>
-              <label>فاصله تریل (R)<input id="trailingStep" inputmode="decimal" value="0.50"></label>
-              <label>گام قفل سود (R)<input id="trailingLock" inputmode="decimal" value="0.30"></label>
+            <label>مدل Trailing
+              <select id="trailingProfile">
+                <option value="NEXUS_TRAIL_01">01 · اسکالپینگ محافظه‌کارانه</option>
+                <option value="NEXUS_TRAIL_02">02 · Step Profit Lock</option>
+                <option value="NEXUS_TRAIL_03">03 · Dynamic ATR</option>
+                <option value="NEXUS_TRAIL_04">04 · ساختار بازار</option>
+                <option value="NEXUS_TRAIL_05">05 · VIP Runner</option>
+                <option value="NEXUS_TRAIL_06">06 · Fast Scalping</option>
+                <option value="NEXUS_TRAIL_07">07 · NEXUS Smart Hybrid</option>
+              </select>
+            </label>
+            <div id="trailingPreview" class="trail-profile-preview" aria-live="polite">
+              <div class="trail-preview-head"><b>NEXUS_TRAIL_01</b><span>اسکالپینگ محافظه‌کارانه</span></div>
+              <p>در 1R به Break Even می‌رود و سپس حد ضرر را به‌صورت پله‌ای برای قفل سود جلو می‌آورد.</p>
+              <div class="trail-mechanics"><span>BE 1R</span><span>STEP 0.50R</span><span>LOCK 0.30R</span></div>
             </div>
-            <div class="trail-note"><b>NEXUS STEP TRAIL</b><span>Stop هرگز به عقب حرکت نمی‌کند و تغییرات توسط موتور MT5 مدیریت می‌شوند.</span></div>
+            <p class="hint">پارامترهای هر مدل از Snapshot رسمی Backend دریافت می‌شوند و در پنل قابل بازنویسی نیستند.</p>
           </div>
         </section>
 
@@ -164,6 +207,6 @@
 
   <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close" type="button">×</button><small>تأیید نهایی</small><h2>بررسی و اجرای سیگنال</h2><div id="preview"></div><div class="safety">DRAFT ← VALIDATE ← MT5 ← SCREENSHOT ← TELEGRAM</div><button id="publish" class="primary" type="button">ارسال به MT5</button><button id="cancelPreview" class="ghost" type="button">بازگشت و ویرایش</button></div></div>
   <div id="toast" class="toast"></div>
-  <script src="/miniapp/admin-signal.js?v=2"></script>
+  <script src="/miniapp/admin-signal.js?v=3"></script>
 </body>
 </html>
