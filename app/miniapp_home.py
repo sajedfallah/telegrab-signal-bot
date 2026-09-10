@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -9,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from . import db
 from .miniapp_api import _auth_user, _autotrade, _entitlements
 from .miniapp_experience import _parse_dt, build_experience_context
+from .miniapp_product_intelligence import home_content
 from .miniapp_signals import _active_truth_clause
 from .services import analytics_service
 
@@ -33,6 +35,9 @@ def _safe_performance(key: str) -> dict[str, Any]:
         "losses": int(data.get("losses") or 0),
         "be": int(data.get("be") or 0),
         "win_rate": float(data.get("win_rate") or 0),
+        "forex_pips": float(data.get("forex_pips") or 0),
+        "crypto_pct": float(data.get("crypto_pct") or 0),
+        "avg_rr": float(data.get("avg_rr") or 0),
         "disclaimer_fa": "این آمار مربوط به نتایج سیگنال‌های ثبت‌شده NEXUS است و بازده حساب معاملاتی نیست.",
         "disclaimer_en": "These metrics describe recorded NEXUS signal outcomes, not trading-account return.",
     }
@@ -43,7 +48,14 @@ def _result_meta(item: dict[str, Any]) -> tuple[str | None, float | None, str | 
         return None, None, None, None
     raw = item.get("result_value")
     unit = str(item.get("result_unit") or "").strip().upper() or None
+    reason = str(item.get("close_reason") or "").strip().upper()
     if raw is None:
+        if reason in {"CANCELLED", "CANCELED"}:
+            return "CANCELLED", None, unit, "لغوشده"
+        if reason == "EXPIRED":
+            return "EXPIRED", None, unit, "منقضی‌شده"
+        if reason in {"PARTIAL", "PARTIAL_CLOSE"}:
+            return "PARTIAL", None, unit, "بسته‌شدن بخشی"
         return "UNKNOWN", None, unit, "نتیجه ثبت نشده"
     try:
         value = float(raw)
@@ -89,7 +101,7 @@ def _recent_signals(*, has_vip: bool, limit: int = 3) -> list[dict[str, Any]]:
     with db.conn() as con:
         rows = con.execute(
             f"""
-            SELECT id,code,symbol,direction,destination,status,created_at,closed_at,result_value,result_unit,
+            SELECT id,code,symbol,direction,destination,status,created_at,closed_at,result_value,result_unit,close_reason,
                    issuer_type,issuer_account
             FROM signals
             WHERE COALESCE(cycle_id, ?) = ?
@@ -99,26 +111,31 @@ def _recent_signals(*, has_vip: bool, limit: int = 3) -> list[dict[str, Any]]:
             ORDER BY id DESC
             LIMIT ?
             """,
-            (cycle, cycle, *live_args, max(1, min(limit, 10))),
+            (cycle, cycle, *live_args, max(1, min(limit, 3))),
         ).fetchall()
     return [_safe_signal(row, has_vip=has_vip) for row in rows]
 
 
-def _today() -> dict[str, Any]:
+def _today(*, has_vip: bool) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
     cycle = db.current_cycle_id()
     live_sql, live_args = _active_truth_clause("ACTIVE")
+    visibility = "1=1" if has_vip else "UPPER(COALESCE(destination,'FREE')) <> 'VIP'"
     with db.conn() as con:
         active = int(con.execute(
             f"""SELECT COUNT(*) FROM signals
                WHERE UPPER(COALESCE(status,'')) NOT IN ('DRAFT','CLOSED','REJECTED','CANCELLED','EXPIRED','PUBLISH_FAILED')
+                 AND {visibility}
                  AND ({live_sql})
                  AND COALESCE(cycle_id,?)=?""",
             (*live_args, cycle, cycle),
         ).fetchone()[0])
         closed = int(con.execute(
-            "SELECT COUNT(*) FROM signals WHERE UPPER(COALESCE(status,''))='CLOSED' AND closed_at>=? AND COALESCE(cycle_id,?)=?",
+            f"""SELECT COUNT(*) FROM signals
+               WHERE UPPER(COALESCE(status,''))='CLOSED'
+                 AND {visibility}
+                 AND closed_at>=? AND COALESCE(cycle_id,?)=?""",
             (start, cycle, cycle),
         ).fetchone()[0])
     return {"active_signals": active, "closed_signals": closed, "as_of": now.isoformat()}
@@ -136,6 +153,8 @@ def _autotrade_health(auto: dict[str, Any], *, now: datetime | None = None) -> d
             "mt5_account": None,
             "last_sync_at": None,
             "stale_after_seconds": AUTOTRADE_STALE_SECONDS,
+            "open_trades": 0,
+            "pending_orders": 0,
         }
     last_seen = _parse_dt(mt5.get("last_seen_at"))
     status = str(mt5.get("status") or "").upper()
@@ -195,15 +214,15 @@ def _spotlight(experience: dict[str, Any], health: dict[str, Any] | None) -> dic
         return {
             "kind": "OPERATIONAL",
             "title_fa": "AutoTrade شما نیاز به بررسی دارد",
-            "subtitle_fa": "وضعیت اتصال و آخرین Sync را بررسی کنید.",
+            "subtitle_fa": "وضعیت اتصال و آخرین همگام‌سازی را بررسی کنید.",
             "cta_fa": "مشاهده وضعیت",
             "destination": "trades",
         }
     if lifecycle == "EXPIRING":
         return {
             "kind": "RENEWAL",
-            "title_fa": "زمان تمدید NEXUS نزدیک است",
-            "subtitle_fa": "تاریخ پایان دسترسی را بررسی و در صورت نیاز تمدید کنید.",
+            "title_fa": "دسترسی NEXUS شما رو به پایان است",
+            "subtitle_fa": "وضعیت اشتراک را ببینید و در زمان مناسب تمدید کنید.",
             "cta_fa": "مشاهده تمدید",
             "destination": "subscriptions",
         }
@@ -211,62 +230,110 @@ def _spotlight(experience: dict[str, Any], health: dict[str, Any] | None) -> dic
         return {
             "kind": "REACTIVATION",
             "title_fa": "دسترسی NEXUS شما پایان یافته است",
-            "subtitle_fa": "نتایج اخیر را ببینید و در صورت نیاز سرویس را دوباره فعال کنید.",
+            "subtitle_fa": "Track Record را بررسی کنید و در صورت نیاز سرویس را دوباره فعال کنید.",
             "cta_fa": "فعال‌سازی مجدد",
             "destination": "subscriptions",
         }
     if segment == "GUEST":
         return {
-            "kind": "TRUST",
-            "title_fa": "قبل از انتخاب اشتراک، عملکرد NEXUS را ببینید",
-            "subtitle_fa": "نتایج ثبت‌شده و سیگنال‌های اخیر را شفاف بررسی کنید.",
-            "cta_fa": "مشاهده نتایج",
+            "kind": "WELCOME",
+            "title_fa": "به NEXUS خوش آمدید",
+            "subtitle_fa": "قبل از انتخاب پلن، عملکرد ثبت‌شده NEXUS و سیگنال‌های اخیر را بررسی کنید.",
+            "cta_fa": "مشاهده عملکرد",
             "destination": "performance",
         }
     if segment == "VIP":
         return {
-            "kind": "USE",
-            "title_fa": "سیگنال‌های NEXUS در دسترس شماست",
-            "subtitle_fa": "سیگنال‌های فعال و نتایج اخیر را از مرکز سیگنال‌ها دنبال کنید.",
+            "kind": "VIP",
+            "title_fa": "مرکز روزانه NEXUS",
+            "subtitle_fa": "سیگنال‌های فعال، نتایج اخیر و وضعیت اشتراک را از همین صفحه دنبال کنید.",
             "cta_fa": "مشاهده سیگنال‌ها",
             "destination": "signals",
         }
     return {
-        "kind": "MONITOR",
+        "kind": "AUTOTRADE",
         "title_fa": "مرکز اجرای AutoTrade شما",
-        "subtitle_fa": "وضعیت اتصال و معاملات واقعی حساب متصل را بررسی کنید.",
+        "subtitle_fa": "وضعیت اتصال، معاملات واقعی و آخرین همگام‌سازی MT5 را بررسی کنید.",
         "cta_fa": "معاملات من",
         "destination": "trades",
     }
 
 
+def _remaining_days(experience: dict[str, Any]) -> int | None:
+    expiry = _parse_dt(experience.get("next_expiry_at"))
+    if not expiry:
+        return None
+    return max(0, math.ceil((expiry - datetime.now(timezone.utc)).total_seconds() / 86400))
+
+
 def _offer(experience: dict[str, Any]) -> dict[str, Any] | None:
     segment = str(experience.get("segment") or "GUEST")
     lifecycle = str(experience.get("lifecycle") or "GUEST")
-    if lifecycle in {"EXPIRING", "EXPIRED"}:
-        return {"kind": "RENEW", "title_fa": "تمدید دسترسی NEXUS", "cta_fa": "مشاهده پلن‌های تمدید", "destination": "subscriptions"}
+    days = _remaining_days(experience)
+    if lifecycle == "EXPIRING":
+        detail = f"دسترسی شما {days} روز دیگر منقضی می‌شود." if days is not None else "دسترسی شما به پایان دوره نزدیک است."
+        return {
+            "kind": "RENEW",
+            "title_fa": "تمدید دسترسی NEXUS",
+            "subtitle_fa": detail,
+            "cta_fa": "مشاهده پیشنهاد تمدید",
+            "destination": "subscriptions",
+        }
+    if lifecycle == "EXPIRED":
+        return {
+            "kind": "REACTIVATE",
+            "title_fa": "بازگشت به NEXUS",
+            "subtitle_fa": "Track Record را بررسی کنید و فقط در صورت نیاز، دسترسی مناسب را دوباره فعال کنید.",
+            "cta_fa": "مشاهده پلن‌ها",
+            "destination": "subscriptions",
+        }
     if segment == "GUEST":
-        return {"kind": "NEW_CUSTOMER", "title_fa": "VIP، AutoTrade یا Bundle؟", "cta_fa": "مقایسه پلن‌ها", "destination": "subscriptions"}
+        return {
+            "kind": "NEXUS START",
+            "title_fa": "اول عملکرد را ببینید، بعد انتخاب کنید",
+            "subtitle_fa": "قبل از خرید، Track Record و نتایج بسته‌شده NEXUS را بررسی کنید.",
+            "cta_fa": "مشاهده عملکرد",
+            "destination": "performance",
+        }
     if segment == "VIP":
-        return {"kind": "UPGRADE", "title_fa": "اجرای خودکار را به تجربه VIP اضافه کنید", "cta_fa": "مشاهده AutoTrade و Bundle", "destination": "subscriptions"}
+        return {
+            "kind": "UPGRADE",
+            "title_fa": "VIP + AutoTrade",
+            "subtitle_fa": "اگر اجرای خودکار برای شما مناسب است، Bundle را با AutoTrade مقایسه کنید.",
+            "cta_fa": "مقایسه Bundle",
+            "destination": "subscriptions",
+        }
     if segment == "AUTOTRADE":
-        return {"kind": "UPGRADE", "title_fa": "دسترسی VIP را به AutoTrade اضافه کنید", "cta_fa": "مشاهده VIP و Bundle", "destination": "subscriptions"}
+        return {
+            "kind": "UPGRADE",
+            "title_fa": "AutoTrade + VIP",
+            "subtitle_fa": "در صورت نیاز به دسترسی مستقیم به Signal Center، Bundle را بررسی کنید.",
+            "cta_fa": "مقایسه Bundle",
+            "destination": "subscriptions",
+        }
     return None
 
 
-def _section_order(experience: dict[str, Any], attention: list[dict[str, Any]]) -> list[str]:
+def _section_order(experience: dict[str, Any], attention: list[dict[str, Any]], offer: dict[str, Any] | None, content: dict[str, Any]) -> list[str]:
+    # The Home CTA/brand spotlight is intentionally present for every lifecycle.
+    # The rest of the hierarchy follows daily utility first, commercial content later.
     segment = str(experience.get("segment") or "GUEST")
-    lifecycle = str(experience.get("lifecycle") or "GUEST")
-    if lifecycle == "EXPIRED":
-        order = ["spotlight", "offer", "performance", "recent_signals", "community"]
-    elif segment == "GUEST":
-        order = ["spotlight", "performance", "recent_signals", "why_nexus", "offer", "community"]
-    elif segment == "VIP":
-        order = ["recent_signals", "performance", "offer", "subscription"]
-    else:
-        order = ["autotrade_health", "trades_preview", "recent_signals", "today", "subscription"]
+    order = ["spotlight"]
     if attention:
-        order.insert(0, "needs_attention")
+        order.append("needs_attention")
+    order.append("today")
+    if segment in {"AUTOTRADE", "BUNDLE"}:
+        order.extend(["autotrade_health", "trades_preview"])
+    order.extend(["recent_signals", "performance"])
+    if offer:
+        order.append("offer")
+    if content.get("market_insight"):
+        order.append("market_insight")
+    if content.get("academy"):
+        order.append("academy")
+    if experience.get("entitlements", {}).get("vip") or experience.get("entitlements", {}).get("autotrade"):
+        order.append("subscription")
+    order.append("community")
     return order
 
 
@@ -277,16 +344,21 @@ def build_home_payload(uid: int) -> dict[str, Any]:
     auto = _autotrade(uid) if experience["segment"] in {"AUTOTRADE", "BUNDLE"} else {"entitled": False}
     health = _autotrade_health(auto)
     attention = _attention(experience, health)
+    offer = _offer(experience)
+    content = home_content(experience)
+    has_vip = bool(ent.get("vip"))
     return {
         "experience": experience,
         "enter_nexus_url": NEXUS_ENTRY_URL,
-        "section_order": _section_order(experience, attention),
+        "section_order": _section_order(experience, attention, offer, content),
         "needs_attention": attention,
         "spotlight": _spotlight(experience, health),
-        "today": _today(),
+        "today": _today(has_vip=has_vip),
         "performance": _safe_performance("30"),
-        "recent_signals": _recent_signals(has_vip=bool(ent.get("vip")), limit=3),
-        "offer": _offer(experience),
+        "recent_signals": _recent_signals(has_vip=has_vip, limit=3),
+        "offer": offer,
+        "market_insight": content.get("market_insight"),
+        "academy": content.get("academy"),
         "autotrade_health": health,
         "trades_preview": {
             "open": (auto.get("open_positions") or [])[:2],
