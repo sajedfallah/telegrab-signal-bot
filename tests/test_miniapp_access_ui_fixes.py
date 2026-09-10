@@ -160,7 +160,7 @@ def test_enter_nexus_link_is_global_and_fixed():
 
 def test_miniapp_shell_loads_official_logo_svg_icons_and_design_layer():
     html = Path("miniapp/index.html").read_text(encoding="utf-8")
-    assert "./assets/brand/nexus-logo.svg" in html
+    assert "./assets/brand/nexus-mark.svg" in html
     assert "./icons.js" in html
     assert "./design-v2.css" in html
     assert "./account-v2.js" in html
