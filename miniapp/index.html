@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0d12" />
+  <meta name="theme-color" content="#05090d" />
   <title>NEXUS Mini App</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="./styles.css?v=20260910-1215" />
@@ -17,8 +17,85 @@
   <link rel="stylesheet" href="./design-v2.css?v=20260910-1215" />
   <link rel="stylesheet" href="./polish-v3.css?v=20260910-1215" />
   <link rel="stylesheet" href="./ui-v4.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./landing-v5.css?v=20260910-1523" />
 </head>
-<body>
+<body class="landing-active">
+  <section class="nexus-landing" id="nexusLanding" aria-label="NEXUS">
+    <div class="nexus-landing-inner">
+      <div class="nexus-landing-brand">
+        <img class="nexus-landing-logo" src="./assets/brand/nexus-mark.svg?v=20260910-1523" alt="NEXUS" decoding="async" />
+        <div class="nexus-landing-wordmark">NEXUS</div>
+        <div class="nexus-landing-subbrand">Trading Intelligence</div>
+      </div>
+
+      <div class="nexus-market-visual" aria-hidden="true">
+        <svg class="nexus-chart-svg" viewBox="0 0 420 190" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="nexusLineGradient" x1="0" x2="1">
+              <stop offset="0%" stop-color="#12687c" stop-opacity="0.3" />
+              <stop offset="58%" stop-color="#25c9ce" stop-opacity="0.78" />
+              <stop offset="100%" stop-color="#50efe0" />
+            </linearGradient>
+            <linearGradient id="nexusBarGradient" x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stop-color="#0e4f5d" stop-opacity="0.12" />
+              <stop offset="100%" stop-color="#2de0d6" stop-opacity="0.88" />
+            </linearGradient>
+          </defs>
+          <g class="nexus-chart-grid">
+            <line x1="0" y1="45" x2="420" y2="45" />
+            <line x1="0" y1="95" x2="420" y2="95" />
+            <line x1="0" y1="145" x2="420" y2="145" />
+            <line x1="70" y1="0" x2="70" y2="190" />
+            <line x1="140" y1="0" x2="140" y2="190" />
+            <line x1="210" y1="0" x2="210" y2="190" />
+            <line x1="280" y1="0" x2="280" y2="190" />
+            <line x1="350" y1="0" x2="350" y2="190" />
+          </g>
+          <g class="nexus-chart-bars">
+            <rect x="52" y="150" width="12" height="24" rx="3" />
+            <rect x="86" y="141" width="12" height="33" rx="3" />
+            <rect x="120" y="146" width="12" height="28" rx="3" />
+            <rect x="154" y="128" width="12" height="46" rx="3" />
+            <rect x="188" y="120" width="12" height="54" rx="3" />
+            <rect x="222" y="104" width="12" height="70" rx="3" />
+            <rect x="256" y="92" width="12" height="82" rx="3" />
+            <rect x="290" y="72" width="12" height="102" rx="3" />
+            <rect x="324" y="49" width="12" height="125" rx="3" />
+            <rect x="358" y="26" width="12" height="148" rx="3" />
+          </g>
+          <path class="nexus-chart-curve" d="M8 165 C72 164, 111 156, 153 143 S236 112, 276 87 S338 42, 398 19" />
+          <circle class="nexus-chart-point" cx="398" cy="19" r="4" />
+        </svg>
+      </div>
+
+      <div class="nexus-landing-copy">
+        <h1 class="nexus-landing-title">هوشمند <strong>معامله کن</strong></h1>
+        <p class="nexus-landing-lead">سیگنال‌های دقیق، دسترسی VIP و AutoTrade در یک تجربه یکپارچه و هوشمند.</p>
+      </div>
+
+      <div class="nexus-landing-features" aria-label="امکانات NEXUS">
+        <div class="nexus-landing-feature">
+          <span class="nexus-landing-feature-icon">▥</span>
+          <b>سیگنال‌های دقیق</b>
+          <small>فرصت‌های واقعی بازار</small>
+        </div>
+        <div class="nexus-landing-feature">
+          <span class="nexus-landing-feature-icon">⚡</span>
+          <b>AutoTrade</b>
+          <small>معاملات خودکار</small>
+        </div>
+        <div class="nexus-landing-feature">
+          <span class="nexus-landing-feature-icon">♛</span>
+          <b>VIP</b>
+          <small>دسترسی اختصاصی</small>
+        </div>
+      </div>
+
+      <button class="nexus-landing-enter" id="enterNexus" type="button">ورود</button>
+      <div class="nexus-landing-footer">آینده معاملات، هوشمندتر است</div>
+    </div>
+  </section>
+
   <div class="app-shell">
     <header class="topbar">
       <div class="brand-wrap">
@@ -94,5 +171,6 @@
   <script src="./ui-fixes.js?v=20260910-1215"></script>
   <script src="./purchase-flow-v4.js?v=20260910-1215"></script>
   <script src="./compat-v4.js?v=20260910-1215"></script>
+  <script src="./landing-v5.js?v=20260910-1523"></script>
 </body>
 </html>
