@@ -21,12 +21,20 @@ def _access_class(row: dict[str, Any]) -> str:
 
 
 def _result_meta(row: dict[str, Any]) -> dict[str, Any]:
-    if str(row.get("status") or "").upper() != "CLOSED":
+    status = str(row.get("status") or "").upper()
+    if status != "CLOSED":
         return {"result": None, "result_value": None, "result_unit": None, "result_label_fa": None}
 
     raw = row.get("result_value")
     unit = str(row.get("result_unit") or "").strip().upper()
+    reason = str(row.get("close_reason") or "").strip().upper()
     if raw is None:
+        if reason in {"CANCELLED", "CANCELED"}:
+            return {"result": "CANCELLED", "result_value": None, "result_unit": unit or None, "result_label_fa": "لغوشده"}
+        if reason == "EXPIRED":
+            return {"result": "EXPIRED", "result_value": None, "result_unit": unit or None, "result_label_fa": "منقضی‌شده"}
+        if reason in {"PARTIAL", "PARTIAL_CLOSE"}:
+            return {"result": "PARTIAL", "result_value": None, "result_unit": unit or None, "result_label_fa": "بسته‌شدن بخشی"}
         return {"result": "UNKNOWN", "result_value": None, "result_unit": unit or None, "result_label_fa": "نتیجه ثبت نشده"}
     try:
         value = float(raw)
@@ -131,6 +139,7 @@ def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False)
         "status": str(data.get("status") or "").upper(),
         "published_at": data.get("created_at"),
         "closed_at": data.get("closed_at"),
+        "close_reason": data.get("close_reason"),
         "locked": bool(access == "VIP" and not has_vip and not closed),
         **result_meta,
     }
@@ -167,20 +176,94 @@ def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False)
     return result
 
 
+def _execution_timeline(uid: int, signal_id: int) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    with db.conn() as con:
+        receipt = con.execute(
+            """
+            SELECT status,first_seen_at,executed_at,ticket,error_text
+            FROM autotrade_signal_receipts
+            WHERE telegram_id=? AND signal_id=? AND platform='MT5' LIMIT 1
+            """,
+            (uid, signal_id),
+        ).fetchone()
+        if receipt is not None:
+            data = dict(receipt)
+            if data.get("first_seen_at"):
+                items.append({"kind": "EA_RECEIVED", "label_fa": "EA سیگنال را دریافت کرد", "created_at": data.get("first_seen_at")})
+            if data.get("executed_at"):
+                items.append({"kind": "BROKER_EXECUTED", "label_fa": "سفارش در بروکر اجرا شد", "created_at": data.get("executed_at"), "ticket": data.get("ticket")})
+            if data.get("error_text"):
+                items.append({"kind": "EXECUTION_ERROR", "label_fa": "اجرا ناموفق بود", "created_at": data.get("executed_at") or data.get("first_seen_at"), "reason": str(data.get("error_text"))})
+        rows = con.execute(
+            """
+            SELECT event_type,status,ticket,profit,error_text,created_at
+            FROM autotrade_trade_executions
+            WHERE telegram_id=? AND signal_id=?
+            ORDER BY id ASC
+            """,
+            (uid, signal_id),
+        ).fetchall()
+    for row in rows:
+        data = dict(row)
+        items.append({
+            "kind": str(data.get("event_type") or data.get("status") or "EXECUTION"),
+            "label_fa": str(data.get("event_type") or data.get("status") or "رویداد اجرا"),
+            "created_at": data.get("created_at"),
+            "ticket": data.get("ticket"),
+            "profit": data.get("profit"),
+            "reason": data.get("error_text"),
+        })
+    items.sort(key=lambda item: str(item.get("created_at") or ""))
+    return items
+
+
 def _my_execution(uid: int, signal_id: int, *, autotrade: bool) -> dict[str, Any] | None:
     if not autotrade:
         return None
     with db.conn() as con:
         row = con.execute(
             """
-            SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at
+            SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,error_text,created_at
             FROM autotrade_trade_executions
             WHERE telegram_id=? AND signal_id=?
             ORDER BY id DESC LIMIT 1
             """,
             (uid, signal_id),
         ).fetchone()
-    return dict(row) if row is not None else None
+        receipt = con.execute(
+            """
+            SELECT status,first_seen_at,executed_at,ticket,error_text
+            FROM autotrade_signal_receipts
+            WHERE telegram_id=? AND signal_id=? AND platform='MT5' LIMIT 1
+            """,
+            (uid, signal_id),
+        ).fetchone()
+    timeline = _execution_timeline(uid, signal_id)
+    if row is not None:
+        data = dict(row)
+        data.update({"execution_state": "EXECUTED", "reason_fa": data.get("error_text"), "timeline": timeline})
+        return data
+    if receipt is not None:
+        data = dict(receipt)
+        status = str(data.get("status") or "SEEN").upper()
+        failed = bool(data.get("error_text")) or status in {"ERROR", "FAILED", "REJECTED", "BLOCKED"}
+        return {
+            "ticket": data.get("ticket"),
+            "status": status,
+            "execution_state": "NOT_EXECUTED" if failed else "RECEIVED",
+            "reason_fa": str(data.get("error_text") or "") or None,
+            "first_seen_at": data.get("first_seen_at"),
+            "executed_at": data.get("executed_at"),
+            "timeline": timeline,
+        }
+    return {
+        "ticket": None,
+        "status": "NO_RECEIPT",
+        "execution_state": "NOT_RECEIVED",
+        "reason_fa": "برای این حساب، رسید دریافت سیگنال از EA ثبت نشده است.",
+        "timeline": timeline,
+    }
 
 
 def _state_clause(state: str) -> tuple[str, tuple[Any, ...]]:
