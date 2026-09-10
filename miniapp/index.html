@@ -6,24 +6,28 @@
   <meta name="theme-color" content="#0a0d12" />
   <title>NEXUS Mini App</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./runtime.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./home-v2.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./signals-v2.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./track-record.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./trades-v2.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./pricing-v2.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./account-v2.css?v=20260910-0248" />
-  <link rel="stylesheet" href="./design-v2.css?v=20260910-0248" />
+  <link rel="stylesheet" href="./styles.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./runtime.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./home-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./signals-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./track-record.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./trades-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./pricing-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./account-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./design-v2.css?v=20260910-1033" />
+  <link rel="stylesheet" href="./polish-v3.css?v=20260910-1033" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
       <div class="brand-wrap">
-        <img class="brand-logo" src="./assets/brand/nexus-logo.svg?v=20260910-0248" alt="NEXUS" />
+        <img class="brand-logo" src="./assets/brand/nexus-logo.svg?v=20260910-1033" alt="NEXUS" decoding="async" />
         <div><div class="brand">NEXUS</div><div class="brand-sub">Trading Intelligence</div></div>
       </div>
-      <button class="icon-btn" id="langBtn" aria-label="language">FA</button>
+      <div class="topbar-actions">
+        <button class="icon-btn notification-btn" id="notificationsBtn" aria-label="اعلان‌ها"><span data-nexus-icon="bell"></span><i class="notification-badge" id="notificationBadge" hidden>0</i></button>
+        <button class="icon-btn" id="langBtn" aria-label="language">FA</button>
+      </div>
     </header>
     <main id="view" class="view"></main>
     <nav class="bottom-nav" aria-label="main navigation">
@@ -54,8 +58,8 @@
 
   <template id="accountTpl">
     <section class="profile-card">
-      <img class="account-brand-avatar" src="./assets/brand/nexus-logo.svg?v=20260910-0248" alt="NEXUS" />
-      <div><h2 id="userName" dir="auto">کاربر NEXUS</h2><p id="userHandle">Telegram User</p></div>
+      <img class="account-brand-avatar" src="./assets/brand/nexus-logo.svg?v=20260910-1033" alt="NEXUS" decoding="async" />
+      <div><h2 id="userName" class="bidi-safe" dir="rtl">کاربر NEXUS</h2><p id="userHandle">Telegram User</p></div>
       <span class="badge muted">MEMBER</span>
     </section>
     <div class="empty-state">در حال دریافت Status Center...</div>
@@ -74,16 +78,17 @@
     <div class="support-card"><div class="support-icon" data-nexus-icon="support"></div><h3>نیاز به کمک داری؟</h3><p>برای مسائل پرداخت، اشتراک، دسترسی کانال یا AutoTrade با تیم پشتیبانی در ارتباط باش.</p><button class="btn primary full" data-action="support">ارتباط با پشتیبانی</button></div>
   </template>
 
-  <script src="./icons.js?v=20260910-0248"></script>
-  <script src="./app.js?v=20260910-0248"></script>
-  <script src="./experience.js?v=20260910-0248"></script>
-  <script src="./home-v2.js?v=20260910-0248"></script>
-  <script src="./home-v2-nav.js?v=20260910-0248"></script>
-  <script src="./signals-v2.js?v=20260910-0248"></script>
-  <script src="./track-record.js?v=20260910-0248"></script>
-  <script src="./trades-v2.js?v=20260910-0248"></script>
-  <script src="./pricing-v2.js?v=20260910-0248"></script>
-  <script src="./account-v2.js?v=20260910-0248" data-nexus-account-v2="1"></script>
-  <script src="./ui-fixes.js?v=20260910-0248"></script>
+  <script src="./icons.js?v=20260910-1033"></script>
+  <script src="./app.js?v=20260910-1033"></script>
+  <script src="./product-intelligence.js?v=20260910-1033"></script>
+  <script src="./experience.js?v=20260910-1033"></script>
+  <script src="./home-v2.js?v=20260910-1033"></script>
+  <script src="./home-v2-nav.js?v=20260910-1033"></script>
+  <script src="./signals-v2.js?v=20260910-1033"></script>
+  <script src="./track-record.js?v=20260910-1033"></script>
+  <script src="./trades-v2.js?v=20260910-1033"></script>
+  <script src="./pricing-v2.js?v=20260910-1033"></script>
+  <script src="./account-v2.js?v=20260910-1033" data-nexus-account-v2="1"></script>
+  <script src="./ui-fixes.js?v=20260910-1033"></script>
 </body>
 </html>
