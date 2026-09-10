@@ -248,8 +248,8 @@ def test_autotrade_health_requires_meaningful_heartbeat_staleness():
 
 def test_guest_home_order_prioritizes_trust_and_does_not_include_autotrade_widgets():
     experience = build_experience_context(_entitlements(), now=datetime(2026, 9, 10, tzinfo=timezone.utc))
-    order = _section_order(experience, [])
-    assert order[:3] == ["spotlight", "performance", "recent_signals"]
+    order = _section_order(experience, [], None, {"market_insight": None, "academy": None})
+    assert order[:4] == ["spotlight", "today", "recent_signals", "performance"]
     assert "autotrade_health" not in order
     assert "trades_preview" not in order
 
