@@ -81,7 +81,6 @@ def _validate_init_data(init_data: str) -> dict[str, Any]:
     now = int(time.time())
     if auth_date <= 0 or auth_date > now + 60 or now - auth_date > MAX_INIT_DATA_AGE:
         raise HTTPException(401, "Telegram initData has expired")
-    from .config import settings
     if user_id not in settings.admin_ids:
         raise HTTPException(403, "NEXUS administrator access is required")
     return user
@@ -141,6 +140,87 @@ def calculate_auto_targets(symbol: str, direction: str, entry: float, stop_loss:
             "target_multipliers": list(RR_MULTIPLIERS)}
 
 
+def calculate_signal_levels(
+    symbol: str,
+    direction: str,
+    entry: float,
+    *,
+    stop_loss: float | None = None,
+    stop_loss_mode: str = "MANUAL",
+    stop_distance: float | None = None,
+    take_profit_mode: str = "AUTO",
+    targets: list[float] | None = None,
+    digits: int | None = None,
+) -> dict[str, Any]:
+    """Resolve canonical SL/TP levels without inventing trading assumptions.
+
+    AUTO SL is deterministic and requires an explicit positive price distance.
+    AUTO TP preserves the existing 1R/1.5R/2R/3R ladder. MANUAL TP preserves
+    the prices supplied by the administrator after directional validation.
+    """
+    canonical = normalize_symbol(symbol)
+    side = str(direction or "").strip().upper()
+    sl_mode = str(stop_loss_mode or "MANUAL").strip().upper()
+    tp_mode = str(take_profit_mode or "AUTO").strip().upper()
+    if side not in {"BUY", "SELL"}:
+        raise ValueError("direction must be BUY or SELL")
+    if sl_mode not in {"MANUAL", "AUTO"}:
+        raise ValueError("stop_loss_mode must be MANUAL or AUTO")
+    if tp_mode not in {"MANUAL", "AUTO"}:
+        raise ValueError("take_profit_mode must be MANUAL or AUTO")
+
+    entry_f = float(entry)
+    if not math.isfinite(entry_f) or entry_f <= 0:
+        raise ValueError("entry must be a positive finite number")
+
+    if sl_mode == "AUTO":
+        if stop_distance is None:
+            raise ValueError("stop_distance is required when stop-loss mode is AUTO")
+        distance = float(stop_distance)
+        if not math.isfinite(distance) or distance <= 0:
+            raise ValueError("stop_distance must be a positive finite number")
+        resolved_stop = entry_f - distance if side == "BUY" else entry_f + distance
+    else:
+        if stop_loss is None:
+            raise ValueError("stop_loss is required when stop-loss mode is MANUAL")
+        resolved_stop = float(stop_loss)
+
+    result = calculate_auto_targets(canonical, side, entry_f, resolved_stop, digits)
+    result["stop_loss_mode"] = sl_mode
+    result["take_profit_mode"] = tp_mode
+    result["stop_distance"] = round(abs(result["entry"] - result["stop_loss"]), result["digits"])
+
+    if tp_mode == "AUTO":
+        return result
+
+    if not targets:
+        raise ValueError("manual take-profit mode requires at least one target")
+    precision = int(result["digits"])
+    clean_targets: list[float] = []
+    for raw in targets:
+        value = float(raw)
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("manual take-profit targets must be positive finite numbers")
+        clean_targets.append(round(value, precision))
+
+    entry_n = float(result["entry"])
+    if side == "BUY":
+        if any(value <= entry_n for value in clean_targets):
+            raise ValueError("BUY take-profit targets must be above entry")
+        if any(clean_targets[i] >= clean_targets[i + 1] for i in range(len(clean_targets) - 1)):
+            raise ValueError("BUY take-profit targets must be strictly increasing")
+    else:
+        if any(value >= entry_n for value in clean_targets):
+            raise ValueError("SELL take-profit targets must be below entry")
+        if any(clean_targets[i] <= clean_targets[i + 1] for i in range(len(clean_targets) - 1)):
+            raise ValueError("SELL take-profit targets must be strictly decreasing")
+
+    risk = float(result["risk"])
+    result["targets"] = clean_targets
+    result["target_multipliers"] = [round(abs(value - entry_n) / risk, 4) for value in clean_targets]
+    return result
+
+
 def _admin_mt5_status() -> dict[str, Any]:
     from .config import settings
     accounts = tuple(str(value) for value in settings.nexus_admin_mt5_accounts)
@@ -169,14 +249,30 @@ class CalculateRequest(BaseModel):
     symbol: str = Field(min_length=3, max_length=32)
     direction: str = Field(pattern="^(?:BUY|SELL)$")
     entry: float = Field(gt=0)
-    stop_loss: float = Field(gt=0)
+    stop_loss: float | None = Field(default=None, gt=0)
+    stop_loss_mode: str = Field(default="MANUAL", pattern="^(?:MANUAL|AUTO)$")
+    stop_distance: float | None = Field(default=None, gt=0)
+    take_profit_mode: str = Field(default="AUTO", pattern="^(?:MANUAL|AUTO)$")
+    targets: list[float] | None = Field(default=None, min_length=1, max_length=10)
     digits: int | None = Field(default=None, ge=0, le=8)
+
+    @field_validator("direction", "stop_loss_mode", "take_profit_mode", mode="before")
+    @classmethod
+    def normalize_level_enums(cls, value: str) -> str:
+        return str(value or "").strip().upper()
 
 
 class CreateSignalRequest(CalculateRequest):
     destination: str = Field(pattern="^(?:FREE|VIP|BOTH)$")
     request_id: str = Field(min_length=8, max_length=160)
     timeframe: str = Field(default="M5", pattern="^(?:M1|M3|M5|M15|M30|H1|H4|D1|W1)$")
+    volume_mode: str = Field(default="RISK", pattern="^(?:RISK|FIXED)$")
+    risk_percent: float = Field(default=0.0, ge=0, le=100)
+    lot_size: float | None = Field(default=None, gt=0)
+    trailing_enabled: bool = False
+    trailing_break_even_r: float | None = Field(default=None, gt=0, le=100)
+    trailing_step_r: float | None = Field(default=None, gt=0, le=100)
+    trailing_lock_r: float | None = Field(default=None, gt=0, le=100)
 
     @field_validator("request_id")
     @classmethod
@@ -186,11 +282,50 @@ class CreateSignalRequest(CalculateRequest):
             raise ValueError("request_id contains invalid characters")
         return value
 
+    @field_validator("destination", "volume_mode", mode="before")
+    @classmethod
+    def normalize_create_enums(cls, value: str) -> str:
+        return str(value or "").strip().upper()
+
 
 class PositionCommandRequest(BaseModel):
     command: str
     account_number: str = Field(min_length=3, max_length=32)
     value: str | None = Field(default=None, max_length=128)
+
+
+def _resolve_sizing(req: CreateSignalRequest) -> tuple[str, float, float | None]:
+    mode = str(req.volume_mode or "RISK").strip().upper()
+    if mode == "FIXED":
+        if req.lot_size is None or not math.isfinite(float(req.lot_size)) or float(req.lot_size) <= 0:
+            raise ValueError("lot_size is required and must be positive in FIXED volume mode")
+        return "FIXED", 0.0, float(req.lot_size)
+    risk = float(req.risk_percent)
+    if not math.isfinite(risk) or risk < 0 or risk > 100:
+        raise ValueError("risk_percent must be between 0 and 100")
+    return "RISK", risk, None
+
+
+def _resolve_trailing(req: CreateSignalRequest) -> tuple[str | None, str | None, dict[str, Any] | None]:
+    if not req.trailing_enabled:
+        return None, None, None
+    break_even = float(req.trailing_break_even_r) if req.trailing_break_even_r is not None else 1.0
+    step = float(req.trailing_step_r) if req.trailing_step_r is not None else 0.50
+    lock = float(req.trailing_lock_r) if req.trailing_lock_r is not None else 0.30
+    if not all(math.isfinite(value) and value > 0 for value in (break_even, step, lock)):
+        raise ValueError("trailing parameters must be positive finite numbers")
+    if lock > step:
+        raise ValueError("trailing lock step cannot be greater than trailing movement step")
+    code = "NEXUS_TRAIL_01"
+    name = "Custom Step Trail"
+    return code, name, {
+        "name": name,
+        "version": 2,
+        "code": code,
+        "break_even_r": break_even,
+        "trail_step_r": step,
+        "lock_step_r": lock,
+    }
 
 
 def _sync_request(row) -> dict[str, Any]:
@@ -230,14 +365,23 @@ def _sync_request(row) -> dict[str, Any]:
 def bootstrap(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     user = _admin(x_telegram_init_data)
     return {"ok": True, "user": user, "mt5_admin": _admin_mt5_status(),
-            "destinations": ["FREE", "VIP", "BOTH"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4"]}
+            "destinations": ["FREE", "VIP", "BOTH"], "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4"],
+            "level_modes": ["AUTO", "MANUAL"], "volume_modes": ["RISK", "FIXED"]}
 
 
 @router.post("/signals/calculate")
 def calculate(req: CalculateRequest, x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     _admin(x_telegram_init_data)
     try:
-        return calculate_auto_targets(req.symbol, req.direction, req.entry, req.stop_loss, req.digits)
+        return calculate_signal_levels(
+            req.symbol, req.direction, req.entry,
+            stop_loss=req.stop_loss,
+            stop_loss_mode=req.stop_loss_mode,
+            stop_distance=req.stop_distance,
+            take_profit_mode=req.take_profit_mode,
+            targets=req.targets,
+            digits=req.digits,
+        )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -252,18 +396,30 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         result = _sync_request(existing); result["idempotent"] = True
         return result
     try:
-        calc = calculate_auto_targets(req.symbol, req.direction, req.entry, req.stop_loss, req.digits)
+        calc = calculate_signal_levels(
+            req.symbol, req.direction, req.entry,
+            stop_loss=req.stop_loss,
+            stop_loss_mode=req.stop_loss_mode,
+            stop_distance=req.stop_distance,
+            take_profit_mode=req.take_profit_mode,
+            targets=req.targets,
+            digits=req.digits,
+        )
+        volume_mode, risk_percent, lot_size = _resolve_sizing(req)
+        trailing_code, trailing_name, trailing_config = _resolve_trailing(req)
         mt5 = _admin_mt5_status()
         account = str(mt5.get("account_number") or "").strip()
         if not account:
             raise ValueError("NEXUS_ADMIN_MT5_ACCOUNTS is not configured")
         token = f"MINIAPP:{int(user['id'])}:{req.request_id}"
+        rr_ratio = max(float(value) for value in calc["target_multipliers"])
         row = db.create_signal(
             market_type=infer_category(calc["symbol"]), symbol=calc["symbol"], direction=calc["direction"],
             entry_price=calc["entry"], stop_loss=calc["stop_loss"], targets=calc["targets"],
-            risk_percent=0, rr_ratio=3.0, destination=req.destination, chart_file_id=None,
+            risk_percent=risk_percent, rr_ratio=rr_ratio, destination=req.destination, chart_file_id=None,
             created_by=int(user["id"]), timeframe=req.timeframe, order_type="MARKET",
-            volume_mode="RISK", publish_token=token,
+            volume_mode=volume_mode, lot_size=lot_size, publish_token=token,
+            trailing_code=trailing_code, trailing_name=trailing_name, trailing_config=trailing_config,
         )
         with db.conn() as con:
             con.execute(
@@ -273,7 +429,18 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
             )
         job = db.create_chart_capture_job(int(row["id"]), f"MINIAPP_ADMIN:{int(user['id'])}")
         status = "READY" if mt5["online"] else "WAITING_FOR_MT5"
-        payload = {**calc, "destination": req.destination, "timeframe": req.timeframe, "mt5_account": account}
+        payload = {
+            **calc,
+            "destination": req.destination,
+            "timeframe": req.timeframe,
+            "mt5_account": account,
+            "volume_mode": volume_mode,
+            "risk_percent": risk_percent,
+            "lot_size": lot_size,
+            "trailing_enabled": bool(req.trailing_enabled),
+            "trailing_code": trailing_code,
+            "trailing_config": trailing_config,
+        }
         with db.conn() as con:
             con.execute(
                 "INSERT OR IGNORE INTO miniapp_admin_signal_requests(request_id,admin_telegram_id,signal_id,status,error_message,payload_json,created_at,updated_at) VALUES(?,?,?,?,NULL,?,?,?)",
