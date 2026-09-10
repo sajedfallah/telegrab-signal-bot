@@ -1,0 +1,16 @@
+.trade-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 12px;
+}
+.trade-actions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0a1d2b;
+  color: #9dc4d7;
+  font-size: 9px;
+}
+.trade-actions button.danger { color: var(--red); border-color: #ff647c55; }
+.trade-actions button.safe { color: var(--green); border-color: #19d7a255; }

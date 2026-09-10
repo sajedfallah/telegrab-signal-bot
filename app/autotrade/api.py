@@ -30,6 +30,8 @@ async def lifespan(_app):
     db.init_db()
     from ..admin_api import init_admin_schema
     init_admin_schema()
+    from ..miniapp_admin_api import init_miniapp_admin_schema
+    init_miniapp_admin_schema()
     yield
 
 app = FastAPI(title="NEXUS Auto Trade API", version=API_VERSION, lifespan=lifespan)
@@ -44,7 +46,7 @@ app.add_middleware(
     allow_origins=_admin_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Telegram-Init-Data"],
 )
 
 @app.middleware("http")
@@ -61,6 +63,8 @@ async def admin_security_headers(request, call_next):
 
 from ..admin_api import router as admin_router
 app.include_router(admin_router)
+from ..miniapp_admin_api import router as miniapp_admin_router
+app.include_router(miniapp_admin_router)
 
 RECEIPT_STATUSES = "^(?:executed|activated|rejected|failed|failed_retryable|closed|pending|ignored)$"
 
@@ -1286,3 +1290,8 @@ _admin_dist = Path(__file__).resolve().parents[2] / "admin-web" / "dist"
 if _admin_dist.exists():
     from fastapi.staticfiles import StaticFiles
     app.mount("/admin", StaticFiles(directory=_admin_dist, html=True), name="admin-web")
+
+_miniapp_dir = Path(__file__).resolve().parents[2] / "miniapp"
+if _miniapp_dir.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/miniapp", StaticFiles(directory=_miniapp_dir, html=True), name="miniapp")

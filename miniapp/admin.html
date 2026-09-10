@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#06101c">
+  <title>NEXUS Admin Signal Center</title>
+  <link rel="stylesheet" href="/miniapp/admin-signal.css?v=1">
+  <link rel="stylesheet" href="/miniapp/admin-actions.css?v=1">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main class="app">
+    <header class="top"><div class="brand">NE<span>X</span>US<small>ADMIN</small></div><button id="refresh" class="icon">↻</button></header>
+    <section class="hero">
+      <div><small>مرکز عملیات</small><h1>مرکز سیگنال NEXUS</h1></div>
+      <div id="mt5Chip" class="chip offline"><i></i><span>MT5 آفلاین</span></div>
+    </section>
+
+    <section id="dashboard" class="view active">
+      <button id="newSignal" class="primary large">＋ صدور سیگنال جدید</button>
+      <div class="metrics"><article><b id="openCount">۰</b><span>درخواست فعال</span></article><article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article><article><b id="waitingCount">۰</b><span>منتظر MT5</span></article></div>
+      <div class="section-head"><h2>آخرین درخواست‌ها</h2><button id="reloadSignals">بروزرسانی</button></div>
+      <div id="signalList" class="stack"><div class="empty">هنوز سیگنالی صادر نشده است.</div></div>
+    </section>
+
+    <section id="create" class="view">
+      <div class="steps"><span class="on">۱<br><small>بازار</small></span><i></i><span>۲<br><small>ریسک</small></span><i></i><span>۳<br><small>انتشار</small></span></div>
+      <form id="signalForm" class="panel form">
+        <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
+        <div class="direction"><button type="button" data-side="BUY" class="selected buy">BUY</button><button type="button" data-side="SELL">SELL</button></div>
+        <div class="grid"><label>قیمت ورود<input id="entry" inputmode="decimal" placeholder="3650.00" required></label><label>حد ضرر<input id="stopLoss" inputmode="decimal" placeholder="3645.00" required></label></div>
+        <div id="riskBox" class="risk"><span>ریسک قیمت</span><b>—</b></div>
+        <div><div class="mini-title">اهداف خودکار</div><div id="targets" class="targets"><p>Entry و Stop Loss را وارد کنید.</p></div></div>
+        <label>مقصد<div class="segments destination"><button type="button" data-value="FREE">FREE</button><button type="button" data-value="VIP">VIP</button><button type="button" data-value="BOTH" class="selected">BOTH</button></div></label>
+        <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
+        <button type="submit" class="outline">پیش‌نمایش سیگنال</button>
+      </form>
+    </section>
+
+    <section id="positions" class="view"><div class="section-head"><h2>پوزیشن‌ها و سفارش‌ها</h2><button id="reloadPositions">بروزرسانی</button></div><div id="positionList" class="stack"></div></section>
+    <section id="logs" class="view"><div class="section-head"><h2>وضعیت صدور</h2></div><div id="logList" class="stack"></div></section>
+
+    <nav class="bottom"><button data-view="dashboard" class="selected"><b>⌂</b>خانه</button><button data-view="create"><b>＋</b>صدور</button><button data-view="positions"><b>↗</b>پوزیشن‌ها</button><button data-view="logs"><b>≡</b>لاگ</button></nav>
+  </main>
+
+  <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close">×</button><small>تأیید نهایی</small><h2>بررسی و اجرای سیگنال</h2><div id="preview"></div><div class="safety">DRAFT ← VALIDATE ← MT5 ← SCREENSHOT ← TELEGRAM</div><button id="publish" class="primary">ارسال به MT5</button><button id="cancelPreview" class="ghost">بازگشت و ویرایش</button></div></div>
+  <div id="toast" class="toast"></div>
+  <script src="/miniapp/admin-signal.js?v=1"></script>
+</body>
+</html>

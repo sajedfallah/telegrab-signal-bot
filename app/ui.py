@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+import os
+
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from .config import settings
 from . import db
 
@@ -330,7 +332,14 @@ def admin_menu(lang: str) -> InlineKeyboardMarkup:
             [("⚙️ System Settings", "admin_group_system")],
             [("🌐 Change Language", "change_language"), ("🏠 Main Menu", "main")],
         ]
-    return kb(rows)
+    markup = kb(rows)
+    miniapp_url = os.getenv("MINIAPP_ADMIN_URL", "").strip()
+    if miniapp_url:
+        markup.inline_keyboard.insert(0, [InlineKeyboardButton(
+            text="⚡ پنل صدور سیگنال Mini App" if lang == "fa" else "⚡ Mini App Signal Center",
+            web_app=WebAppInfo(url=miniapp_url),
+        )])
+    return markup
 
 
 def admin_users_group(lang: str) -> InlineKeyboardMarkup:
