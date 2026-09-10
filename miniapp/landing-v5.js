@@ -56,5 +56,13 @@
   window.addEventListener('pagehide', resetForNextOpen);
   window.addEventListener('pageshow', showLanding);
 
+  // The navigation layer calls the exact same landing lifecycle when the
+  // in-app Back button returns from Home to the entry screen.
+  window.NexusLanding = {
+    show: showLanding,
+    enter: enterApp,
+    reset: resetForNextOpen,
+  };
+
   showLanding();
 })();
