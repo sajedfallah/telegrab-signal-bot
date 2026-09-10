@@ -26,13 +26,15 @@ def test_combined_api_exposes_purchase_admin_and_meta_routes():
     assert required <= paths
 
 
-def test_vip_only_does_not_collect_unnecessary_metatrader_secret():
+def test_vip_only_does_not_collect_unnecessary_metatrader_secret(monkeypatch):
+    monkeypatch.setattr(miniapp_purchase_flow.db, "get_plan", lambda _: None)
     vip, auto = miniapp_purchase_flow._plan_flags("VIP1M")
     assert vip is True
     assert auto is False
 
 
-def test_bundle_requires_metatrader_onboarding():
+def test_bundle_requires_metatrader_onboarding(monkeypatch):
+    monkeypatch.setattr(miniapp_purchase_flow.db, "get_plan", lambda _: None)
     vip, auto = miniapp_purchase_flow._plan_flags("AUTO1M")
     assert vip is True
     assert auto is True
