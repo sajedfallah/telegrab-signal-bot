@@ -96,12 +96,12 @@ def test_frontend_has_polish_intelligence_features_and_no_css_only_access_gate()
     assert ".direction-chip.sell" in css and ".direction-chip.buy" in css
 
 
-def test_shell_loads_notification_center_polish_layer_and_new_cache_key():
+def test_shell_loads_notification_center_polish_layer_and_current_cache_key():
     html = _text("miniapp/index.html")
     assert 'id="notificationsBtn"' in html
-    assert './product-intelligence.js?v=20260910-1033' in html
-    assert './polish-v3.css?v=20260910-1033' in html
-    assert './assets/brand/nexus-logo.svg?v=20260910-1033' in html
+    assert './product-intelligence.js?v=20260910-1215' in html
+    assert './polish-v3.css?v=20260910-1215' in html
+    assert './assets/brand/nexus-mark.svg?v=20260910-1215' in html
 
 
 def test_bottom_nav_remains_server_lifecycle_authoritative():
