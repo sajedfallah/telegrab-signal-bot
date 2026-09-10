@@ -12,9 +12,14 @@
     return window.NexusIcons?.svg?.(name, className) || '';
   }
 
+  function track(name, metadata = {}) {
+    window.NexusProduct?.track?.(name, metadata);
+  }
+
   function dt(value) {
     if (!value) return '—';
-    try { return new Date(value).toLocaleString('fa-IR'); } catch (_) { return String(value); }
+    if (window.NexusProduct?.humanDate) return window.NexusProduct.humanDate(value, true);
+    try { return new Date(value).toLocaleString('fa-IR-u-ca-persian'); } catch (_) { return String(value); }
   }
 
   function price(value) {
@@ -27,23 +32,30 @@
     return `<div class="signal-v2-targets">${targets.map(t => `<span>TP${h(t.target_no)} <b>${price(t.price)}</b></span>`).join('')}</div>`;
   }
 
-  function resultLabel(item) {
-    if (item.status !== 'CLOSED') return '';
-    if (item.result_label_fa) return h(item.result_label_fa);
+  function resultMeta(item) {
+    if (item.status !== 'CLOSED') return null;
     const result = String(item.result || 'UNKNOWN').toUpperCase();
-    if (result === 'WIN') return 'سود';
-    if (result === 'LOSS') return 'ضرر';
-    if (result === 'BE') return 'سر‌به‌سر';
-    return 'نتیجه ثبت نشده';
+    const labels = {
+      WIN: 'سود', LOSS: 'ضرر', BE: 'سر‌به‌سر', PARTIAL: 'بسته‌شدن بخشی',
+      CANCELLED: 'لغوشده', EXPIRED: 'منقضی‌شده', UNKNOWN: 'نتیجه ثبت نشده'
+    };
+    return { result, label: item.result_label_fa || labels[result] || labels.UNKNOWN };
   }
 
   function resultChip(item) {
-    if (item.status !== 'CLOSED') return '';
-    const result = String(item.result || 'UNKNOWN').toLowerCase();
-    return `<span class="signal-v2-result ${h(result)}">${resultLabel(item)}</span>`;
+    const meta = resultMeta(item);
+    if (!meta) return '';
+    return `<span class="signal-v2-result ${h(meta.result.toLowerCase())}"><b>${h(meta.result)}</b><span>${h(meta.label)}</span></span>`;
+  }
+
+  function isNew(item) {
+    if (!item.published_at || item.status === 'CLOSED') return false;
+    const t = new Date(item.published_at).getTime();
+    return Number.isFinite(t) && Date.now() - t >= 0 && Date.now() - t <= 10 * 60 * 1000;
   }
 
   function card(item) {
+    const direction = String(item.direction || '').toUpperCase();
     const details = item.locked ? `
       <div class="signal-v2-lock">${icon('lock')}<div><b>دسترسی VIP لازم است</b><span>جزئیات عملیاتی این سیگنال برای حساب شما ارسال نشده است.</span></div></div>
       <button class="btn primary full" data-unlock-vip>مشاهده پلن‌های VIP</button>` : `
@@ -54,20 +66,26 @@
       </div>
       ${targetHtml(item.targets)}`;
     return `<article class="signal-v2-card ${item.locked ? 'locked' : ''}" data-signal-id="${h(item.id)}">
-      <div class="signal-top"><div class="signal-v2-badges"><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span>${item.code ? `<span class="badge muted">#${h(item.code)}</span>` : ''}</div><span class="status-pill ${item.status === 'CLOSED' ? 'success' : ''}">${h(item.status || '')}</span></div>
-      <div class="signal-v2-title"><div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div><div class="signal-v2-side">${item.direction ? `<b>${h(item.direction)}</b>` : ''}${resultChip(item)}</div></div>
+      <div class="signal-top">
+        <div class="signal-v2-badges"><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span>${item.code ? `<span class="badge muted">#${h(item.code)}</span>` : ''}${isNew(item) ? '<span class="badge new-signal-badge">جدید</span>' : ''}</div>
+        <span class="status-pill ${item.status === 'CLOSED' ? 'neutral' : 'success'}">${h(item.status || '')}</span>
+      </div>
+      <div class="signal-v2-title">
+        <div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div>
+        <div class="signal-v2-side">${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}${resultChip(item)}</div>
+      </div>
       ${details}
-      <button class="text-btn signal-v2-detail" data-open-signal="${h(item.id)}">جزئیات و Timeline</button>
+      <button class="text-btn signal-v2-detail" data-open-signal="${h(item.id)}">جزئیات و Timeline ${icon('arrowLeft')}</button>
     </article>`;
   }
 
   function shell() {
-    return `<section class="page-head"><div><div class="eyebrow">SIGNAL CENTER</div><h1>سیگنال‌های NEXUS</h1></div></section>
+    return `<section class="page-head"><div><div class="eyebrow">SIGNAL CENTER</div><h1>سیگنال‌های NEXUS</h1></div><button class="btn ghost compact-btn" data-open-track-record>${icon('chart')}<span>عملکرد NEXUS</span></button></section>
       <div class="signal-v2-filters">
-        <div class="plan-tabs signal-v2-primary"><button class="tab active" data-signal-state="ACTIVE">فعال</button><button class="tab" data-signal-state="CLOSED">بسته‌شده</button></div>
-        <div class="signal-v2-access"><button class="tab active" data-signal-access="ALL">همه</button><button class="tab" data-signal-access="FREE">FREE</button><button class="tab" data-signal-access="VIP">VIP</button></div>
+        <div class="signal-filter-group"><span class="filter-label">وضعیت</span><div class="plan-tabs signal-v2-primary"><button class="tab active" data-signal-state="ACTIVE">فعال</button><button class="tab" data-signal-state="CLOSED">بسته‌شده</button></div></div>
+        <div class="signal-filter-group"><span class="filter-label">نوع دسترسی</span><div class="signal-v2-access"><button class="tab active" data-signal-access="ALL">همه</button><button class="tab" data-signal-access="FREE">رایگان</button><button class="tab" data-signal-access="VIP">VIP</button></div></div>
       </div>
-      <div class="stack" id="signalFeed"><div class="empty-state">در حال دریافت سیگنال‌ها...</div></div>
+      <div class="stack signal-feed-transition" id="signalFeed">${window.NexusProduct?.skeleton?.('signals', 3) || '<div class="empty-state">در حال دریافت سیگنال‌ها...</div>'}</div>
       <button class="btn ghost full signal-load-more" id="signalLoadMore" hidden>نمایش بیشتر</button>`;
   }
 
@@ -76,7 +94,8 @@
     if (vipLocked) {
       return `<div class="empty-state nexus-empty-state">${icon('lock')}<b>سیگنال فعال VIP برای این حساب نمایش داده نمی‌شود</b><span>برای مشاهده سیگنال‌های فعال VIP باید دسترسی VIP فعال باشد.</span><button class="btn primary" data-unlock-vip>مشاهده پلن‌ها</button></div>`;
     }
-    return `<div class="empty-state nexus-empty-state">${icon('signals')}<b>سیگنال فعالی وجود ندارد</b><span>در این فیلتر داده معتبر و فعالی ثبت نشده است.</span></div>`;
+    const label = signalState.state === 'CLOSED' ? 'سیگنال بسته‌شده‌ای در این فیلتر وجود ندارد' : 'سیگنال فعالی وجود ندارد';
+    return `<div class="empty-state nexus-empty-state">${icon('signals')}<b>${h(label)}</b><span>در این فیلتر داده معتبر و قابل نمایش ثبت نشده است.</span></div>`;
   }
 
   async function loadSignals({ append = false } = {}) {
@@ -84,7 +103,10 @@
     signalState.loading = true;
     const feed = document.getElementById('signalFeed');
     const more = document.getElementById('signalLoadMore');
-    if (!append && feed) feed.innerHTML = '<div class="empty-state">در حال دریافت سیگنال‌ها...</div>';
+    if (!append && feed) {
+      feed.classList.add('is-loading');
+      feed.innerHTML = window.NexusProduct?.skeleton?.('signals', 3) || '<div class="empty-state">در حال دریافت سیگنال‌ها...</div>';
+    }
     try {
       const query = new URLSearchParams({
         state: signalState.state,
@@ -96,13 +118,17 @@
       const items = data.items || [];
       const html = items.length ? items.map(card).join('') : (!append ? emptyState() : '');
       if (feed) {
+        feed.classList.remove('is-loading');
         if (append) feed.insertAdjacentHTML('beforeend', html);
         else feed.innerHTML = html;
       }
       if (more) more.hidden = items.length < signalState.limit;
       bindSignalCards();
     } catch (err) {
-      if (feed) feed.innerHTML = `<div class="empty-state">دریافت سیگنال‌ها با مشکل مواجه شد.<br><button class="btn ghost" id="retrySignals">تلاش مجدد</button></div>`;
+      if (feed) {
+        feed.classList.remove('is-loading');
+        feed.innerHTML = `<div class="empty-state">دریافت سیگنال‌ها با مشکل مواجه شد.<br><button class="btn ghost" id="retrySignals">تلاش مجدد</button></div>`;
+      }
       document.getElementById('retrySignals')?.addEventListener('click', () => loadSignals());
       if (more) more.hidden = true;
     } finally {
@@ -114,6 +140,7 @@
     signalState.state = value;
     signalState.offset = 0;
     document.querySelectorAll('[data-signal-state]').forEach(btn => btn.classList.toggle('active', btn.dataset.signalState === value));
+    track('signal_filter', { filter: 'state', value });
     loadSignals();
   }
 
@@ -121,30 +148,47 @@
     signalState.access = value;
     signalState.offset = 0;
     document.querySelectorAll('[data-signal-access]').forEach(btn => btn.classList.toggle('active', btn.dataset.signalAccess === value));
+    track('signal_filter', { filter: 'access', value });
     loadSignals();
   }
 
-  function timelineHtml(items) {
-    if (!items?.length) return '<div class="empty-state">Timeline ثبت‌شده‌ای وجود ندارد.</div>';
-    return `<div class="signal-timeline">${items.map(item => `<article><span></span><div><b>${h(item.action || 'UPDATE')}</b><p>${h(item.detail_fa || item.detail_en || '')}</p><small>${h(dt(item.created_at))}</small></div></article>`).join('')}</div>`;
+  function timelineHtml(items, className = '') {
+    if (!items?.length) return '<div class="empty-state compact-empty">Timeline ثبت‌شده‌ای وجود ندارد.</div>';
+    return `<div class="signal-timeline ${className}">${items.map(item => `<article><span></span><div><b>${h(item.label_fa || item.action || item.kind || item.event_type || 'UPDATE')}</b>${item.detail_fa || item.detail_en || item.reason ? `<p>${h(item.detail_fa || item.detail_en || item.reason)}</p>` : ''}${item.ticket ? `<p>Ticket: ${h(item.ticket)}</p>` : ''}${item.profit != null ? `<p>P/L: ${h(Number(item.profit).toFixed(2))} $</p>` : ''}<small>${h(dt(item.created_at))}</small></div></article>`).join('')}</div>`;
+  }
+
+  function executionHtml(execution) {
+    if (!execution) return '';
+    const stateName = String(execution.execution_state || execution.status || 'UNKNOWN').toUpperCase();
+    const ok = stateName === 'EXECUTED';
+    const received = stateName === 'RECEIVED';
+    const title = ok ? 'اجرای من انجام شده است' : received ? 'EA سیگنال را دریافت کرده است' : 'اجرای من انجام نشده است';
+    return `<section class="signal-execution-panel ${ok ? 'success' : stateName === 'NOT_RECEIVED' ? 'neutral' : 'warning'}">
+      <div class="signal-top"><b>${h(title)}</b><span class="status-pill ${ok ? 'success' : 'neutral'}">${h(stateName)}</span></div>
+      ${execution.ticket ? `<div class="kv"><span>Ticket</span><b>${h(execution.ticket)}</b></div>` : ''}
+      ${execution.reason_fa ? `<div class="execution-reason"><span>${icon('info')}</span><p><b>دلیل:</b> ${h(execution.reason_fa)}</p></div>` : ''}
+      ${execution.timeline?.length ? `<h4>Execution Timeline</h4>${timelineHtml(execution.timeline, 'execution-timeline')}` : ''}
+      ${ok ? '<button class="btn ghost full" id="goMyTrades">معامله من</button>' : ''}
+    </section>`;
   }
 
   async function openSignal(id) {
+    track('signal_detail', { signal_id: id });
     try {
       const item = await api(`/signals/${encodeURIComponent(id)}`);
       const targets = targetHtml(item.targets);
-      const execution = item.my_execution ? `<div class="status-panel success"><b>وضعیت اجرای من</b><div class="kv"><span>Ticket</span><b>${h(item.my_execution.ticket || '—')}</b></div><div class="kv"><span>Status</span><b>${h(item.my_execution.status || item.my_execution.event_type || 'EXECUTED')}</b></div><button class="btn ghost full" id="goMyTrades">معامله من</button></div>` : '';
+      const direction = String(item.direction || '').toUpperCase();
       showModal(`Signal ${item.code ? '#' + h(item.code) : ''}`, `
-        <div class="signal-detail-head"><div><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span><h3>${h(item.symbol)}</h3></div><b>${h(item.direction || '')}</b></div>
+        <div class="signal-detail-head"><div><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span><h3>${h(item.symbol)}</h3></div>${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}</div>
         <div class="kv"><span>Status</span><b>${h(item.status)}</b></div>
+        ${resultChip(item)}
         ${item.entry_price != null ? `<div class="kv"><span>Entry</span><b>${price(item.entry_price)}</b></div>` : ''}
         ${item.stop_loss != null ? `<div class="kv"><span>SL</span><b>${price(item.stop_loss)}</b></div>` : ''}
         ${item.risk_percent != null ? `<div class="kv"><span>Risk</span><b>${h(item.risk_percent)}%</b></div>` : ''}
         ${targets}
-        ${item.status === 'CLOSED' ? `<div class="kv signal-result-row"><span>سود / ضرر</span><b class="${h(String(item.result || 'unknown').toLowerCase())}">${resultLabel(item)}</b></div>` : ''}
-        ${execution}
-        <h4>Timeline</h4>${timelineHtml(item.timeline)}`);
-      setTimeout(() => document.getElementById('goMyTrades')?.addEventListener('click', () => { closeModal(); window.NexusExperience?.renderTrades?.(); }), 0);
+        ${executionHtml(item.my_execution)}
+        ${item.timeline?.length ? `<h4>Signal Timeline</h4>${timelineHtml(item.timeline)}` : ''}`);
+      setTimeout(() => document.getElementById('goMyTrades')?.addEventListener('click', () => { closeModal(); window.NexusTrades?.open?.(); }), 0);
     } catch (err) {
       const message = String(err?.message || '');
       if (message.includes('VIP access required')) {
@@ -160,6 +204,10 @@
     view.querySelectorAll('[data-open-signal]').forEach(btn => btn.addEventListener('click', event => {
       event.stopPropagation();
       openSignal(btn.dataset.openSignal);
+    }));
+    view.querySelectorAll('[data-signal-id]').forEach(cardEl => cardEl.addEventListener('click', event => {
+      if (event.target.closest('button')) return;
+      openSignal(cardEl.dataset.signalId);
     }));
     view.querySelectorAll('[data-unlock-vip]').forEach(btn => btn.addEventListener('click', event => {
       event.stopPropagation();
@@ -177,6 +225,7 @@
       signalState.offset += signalState.limit;
       loadSignals({ append: true });
     });
+    view.querySelector('[data-open-track-record]')?.addEventListener('click', () => window.NexusTrackRecord?.open?.());
     loadSignals();
   }
 
