@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -35,10 +36,25 @@ class FakeDB:
             );
             """
         )
+        self.claimed: set[tuple[str, str, str]] = set()
+        self.sent: set[tuple[str, str, str]] = set()
 
     @contextmanager
     def conn(self):
         yield self.con
+
+    def claim_report_dispatch(self, report_type, period_key, recipient_key, start_iso, end_iso):
+        key = (str(report_type), str(period_key), str(recipient_key))
+        if key in self.claimed:
+            return False
+        self.claimed.add(key)
+        return True
+
+    def mark_report_sent(self, report_type, period_key, recipient_key, start_iso, end_iso):
+        self.sent.add((str(report_type), str(period_key), str(recipient_key)))
+
+    def release_report_dispatch(self, report_type, period_key, recipient_key):
+        self.claimed.discard((str(report_type), str(period_key), str(recipient_key)))
 
 
 class FakeMain:
@@ -48,6 +64,8 @@ class FakeMain:
             free_channel_target=-100101,
             vip_channel_id=-100202,
             public_channel_id=-100303,
+            channel_reports_enabled=True,
+            channel_content_language="fa",
         )
 
     @staticmethod
@@ -57,6 +75,14 @@ class FakeMain:
     @staticmethod
     def _period_utc(start_local, end_local):
         return start_local.astimezone(timezone.utc).isoformat(), end_local.astimezone(timezone.utc).isoformat()
+
+
+class FakeBot:
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    async def send_message(self, target, text, **kwargs):
+        self.calls.append({"target": target, "text": text, **kwargs})
 
 
 def _seed_gold_close(main: FakeMain):
@@ -115,6 +141,55 @@ def test_channel_report_has_one_market_agnostic_summary_card():
     assert "فارکس" not in text
     assert "Crypto" not in text
     assert "Forex" not in text
+
+
+def test_public_daily_report_has_clear_independent_free_and_vip_sections():
+    main = FakeMain()
+    _seed_gold_close(main)
+    start = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 4, tzinfo=timezone.utc)
+
+    text = report_runtime.render_public_daily_report(main, start, end, "fa")
+
+    assert "گزارش روزانه کانال‌های سیگنال" in text
+    assert "🆓 NEXUS FREE SIGNAL" in text
+    assert "👑 NEXUS VIP SIGNAL" in text
+    assert text.count("سیگنال‌های صادرشده: <b>1</b>") == 2
+    assert text.count("معاملات بسته‌شده: <b>1</b>") == 2
+    assert text.count("🔴 LOSS: <b>1</b>") == 2
+    assert "آمار FREE و VIP به‌صورت مستقل" in text
+
+
+def test_daily_send_keeps_channel_reports_and_sends_one_combined_public_post():
+    main = FakeMain()
+    _seed_gold_close(main)
+    bot = FakeBot()
+    start = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 4, tzinfo=timezone.utc)
+
+    asyncio.run(report_runtime.send_channel_report(main, bot, "daily", "2026-09-03", start, end))
+
+    assert [call["target"] for call in bot.calls] == [-100101, -100202, -100303]
+    public_calls = [call for call in bot.calls if call["target"] == -100303]
+    assert len(public_calls) == 1
+    assert "🆓 NEXUS FREE SIGNAL" in public_calls[0]["text"]
+    assert "👑 NEXUS VIP SIGNAL" in public_calls[0]["text"]
+    assert "NEXUS گزارش روزانه — VIP" not in public_calls[0]["text"]
+    assert ("daily_public_channels_v3", "2026-09-03", "-100303") in main.db.sent
+
+
+def test_daily_public_dispatch_is_idempotent():
+    main = FakeMain()
+    _seed_gold_close(main)
+    bot = FakeBot()
+    start = datetime(2026, 9, 3, tzinfo=timezone.utc)
+    end = datetime(2026, 9, 4, tzinfo=timezone.utc)
+
+    asyncio.run(report_runtime.send_channel_report(main, bot, "daily", "2026-09-03", start, end))
+    asyncio.run(report_runtime.send_channel_report(main, bot, "daily", "2026-09-03", start, end))
+
+    assert len([call for call in bot.calls if call["target"] == -100303]) == 1
+    assert len(bot.calls) == 3
 
 
 def test_report_routing_matches_free_vip_public_policy():
