@@ -11,7 +11,13 @@ from app.services import report_runtime
 
 class FakeDB:
     def __init__(self):
-        self.con = sqlite3.connect(":memory:")
+        # report_runtime renders scheduled reports via asyncio.to_thread().
+        # Production db.conn() opens a connection inside the worker thread,
+        # but this in-memory test double intentionally reuses one connection.
+        # Allow that fixture connection to be read from the worker thread so
+        # the test models production behavior instead of failing on SQLite's
+        # default thread-affinity guard.
+        self.con = sqlite3.connect(":memory:", check_same_thread=False)
         self.con.row_factory = sqlite3.Row
         self.con.executescript(
             """
