@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime, timezone
 from html import escape
@@ -65,8 +66,7 @@ def _fake_main(sent):
     )
 
 
-@pytest.mark.asyncio
-async def test_broker_sl_update_replies_and_advances_persisted_lifecycle(monkeypatch, tmp_path):
+def test_broker_sl_update_replies_and_advances_persisted_lifecycle(monkeypatch, tmp_path):
     db, uid, row = _signal(monkeypatch, tmp_path)
     from app.autotrade import telegram_lifecycle_truth as truth
 
@@ -83,7 +83,7 @@ async def test_broker_sl_update_replies_and_advances_persisted_lifecycle(monkeyp
         "take_profit": 4364.0,
         "account_number": "80150619",
     }
-    handled = await truth._handle_update(main, object(), {"telegram_id": uid}, payload)
+    handled = asyncio.run(truth._handle_update(main, object(), {"telegram_id": uid}, payload))
 
     assert handled is True
     assert len(sent) == 1
@@ -101,8 +101,7 @@ async def test_broker_sl_update_replies_and_advances_persisted_lifecycle(monkeyp
     assert int(updates[0]["vip_message_id"]) == 201
 
 
-@pytest.mark.asyncio
-async def test_broker_partial_uses_exact_stage_profit_not_floating_snapshot(monkeypatch, tmp_path):
+def test_broker_partial_uses_exact_stage_profit_not_floating_snapshot(monkeypatch, tmp_path):
     db, uid, row = _signal(monkeypatch, tmp_path, lot_size=0.02)
     from app.autotrade import telegram_lifecycle_truth as truth
 
@@ -127,7 +126,7 @@ async def test_broker_partial_uses_exact_stage_profit_not_floating_snapshot(monk
         "take_profit": 4318.0,
         "account_number": "80150619",
     }
-    handled = await truth._handle_update(main, object(), {"telegram_id": uid}, payload)
+    handled = asyncio.run(truth._handle_update(main, object(), {"telegram_id": uid}, payload))
 
     assert handled is True
     assert len(sent) == 1
@@ -147,8 +146,7 @@ async def test_broker_partial_uses_exact_stage_profit_not_floating_snapshot(monk
     assert value["stage_profit"] == pytest.approx(12.34)
 
 
-@pytest.mark.asyncio
-async def test_live_snapshot_volume_fallback_never_mislabels_floating_pnl_as_stage_profit(monkeypatch, tmp_path):
+def test_live_snapshot_volume_fallback_never_mislabels_floating_pnl_as_stage_profit(monkeypatch, tmp_path):
     db, uid, row = _signal(monkeypatch, tmp_path, lot_size=0.02)
     from app.autotrade import telegram_lifecycle_truth as truth
 
@@ -166,7 +164,7 @@ async def test_live_snapshot_volume_fallback_never_mislabels_floating_pnl_as_sta
         "volume": 0.01,
         "profit": 99.99,
     }
-    handled = await truth._handle_update(main, object(), {"telegram_id": uid}, payload)
+    handled = asyncio.run(truth._handle_update(main, object(), {"telegram_id": uid}, payload))
 
     assert handled is True
     assert sent == []
