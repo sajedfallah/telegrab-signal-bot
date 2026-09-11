@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 def _fresh_signal(monkeypatch, tmp_path, *, direction="SHORT"):
@@ -20,6 +20,32 @@ def _fresh_signal(monkeypatch, tmp_path, *, direction="SHORT"):
 
 def _fresh_event_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _install_live_open(db, uid: int, sig, *, seen_at: str | None = None):
+    now = seen_at or datetime.now(timezone.utc).isoformat()
+    account = "80150619"
+    with db.conn() as con:
+        con.execute(
+            "INSERT INTO autotrade_mt5_accounts(telegram_id,account_number,status,bound_at,last_seen_at) "
+            "VALUES(?,?,?,?,?)",
+            (uid, account, "active", now, now),
+        )
+        con.execute(
+            """
+            INSERT INTO mt5_live_state(
+                account_number,state_type,identifier,ticket,signal_code,symbol,direction,
+                volume,entry_price,current_price,stop_loss,take_profit,profit,magic,
+                nexus_managed,order_type,status,broker,server,last_seen_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                account, "POSITION", "95296019", "95296019", str(sig["code"]),
+                "XAUUSD.EC", "SHORT", 0.01, 4384.10, 4360.0, 4372.21, 4318.0,
+                37.55, 258025, 1, "MARKET", "OPEN", "TestBroker", "TestServer", now,
+            ),
+        )
+    return account
 
 
 def test_corrupt_reconcile_timestamp_is_rejected(monkeypatch, tmp_path):
@@ -84,4 +110,47 @@ def test_reconcile_long_alias_matches_buy_signal(monkeypatch, tmp_path):
         "entry_price": 4384.10,
         "event_time_ms": _fresh_event_ms(),
     }
+    assert guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"])) is None
+
+
+def test_reconcile_close_is_suppressed_while_fresh_live_position_is_open(monkeypatch, tmp_path):
+    db, uid, sig = _fresh_signal(monkeypatch, tmp_path, direction="SELL")
+    _install_live_open(db, uid, sig)
+    from app.autotrade import notification_queue_guard as guard
+
+    payload = {
+        "event": "CLOSE",
+        "event_id": "RECON-CLOSE-95296019-78379999",
+        "signal_id": sig["code"],
+        "ticket": "78379999",
+        "position_id": "95296019",
+        "symbol": "XAUUSD.EC",
+        "direction": "SHORT",
+        "entry_price": 4384.10,
+        "event_time_ms": _fresh_event_ms(),
+    }
+
+    reason = guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"]))
+    assert reason
+    assert "live position is still OPEN" in reason
+
+
+def test_stale_live_open_does_not_block_legitimate_reconcile_close(monkeypatch, tmp_path):
+    db, uid, sig = _fresh_signal(monkeypatch, tmp_path, direction="SELL")
+    stale = (datetime.now(timezone.utc) - timedelta(minutes=2)).isoformat()
+    _install_live_open(db, uid, sig, seen_at=stale)
+    from app.autotrade import notification_queue_guard as guard
+
+    payload = {
+        "event": "CLOSE",
+        "event_id": "RECON-CLOSE-95296019-78380000",
+        "signal_id": sig["code"],
+        "ticket": "78380000",
+        "position_id": "95296019",
+        "symbol": "XAUUSD.EC",
+        "direction": "SHORT",
+        "entry_price": 4384.10,
+        "event_time_ms": _fresh_event_ms(),
+    }
+
     assert guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"])) is None
