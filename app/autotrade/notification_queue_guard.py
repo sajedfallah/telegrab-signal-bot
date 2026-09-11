@@ -12,6 +12,12 @@ A legacy EA BuildReconcileItem() formatting defect could also shift arguments
 so ``event_time_ms`` contained the deal ticket instead of epoch milliseconds.
 Those snapshots are unsafe: they are dropped before reconciliation and any
 already-persisted legacy notification is quarantined before Telegram delivery.
+
+Synthetic CLOSE reconciliation is also fail-closed against fresh authoritative
+live MT5 state.  The legacy EA aggregates any exit deal into a RECON-CLOSE item,
+including partial exits.  If the same NEXUS position is still OPEN in the fresh
+live snapshot, that synthetic CLOSE is suppressed; the explicit broker-deal
+partial UPDATE path owns the partial-close lifecycle instead.
 """
 
 import json
@@ -26,6 +32,7 @@ _INSTALLED = False
 _ORIGINAL_PENDING = None
 _ORIGINAL_RECONCILE = None
 _FIRST_POLL_LOGGED = False
+_LIVE_CLOSE_GUARD_SECONDS = 30.0
 
 
 def _compact_symbol(value: object) -> str:
@@ -94,6 +101,63 @@ def _is_reconcile(payload: dict) -> bool:
     return str(payload.get("event_id") or "").upper().strip().startswith("RECON-")
 
 
+def _fresh_live_position_still_open(telegram_id: int, payload: dict, row) -> bool:
+    """Return True only for a fresh authoritative OPEN snapshot of this position.
+
+    Freshness matters: an old OPEN row must not permanently block a legitimate
+    final CLOSE after an EA/network outage.  In normal operation the EA sends
+    live state every five seconds immediately before history reconciliation, so
+    a 30-second window is deliberately conservative.
+    """
+    if str(payload.get("event") or "").upper().strip() != "CLOSE":
+        return False
+    if not _is_reconcile(payload):
+        return False
+
+    signal_code = str(row["code"] or "").strip() if row else ""
+    position_id = str(payload.get("position_id") or "").strip()
+    if not signal_code and not position_id:
+        return False
+
+    try:
+        with db.conn() as con:
+            live = con.execute(
+                """
+                SELECT l.last_seen_at
+                FROM mt5_live_state AS l
+                JOIN autotrade_mt5_accounts AS a
+                  ON a.account_number=l.account_number
+                WHERE a.telegram_id=?
+                  AND LOWER(COALESCE(a.status,'active'))='active'
+                  AND l.state_type='POSITION'
+                  AND l.status='OPEN'
+                  AND l.nexus_managed=1
+                  AND (
+                        UPPER(COALESCE(l.signal_code,''))=UPPER(?)
+                        OR (?<>'' AND CAST(l.identifier AS TEXT)=?)
+                      )
+                ORDER BY l.last_seen_at DESC
+                LIMIT 1
+                """,
+                (int(telegram_id), signal_code, position_id, position_id),
+            ).fetchone()
+    except Exception:
+        log.exception(
+            "[NEXUS][QUEUE_GUARD] live-state CLOSE guard lookup failed signal=%s position=%s",
+            signal_code,
+            position_id,
+        )
+        return False
+
+    if not live:
+        return False
+    seen = _parse_iso(live["last_seen_at"])
+    if seen is None:
+        return False
+    age = (datetime.now(timezone.utc) - seen).total_seconds()
+    return -5.0 <= age <= _LIVE_CLOSE_GUARD_SECONDS
+
+
 def _identity_rejection_reason(
     telegram_id: int,
     payload: dict,
@@ -149,6 +213,9 @@ def _identity_rejection_reason(
         event_dt = datetime.fromtimestamp(event_ms / 1000.0, tz=timezone.utc)
         if event_dt.timestamp() + 5 < signal_created.timestamp():
             return "reconcile event predates signal creation"
+
+    if _fresh_live_position_still_open(int(telegram_id), payload, row):
+        return "reconcile CLOSE suppressed: fresh authoritative live position is still OPEN"
 
     return None
 
