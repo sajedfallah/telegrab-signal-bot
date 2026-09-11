@@ -43,6 +43,16 @@ def _symbols_compatible(a: object, b: object) -> bool:
     return len(left) >= 6 and len(right) >= 6 and left[:6] == right[:6]
 
 
+def _direction_family(value: object) -> str:
+    """Normalize broker and signal direction aliases onto one identity family."""
+    raw = str(value or "").upper().strip()
+    if raw in {"BUY", "LONG"}:
+        return "BUY"
+    if raw in {"SELL", "SHORT"}:
+        return "SELL"
+    return raw
+
+
 def _parse_iso(value: object):
     text = str(value or "").strip()
     if not text:
@@ -109,7 +119,11 @@ def _identity_rejection_reason(
 
     payload_direction = str(payload.get("direction") or "").upper().strip()
     row_direction = str(row["direction"] or "").upper().strip()
-    if payload_direction and row_direction and payload_direction != row_direction:
+    if (
+        payload_direction
+        and row_direction
+        and _direction_family(payload_direction) != _direction_family(row_direction)
+    ):
         return f"direction mismatch history={payload_direction} signal={row_direction}"
 
     if not _symbols_compatible(payload.get("symbol"), row["symbol"]):
