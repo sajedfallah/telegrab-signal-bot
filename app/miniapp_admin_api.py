@@ -22,6 +22,7 @@ from .autotrade.trailing_profiles import TRAILING_PROFILES, profile_snapshot
 
 router = APIRouter(prefix="/miniapp/api/admin", tags=["miniapp-admin-signal-center"])
 MAX_INIT_DATA_AGE = max(60, int(os.getenv("MINIAPP_AUTH_MAX_AGE_SECONDS", "86400")))
+LIVE_PNL_STALE_SECONDS = max(120, min(int(os.getenv("MINIAPP_ACTIVE_TRUTH_STALE_SECONDS", "600")), 3600))
 # Preserve the existing MANUAL contract. AUTO will use its own 1R/2R/3R
 # structure calculation once an authoritative completed-candle feed is wired.
 RR_MULTIPLIERS = (1.0, 1.5, 2.0, 3.0)
@@ -160,7 +161,10 @@ def _admin_mt5_status() -> dict[str, Any]:
     age = None
     if row:
         try:
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(str(row["last_seen_at"]))).total_seconds()
+            seen = datetime.fromisoformat(str(row["last_seen_at"]).replace("Z", "+00:00"))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - seen.astimezone(timezone.utc)).total_seconds()
         except ValueError:
             age = None
     online = age is not None and age <= 120
@@ -224,6 +228,96 @@ class PositionCommandRequest(BaseModel):
     value: str | None = Field(default=None, max_length=128)
 
 
+def _snapshot_age_seconds(value: Any) -> float | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def _admin_live_signal(signal: Any) -> dict[str, Any] | None:
+    if not signal:
+        return None
+    data = dict(signal)
+    if str(data.get("status") or "").upper() == "CLOSED":
+        return None
+    account = str(data.get("issuer_account") or "").strip()
+    code = str(data.get("code") or "").strip()
+    if not account or not code:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+    with db.conn() as con:
+        rows = [dict(row) for row in con.execute(
+            """
+            SELECT live.* FROM mt5_live_state live
+            WHERE live.account_number=? AND live.nexus_managed=1
+              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
+              AND (
+                UPPER(COALESCE(live.signal_code,''))=UPPER(?)
+                OR EXISTS (
+                  SELECT 1 FROM autotrade_trade_executions exec
+                  WHERE exec.signal_id=? AND exec.ticket=live.ticket
+                )
+              )
+            ORDER BY live.last_seen_at DESC, live.ticket DESC
+            """,
+            (account, code, int(data["id"])),
+        ).fetchall()]
+    if not rows:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+    last_sync = max((str(row.get("last_seen_at") or "") for row in rows), default="") or None
+    age = _snapshot_age_seconds(last_sync)
+    fresh = age is not None and age <= LIVE_PNL_STALE_SECONDS
+    positions = [row for row in rows if str(row.get("state_type") or "").upper() == "POSITION" and str(row.get("status") or "").upper() == "OPEN"]
+    pending = [row for row in rows if str(row.get("state_type") or "").upper() == "ORDER" and str(row.get("status") or "").upper() == "PENDING"]
+    if positions:
+        latest = max(positions, key=lambda row: str(row.get("last_seen_at") or ""))
+        pnl = sum(float(row.get("profit") or 0.0) for row in positions)
+        volume = sum(float(row.get("volume") or 0.0) for row in positions)
+        current = float(latest.get("current_price") or 0.0) or None
+        entry = float(data.get("entry_price") or 0.0)
+        original_sl = float(data.get("stop_loss") or 0.0)
+        initial_r = abs(entry - original_sl)
+        current_r = None
+        if current is not None and entry > 0 and initial_r > 0:
+            side = str(data.get("direction") or "").upper()
+            move = current - entry if side in {"BUY", "LONG"} else entry - current
+            current_r = round(move / initial_r, 4)
+        return {
+            "status": "LIVE" if fresh else "STALE",
+            "current_price": current,
+            "floating_pnl": round(pnl, 2),
+            "current_r": current_r,
+            "volume": volume,
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": "IN_PROFIT" if pnl > 0 else "IN_LOSS" if pnl < 0 else "BE",
+            "last_sync": last_sync,
+            "age_seconds": round(age, 1) if age is not None else None,
+            "position_count": len(positions),
+        }
+    if pending:
+        latest = max(pending, key=lambda row: str(row.get("last_seen_at") or ""))
+        return {
+            "status": "PENDING" if fresh else "STALE",
+            "current_price": float(latest.get("current_price") or 0.0) or None,
+            "floating_pnl": 0.0,
+            "current_r": None,
+            "volume": sum(float(row.get("volume") or 0.0) for row in pending),
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": "BE",
+            "last_sync": last_sync,
+            "age_seconds": round(age, 1) if age is not None else None,
+            "position_count": 0,
+        }
+    return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": last_sync, "age_seconds": age}
+
+
 def _sync_request(row) -> dict[str, Any]:
     item = dict(row)
     signal = db.get_signal(int(item["signal_id"])) if item.get("signal_id") else None
@@ -251,7 +345,8 @@ def _sync_request(row) -> dict[str, Any]:
             con.execute("UPDATE miniapp_admin_signal_requests SET status=?,error_message=?,updated_at=? WHERE id=?",
                         (status, error, db.now_iso(), int(item["id"])))
     item.update({"status": status, "error_message": error,
-                 "signal": dict(signal) if signal else None, "chart_job": dict(job) if job else None})
+                 "signal": dict(signal) if signal else None, "chart_job": dict(job) if job else None,
+                 "live": _admin_live_signal(signal)})
     if signal:
         item["targets"] = [float(target["price"]) for target in db.get_signal_targets(int(signal["id"]))]
     return item
