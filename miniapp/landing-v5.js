@@ -2,13 +2,56 @@
   const landing = document.getElementById('nexusLanding');
   const enterButton = document.getElementById('enterNexus');
   const appShell = document.querySelector('.app-shell');
+  const poster = landing?.querySelector('.nexus-landing-poster');
 
-  if (!landing || !enterButton || !appShell) {
+  if (!landing || !enterButton || !appShell || !poster) {
     document.body.classList.remove('landing-active');
     return;
   }
 
   let entered = false;
+  let posterObjectUrl = null;
+  let posterHydrated = false;
+
+  const embeddedSource = poster.dataset.directWebpSource || '';
+
+  const extractEmbeddedWebp = async () => {
+    if (posterHydrated || !embeddedSource) return;
+
+    try {
+      const response = await fetch(embeddedSource, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) throw new Error(`landing asset HTTP ${response.status}`);
+
+      const svg = await response.text();
+      const match = svg.match(/data:image\/webp;base64,([^"']+)/i);
+      if (!match?.[1]) throw new Error('embedded WebP payload not found');
+
+      const binary = atob(match[1]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+
+      const blob = new Blob([bytes], { type: 'image/webp' });
+      posterObjectUrl = URL.createObjectURL(blob);
+      poster.src = posterObjectUrl;
+
+      if (typeof poster.decode === 'function') {
+        try { await poster.decode(); } catch (_) {}
+      }
+
+      poster.classList.remove('is-fallback');
+      poster.classList.add('is-ready');
+      posterHydrated = true;
+    } catch (error) {
+      console.error('NEXUS landing direct image decode failed', error);
+      poster.src = embeddedSource;
+      poster.classList.remove('is-ready');
+      poster.classList.add('is-fallback');
+      posterHydrated = true;
+    }
+  };
 
   const showLanding = () => {
     entered = false;
@@ -18,6 +61,7 @@
     appShell.setAttribute('aria-hidden', 'true');
     document.body.classList.add('landing-active');
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    extractEmbeddedWebp();
   };
 
   const enterApp = () => {
@@ -40,9 +84,6 @@
     }, 220);
   };
 
-  // Telegram can keep its WebView alive after the Mini App is closed. Reset
-  // the gate whenever the document leaves the foreground so every reopen
-  // starts on the landing page, even when the same WebView is reused.
   const resetForNextOpen = () => {
     if (entered || landing.hidden) showLanding();
   };
@@ -55,9 +96,10 @@
 
   window.addEventListener('pagehide', resetForNextOpen);
   window.addEventListener('pageshow', showLanding);
+  window.addEventListener('beforeunload', () => {
+    if (posterObjectUrl) URL.revokeObjectURL(posterObjectUrl);
+  });
 
-  // The navigation layer calls the exact same landing lifecycle when the
-  // in-app Back button returns from Home to the entry screen.
   window.NexusLanding = {
     show: showLanding,
     enter: enterApp,
