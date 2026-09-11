@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap');
+
+/* NEXUS User Mini App — Final UI polish
+   Presentation only: typography, emphasis, radius and landing tap target. */
+
+:root{
+  --nexus-ui-font:"Vazirmatn","Geeza Pro","Noto Sans Arabic",Tahoma,"Segoe UI",Arial,sans-serif;
+}
+
+html[lang="fa"] body,
+.app-shell,
+.app-shell button,
+.app-shell input,
+.app-shell select,
+.app-shell textarea,
+.app-shell .brand,
+.app-shell .brand-sub,
+.app-shell .eyebrow,
+.app-shell .badge,
+.app-shell .status-pill,
+.app-shell code,
+.app-shell .ltr{
+  font-family:var(--nexus-ui-font)!important;
+}
+
+/* Signal Center: make the Performance CTA unmistakable. */
+.app-shell [data-open-track-record]{
+  min-height:46px!important;
+  padding:10px 15px!important;
+  border:2px solid rgba(255,211,102,.78)!important;
+  border-radius:14px!important;
+  background:linear-gradient(135deg,#fbbf24 0%,#f59e0b 100%)!important;
+  color:#160d02!important;
+  font-size:13px!important;
+  font-weight:900!important;
+  letter-spacing:0!important;
+  box-shadow:0 10px 28px rgba(245,158,11,.28),inset 0 1px 0 rgba(255,255,255,.34)!important;
+}
+
+.app-shell [data-open-track-record] .nexus-inline-icon{
+  width:20px!important;
+  height:20px!important;
+  color:#160d02!important;
+}
+
+.app-shell [data-open-track-record]:active{
+  transform:scale(.97);
+}
+
+/* Home: inner cards should follow the same rounded design language. */
+.app-shell .home-v2-priority .home-attention-card{
+  border:1px solid rgba(245,158,11,.24)!important;
+  border-radius:16px!important;
+  padding:12px 13px!important;
+  overflow:hidden!important;
+  background:rgba(255,255,255,.018)!important;
+}
+
+.app-shell .home-subscription-card{
+  border:1px solid rgba(96,165,250,.20)!important;
+  border-radius:16px!important;
+  padding:4px 12px 10px!important;
+  overflow:hidden!important;
+  background:rgba(255,255,255,.018)!important;
+}
+
+.app-shell .home-subscription-card .kv{
+  border-radius:0!important;
+  padding-left:0!important;
+  padding-right:0!important;
+}
+
+.app-shell .home-subscription-card .kv:last-of-type{
+  border-bottom-color:transparent!important;
+}
+
+/* Landing V9: invisible native hit target aligned with the smaller visible CTA. */
+.nexus-landing-enter{
+  top:75.4%!important;
+  left:31.5%!important;
+  right:31.5%!important;
+  height:5.4%!important;
+  min-height:44px!important;
+  border-radius:18px!important;
+}
+
+@media(max-width:390px){
+  .nexus-landing-enter{
+    left:29%!important;
+    right:29%!important;
+  }
+}
+
+@media(orientation:landscape){
+  .nexus-landing-enter{
+    left:39%!important;
+    right:39%!important;
+    top:74%!important;
+    height:8%!important;
+  }
+}
