@@ -51,8 +51,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
 
-      - name: Compile backend
-        run: python -m compileall -q app run_api.py
+      - name: Compile backend and smoke diagnostics
+        run: |
+          python -m compileall -q app run_api.py scripts/diagnose_live_pnl.py
+          python scripts/diagnose_live_pnl.py --help > /dev/null
 
       - name: Check Mini App JavaScript syntax
         run: |
