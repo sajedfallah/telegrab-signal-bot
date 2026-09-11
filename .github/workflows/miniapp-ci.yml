@@ -4,17 +4,21 @@ on:
   pull_request:
     branches:
       - main
+      - release/nexus-v0.6.5
+      - integration/v066-release-reconcile
   push:
     branches:
       - feature/nexus-miniapp-ui-v1
       - feature/miniapp-cx-v2-p0-shell
       - feature/miniapp-polish-intelligence-v3
       - feature/miniapp-payment-onboarding-v4
+      - feature/v066-miniapp-auto-setup-fixed-volume
+      - integration/v066-release-reconcile
 
 jobs:
   miniapp-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       BOT_TOKEN: "123456:TESTTOKEN"
       BOT_USERNAME: "nexus_test_bot"
@@ -50,8 +54,10 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest
 
-      - name: Compile backend
-        run: python -m compileall -q app run_api.py
+      - name: Compile backend and smoke diagnostics
+        run: |
+          python -m compileall -q app run_api.py scripts/diagnose_live_pnl.py
+          python scripts/diagnose_live_pnl.py --help > /dev/null
 
       - name: Check Mini App JavaScript syntax
         run: |
@@ -69,4 +75,7 @@ jobs:
             tests/test_miniapp_access_ui_fixes.py \
             tests/test_miniapp_product_intelligence.py \
             tests/test_miniapp_payment_onboarding_v4.py \
+            tests/test_miniapp_admin_signal_controls.py \
+            tests/test_miniapp_landing_v5.py \
+            tests/test_miniapp_live_pnl.py \
             -q
