@@ -27,6 +27,43 @@
     return h(value);
   }
 
+  function signed(value, digits = 2) {
+    if (value == null || value === '') return '—';
+    const n = Number(value);
+    if (!Number.isFinite(n)) return h(value);
+    return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`;
+  }
+
+  function pulseHtml(status) {
+    const key = String(status || 'UNAVAILABLE').toUpperCase();
+    return `<span class="nexus-live-pulse ${h(key.toLowerCase())}" aria-hidden="true"><svg viewBox="0 0 64 48"><polyline class="pulse-back" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline><polyline class="pulse-front" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline></svg></span>`;
+  }
+
+  function liveHtml(live, { detail = false } = {}) {
+    if (!live) return '';
+    const status = String(live.status || 'UNAVAILABLE').toUpperCase();
+    const pnlState = String(live.pnl_state || '').toLowerCase();
+    const active = status === 'LIVE';
+    const label = status === 'LIVE' ? 'MT5 LIVE' : status === 'PENDING' ? 'MT5 PENDING' : status === 'STALE' ? 'STALE' : 'LIVE DATA UNAVAILABLE';
+    const sync = live.age_seconds != null ? `${Math.round(Number(live.age_seconds))}s ago` : '—';
+    if (status === 'UNAVAILABLE') {
+      return `<section class="signal-live-panel unavailable"><div class="signal-live-head">${pulseHtml(status)}<b>${h(label)}</b><small>Broker snapshot unavailable</small></div></section>`;
+    }
+    const cells = `
+      <div><span>Current</span><b>${price(live.current_price)}</b></div>
+      <div><span>Floating P&amp;L</span><b class="pnl ${h(pnlState)}">${signed(live.floating_pnl, 2)}</b></div>
+      <div><span>Current R</span><b>${live.current_r == null ? '—' : `${signed(live.current_r, 2)}R`}</b></div>
+      <div><span>Volume</span><b>${price(live.volume)}</b></div>`;
+    const extras = detail ? `
+      <div><span>Live SL</span><b>${price(live.stop_loss)}</b></div>
+      <div><span>Live TP</span><b>${price(live.take_profit)}</b></div>` : '';
+    return `<section class="signal-live-panel ${h(status.toLowerCase())}">
+      <div class="signal-live-head">${pulseHtml(status)}<b>${h(label)}</b><small>synced ${h(sync)}</small></div>
+      <div class="signal-live-grid">${cells}${extras}</div>
+      ${!active && status === 'STALE' ? '<div class="signal-live-warning">آخرین Snapshot بروکر قدیمی است؛ اعداد به‌عنوان Live در نظر گرفته نمی‌شوند.</div>' : ''}
+    </section>`;
+  }
+
   function targetHtml(targets) {
     if (!targets?.length) return '';
     return `<div class="signal-v2-targets">${targets.map(t => `<span>TP${h(t.target_no)} <b>${price(t.price)}</b></span>`).join('')}</div>`;
@@ -64,7 +101,8 @@
         ${item.stop_loss != null ? `<div><span>SL</span><b>${price(item.stop_loss)}</b></div>` : ''}
         ${item.risk_percent != null ? `<div><span>Risk</span><b>${h(item.risk_percent)}%</b></div>` : ''}
       </div>
-      ${targetHtml(item.targets)}`;
+      ${targetHtml(item.targets)}
+      ${item.status !== 'CLOSED' ? liveHtml(item.live) : ''}`;
     return `<article class="signal-v2-card ${item.locked ? 'locked' : ''}" data-signal-id="${h(item.id)}">
       <div class="signal-top">
         <div class="signal-v2-badges"><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span>${item.code ? `<span class="badge muted">#${h(item.code)}</span>` : ''}${isNew(item) ? '<span class="badge new-signal-badge">جدید</span>' : ''}</div>
@@ -98,12 +136,12 @@
     return `<div class="empty-state nexus-empty-state">${icon('signals')}<b>${h(label)}</b><span>در این فیلتر داده معتبر و قابل نمایش ثبت نشده است.</span></div>`;
   }
 
-  async function loadSignals({ append = false } = {}) {
+  async function loadSignals({ append = false, silent = false } = {}) {
     if (signalState.loading || state.route !== 'signals') return;
     signalState.loading = true;
     const feed = document.getElementById('signalFeed');
     const more = document.getElementById('signalLoadMore');
-    if (!append && feed) {
+    if (!append && !silent && feed) {
       feed.classList.add('is-loading');
       feed.innerHTML = window.NexusProduct?.skeleton?.('signals', 3) || '<div class="empty-state">در حال دریافت سیگنال‌ها...</div>';
     }
@@ -125,12 +163,12 @@
       if (more) more.hidden = items.length < signalState.limit;
       bindSignalCards();
     } catch (err) {
-      if (feed) {
+      if (!silent && feed) {
         feed.classList.remove('is-loading');
         feed.innerHTML = `<div class="empty-state">دریافت سیگنال‌ها با مشکل مواجه شد.<br><button class="btn ghost" id="retrySignals">تلاش مجدد</button></div>`;
       }
       document.getElementById('retrySignals')?.addEventListener('click', () => loadSignals());
-      if (more) more.hidden = true;
+      if (!silent && more) more.hidden = true;
     } finally {
       signalState.loading = false;
     }
@@ -186,6 +224,7 @@
         ${item.stop_loss != null ? `<div class="kv"><span>SL</span><b>${price(item.stop_loss)}</b></div>` : ''}
         ${item.risk_percent != null ? `<div class="kv"><span>Risk</span><b>${h(item.risk_percent)}%</b></div>` : ''}
         ${targets}
+        ${item.status !== 'CLOSED' ? liveHtml(item.live, { detail: true }) : ''}
         ${executionHtml(item.my_execution)}
         ${item.timeline?.length ? `<h4>Signal Timeline</h4>${timelineHtml(item.timeline)}` : ''}`);
       setTimeout(() => document.getElementById('goMyTrades')?.addEventListener('click', () => { closeModal(); window.NexusTrades?.open?.(); }), 0);
@@ -235,4 +274,8 @@
     if (!target) return;
     window.setTimeout(hydrateNexusSignals, 0);
   }, true);
+  window.setInterval(() => {
+    if (document.visibilityState !== 'visible' || state.route !== 'signals' || signalState.state !== 'ACTIVE' || signalState.offset !== 0) return;
+    loadSignals({ silent: true });
+  }, 5000);
 })();

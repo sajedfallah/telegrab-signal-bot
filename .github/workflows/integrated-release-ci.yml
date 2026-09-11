@@ -1,12 +1,15 @@
-name: NEXUS v0.6.5 Integrated Release CI
+name: NEXUS Integrated Release CI
 
 on:
   push:
     branches:
       - feature/v065-integrated-release
+      - integration/v066-release-reconcile
   pull_request:
     branches:
       - feature/v065-integrated-release
+      - release/nexus-v0.6.5
+      - integration/v066-release-reconcile
   workflow_dispatch:
 
 jobs:
@@ -37,6 +40,11 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -44,19 +52,21 @@ jobs:
           python -m pip install pytest
 
       - name: Compile integrated runtime
-        run: python -m compileall -q app run.py run_api.py
+        run: python -m compileall -q app run.py run_api.py scripts/diagnose_live_pnl.py
 
-      - name: Admin Mini App release checks
+      - name: Admin and Customer Mini App release checks
         run: |
           node --check miniapp/admin-signal.js
+          node --check miniapp/admin-v066-overlay.js
+          node --check miniapp/signals-v2.js
           git diff --check
 
-      - name: Focused new feature tests
+      - name: Focused v066 release tests
         run: |
-          python -m pytest tests/test_agentic_content_mvp.py -q
-          python -m pytest tests/test_nexus_hub_academy.py -q
-          python -m pytest tests/test_autotrade_user_lifecycle.py -q
-          python -m pytest tests/test_autotrade_cleanup_runtime.py -q
+          python -m pytest tests/test_miniapp_admin_signal_controls.py -q
+          python -m pytest tests/test_miniapp_live_pnl.py -q
+          python -m pytest tests/test_miniapp_landing_v5.py -q
+          python scripts/diagnose_live_pnl.py --help > /dev/null
 
       - name: Full production regression suite
         run: python -m pytest tests -q

@@ -13,7 +13,7 @@ from typing import Any
 from urllib.parse import parse_qsl
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from . import db
 from .autotrade.symbol_registry import CANONICAL_SYMBOLS, infer_category, normalize_symbol
@@ -22,6 +22,7 @@ from .autotrade.trailing_profiles import TRAILING_GUIDE_FA, TRAILING_PROFILES, p
 
 router = APIRouter(prefix="/miniapp/api/admin", tags=["miniapp-admin-signal-center"])
 MAX_INIT_DATA_AGE = max(60, int(os.getenv("MINIAPP_AUTH_MAX_AGE_SECONDS", "86400")))
+LIVE_PNL_STALE_SECONDS = max(120, min(int(os.getenv("MINIAPP_ACTIVE_TRUTH_STALE_SECONDS", "600")), 3600))
 RR_MULTIPLIERS = (1.0, 1.5, 2.0, 3.0)
 VALID_COMMANDS = {
     "MOVE_SL_TO_ENTRY", "CLOSE_SIGNAL", "CANCEL_PENDING", "UPDATE_SL",
@@ -133,7 +134,9 @@ def calculate_auto_targets(symbol: str, direction: str, entry: float, stop_loss:
     targets = [round(entry_n + sign * risk * multiple, precision) for multiple in RR_MULTIPLIERS]
     if any(value <= 0 for value in targets):
         raise ValueError("calculated target must be positive")
-    ordered = all(targets[i] < targets[i + 1] for i in range(3)) if side == "BUY" else all(targets[i] > targets[i + 1] for i in range(3))
+    ordered = (all(targets[i] < targets[i + 1] for i in range(len(targets) - 1))
+               if side == "BUY" else
+               all(targets[i] > targets[i + 1] for i in range(len(targets) - 1)))
     if not ordered:
         raise ValueError("calculated targets are not strictly ordered")
     return {"symbol": canonical, "direction": side, "digits": precision, "entry": entry_n,
@@ -236,7 +239,10 @@ def _admin_mt5_status() -> dict[str, Any]:
     age = None
     if row:
         try:
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(str(row["last_seen_at"]))).total_seconds()
+            seen = datetime.fromisoformat(str(row["last_seen_at"]).replace("Z", "+00:00"))
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - seen.astimezone(timezone.utc)).total_seconds()
         except ValueError:
             age = None
     online = age is not None and age <= 120
@@ -290,6 +296,7 @@ class CreateSignalRequest(CalculateRequest):
     destination: str = Field(pattern="^(?:FREE|VIP|BOTH)$")
     request_id: str = Field(min_length=8, max_length=160)
     timeframe: str = Field(default="M5", pattern="^(?:M1|M3|M5|M15|M30|H1|H4|D1|W1)$")
+    setup_mode: str = Field(default="MANUAL", pattern="^(?:MANUAL|AUTO)$")
     volume_mode: str = Field(default="RISK", pattern="^(?:RISK|FIXED)$")
     risk_percent: float = Field(default=0.0, ge=0, le=100)
     lot_size: float | None = Field(default=None, gt=0)
@@ -308,7 +315,7 @@ class CreateSignalRequest(CalculateRequest):
             raise ValueError("request_id contains invalid characters")
         return value
 
-    @field_validator("destination", "volume_mode", mode="before")
+    @field_validator("destination", "setup_mode", "volume_mode", mode="before")
     @classmethod
     def normalize_create_enums(cls, value: str) -> str:
         return str(value or "").strip().upper()
@@ -320,6 +327,20 @@ class CreateSignalRequest(CalculateRequest):
             return None
         normalized = str(value).strip().upper()
         return normalized or None
+
+    @model_validator(mode="after")
+    def validate_v066_contract(self):
+        if self.volume_mode == "FIXED" and self.lot_size is None:
+            raise ValueError("lot_size is required for FIXED volume")
+        if self.volume_mode == "RISK" and self.lot_size is not None:
+            raise ValueError("lot_size must be empty for RISK volume")
+        # Fail closed until an authoritative completed-candle structure engine
+        # exists. Never invent a structural stop from distance or heuristics.
+        if self.setup_mode == "AUTO":
+            raise ValueError(
+                "AUTO setup requires confirmed MT5 candle structure; market-data feed is not available yet"
+            )
+        return self
 
 
 class PositionCommandRequest(BaseModel):
@@ -371,6 +392,96 @@ def _resolve_trailing(req: CreateSignalRequest) -> tuple[str | None, str | None,
     }
 
 
+def _snapshot_age_seconds(value: Any) -> float | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def _admin_live_signal(signal: Any) -> dict[str, Any] | None:
+    if not signal:
+        return None
+    data = dict(signal)
+    if str(data.get("status") or "").upper() == "CLOSED":
+        return None
+    account = str(data.get("issuer_account") or "").strip()
+    code = str(data.get("code") or "").strip()
+    if not account or not code:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+    with db.conn() as con:
+        rows = [dict(row) for row in con.execute(
+            """
+            SELECT live.* FROM mt5_live_state live
+            WHERE live.account_number=? AND live.nexus_managed=1
+              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
+              AND (
+                UPPER(COALESCE(live.signal_code,''))=UPPER(?)
+                OR EXISTS (
+                  SELECT 1 FROM autotrade_trade_executions exec
+                  WHERE exec.signal_id=? AND exec.ticket=live.ticket
+                )
+              )
+            ORDER BY live.last_seen_at DESC, live.ticket DESC
+            """,
+            (account, code, int(data["id"])),
+        ).fetchall()]
+    if not rows:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+    last_sync = max((str(row.get("last_seen_at") or "") for row in rows), default="") or None
+    age = _snapshot_age_seconds(last_sync)
+    fresh = age is not None and age <= LIVE_PNL_STALE_SECONDS
+    positions = [row for row in rows if str(row.get("state_type") or "").upper() == "POSITION" and str(row.get("status") or "").upper() == "OPEN"]
+    pending = [row for row in rows if str(row.get("state_type") or "").upper() == "ORDER" and str(row.get("status") or "").upper() == "PENDING"]
+    if positions:
+        latest = max(positions, key=lambda row: str(row.get("last_seen_at") or ""))
+        pnl = sum(float(row.get("profit") or 0.0) for row in positions)
+        volume = sum(float(row.get("volume") or 0.0) for row in positions)
+        current = float(latest.get("current_price") or 0.0) or None
+        entry = float(data.get("entry_price") or 0.0)
+        original_sl = float(data.get("stop_loss") or 0.0)
+        initial_r = abs(entry - original_sl)
+        current_r = None
+        if current is not None and entry > 0 and initial_r > 0:
+            side = str(data.get("direction") or "").upper()
+            move = current - entry if side in {"BUY", "LONG"} else entry - current
+            current_r = round(move / initial_r, 4)
+        return {
+            "status": "LIVE" if fresh else "STALE",
+            "current_price": current,
+            "floating_pnl": round(pnl, 2),
+            "current_r": current_r,
+            "volume": volume,
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": "IN_PROFIT" if pnl > 0 else "IN_LOSS" if pnl < 0 else "BE",
+            "last_sync": last_sync,
+            "age_seconds": round(age, 1) if age is not None else None,
+            "position_count": len(positions),
+        }
+    if pending:
+        latest = max(pending, key=lambda row: str(row.get("last_seen_at") or ""))
+        return {
+            "status": "PENDING" if fresh else "STALE",
+            "current_price": float(latest.get("current_price") or 0.0) or None,
+            "floating_pnl": 0.0,
+            "current_r": None,
+            "volume": sum(float(row.get("volume") or 0.0) for row in pending),
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": "BE",
+            "last_sync": last_sync,
+            "age_seconds": round(age, 1) if age is not None else None,
+            "position_count": 0,
+        }
+    return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": last_sync, "age_seconds": age}
+
+
 def _sync_request(row) -> dict[str, Any]:
     item = dict(row)
     signal = db.get_signal(int(item["signal_id"])) if item.get("signal_id") else None
@@ -398,7 +509,8 @@ def _sync_request(row) -> dict[str, Any]:
             con.execute("UPDATE miniapp_admin_signal_requests SET status=?,error_message=?,updated_at=? WHERE id=?",
                         (status, error, db.now_iso(), int(item["id"])))
     item.update({"status": status, "error_message": error,
-                 "signal": dict(signal) if signal else None, "chart_job": dict(job) if job else None})
+                 "signal": dict(signal) if signal else None, "chart_job": dict(job) if job else None,
+                 "live": _admin_live_signal(signal)})
     if signal:
         item["targets"] = [float(target["price"]) for target in db.get_signal_targets(int(signal["id"]))]
     return item
@@ -413,6 +525,7 @@ def bootstrap(x_telegram_init_data: str | None = Header(default=None, alias="X-T
         "mt5_admin": _admin_mt5_status(),
         "destinations": ["FREE", "VIP", "BOTH"],
         "timeframes": ["M1", "M5", "M15", "M30", "H1", "H4"],
+        "setup_modes": ["MANUAL", "AUTO"],
         "level_modes": ["AUTO", "MANUAL"],
         "volume_modes": ["RISK", "FIXED"],
         "symbol_catalog": _symbol_catalog(),
@@ -482,6 +595,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         status = "READY" if mt5["online"] else "WAITING_FOR_MT5"
         payload = {
             **calc,
+            "setup_mode": req.setup_mode,
             "destination": req.destination,
             "timeframe": req.timeframe,
             "mt5_account": account,
@@ -496,7 +610,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         with db.conn() as con:
             con.execute(
                 "INSERT OR IGNORE INTO miniapp_admin_signal_requests(request_id,admin_telegram_id,signal_id,status,error_message,payload_json,created_at,updated_at) VALUES(?,?,?,?,NULL,?,?,?)",
-                (req.request_id, int(user["id"]), int(row["id"]), status, json.dumps(payload), db.now_iso(), db.now_iso()),
+                (req.request_id, int(user["id"]), int(row["id"]), status, json.dumps(payload, ensure_ascii=False), db.now_iso(), db.now_iso()),
             )
             request_row = con.execute("SELECT * FROM miniapp_admin_signal_requests WHERE request_id=?", (req.request_id,)).fetchone()
         db.add_signal_event(int(row["id"]), "MINIAPP_SIGNAL_CREATED", actor_type="MINIAPP_ADMIN",
