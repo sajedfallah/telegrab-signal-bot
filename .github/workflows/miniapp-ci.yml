@@ -78,4 +78,5 @@ jobs:
             tests/test_miniapp_admin_signal_controls.py \
             tests/test_miniapp_landing_v5.py \
             tests/test_miniapp_live_pnl.py \
+            tests/test_v066_reconcile_contract.py \
             -q
