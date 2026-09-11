@@ -123,6 +123,109 @@ def _mt5_admin_is_live(data: dict[str, Any]) -> bool:
     return row is not None
 
 
+def _snapshot_age_seconds(value: Any) -> float | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def _live_signal_state(data: dict[str, Any]) -> dict[str, Any] | None:
+    """Return broker-reported, read-only live state for one NEXUS signal.
+
+    Floating PnL is never reconstructed from price. It is the MT5-reported
+    `profit` from the authoritative live snapshot. Original signal Entry/SL are
+    used only to express current price displacement as an informational R value.
+    """
+    if str(data.get("status") or "").upper() == "CLOSED":
+        return None
+    account = str(data.get("issuer_account") or "").strip()
+    code = str(data.get("code") or "").strip()
+    signal_id = int(data["id"])
+    if not account or not code:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+
+    with db.conn() as con:
+        rows = [dict(row) for row in con.execute(
+            """
+            SELECT live.*
+            FROM mt5_live_state live
+            WHERE live.account_number=?
+              AND live.nexus_managed=1
+              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
+              AND (
+                UPPER(COALESCE(live.signal_code,''))=UPPER(?)
+                OR EXISTS (
+                  SELECT 1 FROM autotrade_trade_executions exec
+                  WHERE exec.signal_id=? AND exec.ticket=live.ticket
+                )
+              )
+            ORDER BY live.last_seen_at DESC, live.ticket DESC
+            """,
+            (account, code, signal_id),
+        ).fetchall()]
+
+    if not rows:
+        return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": None, "age_seconds": None}
+
+    last_sync = max((str(row.get("last_seen_at") or "") for row in rows), default="") or None
+    age_seconds = _snapshot_age_seconds(last_sync)
+    fresh = age_seconds is not None and age_seconds <= ACTIVE_TRUTH_STALE_SECONDS
+    positions = [row for row in rows if str(row.get("state_type") or "").upper() == "POSITION" and str(row.get("status") or "").upper() == "OPEN"]
+    pending = [row for row in rows if str(row.get("state_type") or "").upper() == "ORDER" and str(row.get("status") or "").upper() == "PENDING"]
+
+    if positions:
+        latest = max(positions, key=lambda row: str(row.get("last_seen_at") or ""))
+        floating_pnl = sum(float(row.get("profit") or 0.0) for row in positions)
+        volume = sum(float(row.get("volume") or 0.0) for row in positions)
+        current_price = float(latest.get("current_price") or 0.0) or None
+        entry = float(data.get("entry_price") or 0.0)
+        original_sl = float(data.get("stop_loss") or 0.0)
+        current_r = None
+        initial_r = abs(entry - original_sl)
+        if current_price is not None and entry > 0 and initial_r > 0:
+            direction = str(data.get("direction") or "").upper()
+            displacement = current_price - entry if direction in {"BUY", "LONG"} else entry - current_price
+            current_r = round(displacement / initial_r, 4)
+        pnl_state = "IN_PROFIT" if floating_pnl > 0 else "IN_LOSS" if floating_pnl < 0 else "BE"
+        return {
+            "status": "LIVE" if fresh else "STALE",
+            "current_price": current_price,
+            "floating_pnl": round(floating_pnl, 2),
+            "current_r": current_r,
+            "volume": volume,
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": pnl_state,
+            "last_sync": last_sync,
+            "age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+            "position_count": len(positions),
+        }
+
+    if pending:
+        latest = max(pending, key=lambda row: str(row.get("last_seen_at") or ""))
+        return {
+            "status": "PENDING" if fresh else "STALE",
+            "current_price": float(latest.get("current_price") or 0.0) or None,
+            "floating_pnl": 0.0,
+            "current_r": None,
+            "volume": sum(float(row.get("volume") or 0.0) for row in pending),
+            "stop_loss": float(latest.get("stop_loss") or 0.0) or None,
+            "take_profit": float(latest.get("take_profit") or 0.0) or None,
+            "pnl_state": "BE",
+            "last_sync": last_sync,
+            "age_seconds": round(age_seconds, 1) if age_seconds is not None else None,
+            "position_count": 0,
+        }
+
+    return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": last_sync, "age_seconds": age_seconds}
+
+
 def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False) -> dict[str, Any]:
     data = dict(row)
     access = _access_class(data)
@@ -161,6 +264,7 @@ def serialize_signal(row: Any, *, has_vip: bool, include_timeline: bool = False)
         "targets": _targets(int(data["id"])),
         "risk_percent": data.get("risk_percent"),
         "rr_ratio": data.get("rr_ratio"),
+        "live": _live_signal_state(data),
     })
     if include_timeline:
         result["timeline"] = [

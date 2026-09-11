@@ -1,46 +1,30 @@
 .nexus-page-back {
-  min-height: 38px;
-  padding: 0 12px;
-  border: 1px solid rgba(76, 211, 255, 0.22);
-  border-radius: 12px;
-  background: rgba(7, 19, 28, 0.78);
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 68px);
+  right: 18px;
+  z-index: 120;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(76, 211, 255, 0.34);
+  border-radius: 13px;
+  background: rgba(7, 19, 28, 0.96);
   color: #e9f9ff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   font: inherit;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  backdrop-filter: blur(12px);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 8px 28px rgba(0,0,0,.32), inset 0 0 0 1px rgba(255,255,255,.03);
 }
-
-.nexus-page-back:active {
-  transform: translateY(1px);
-}
-
-.nexus-page-back .nexus-back-arrow {
-  font-size: 17px;
-  line-height: 1;
-  direction: ltr;
-}
-
-body.landing-active .nexus-page-back {
-  visibility: hidden;
-  pointer-events: none;
-}
-
+.nexus-page-back:active { transform: translateY(1px); }
+.nexus-page-back .nexus-back-arrow { font-size: 19px; line-height: 1; direction: ltr; color: #4cd3ff; }
+body.landing-active .nexus-page-back,
+body.nexus-route-home .nexus-page-back { visibility: hidden; pointer-events: none; opacity: 0; }
 @media (max-width: 380px) {
-  .nexus-page-back {
-    width: 38px;
-    padding: 0;
-    border-radius: 11px;
-  }
-
-  .nexus-page-back .nexus-back-label {
-    display: none;
-  }
+  .nexus-page-back { top: calc(env(safe-area-inset-top, 0px) + 64px); right: 12px; min-width: 42px; padding: 0 11px; }
 }
