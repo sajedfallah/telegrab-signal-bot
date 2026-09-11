@@ -10,6 +10,7 @@ on:
       - feature/miniapp-cx-v2-p0-shell
       - feature/miniapp-polish-intelligence-v3
       - feature/miniapp-payment-onboarding-v4
+      - feature/v066-miniapp-auto-setup-fixed-volume
 
 jobs:
   miniapp-tests:
@@ -69,4 +70,5 @@ jobs:
             tests/test_miniapp_access_ui_fixes.py \
             tests/test_miniapp_product_intelligence.py \
             tests/test_miniapp_payment_onboarding_v4.py \
+            tests/test_miniapp_live_pnl.py \
             -q
