@@ -1,3 +1,5 @@
+import base64
+import re
 from pathlib import Path
 
 
@@ -5,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX = (ROOT / "miniapp" / "index.html").read_text(encoding="utf-8")
 CSS = (ROOT / "miniapp" / "landing-v5.css").read_text(encoding="utf-8")
 JS = (ROOT / "miniapp" / "landing-v5.js").read_text(encoding="utf-8")
-POSTER = ROOT / "miniapp" / "assets" / "brand" / "nexus-landing-approved-v8.webp"
+POSTER = ROOT / "miniapp" / "assets" / "brand" / "nexus-landing-minimal-v9.svg"
 
 
 def test_landing_is_rendered_before_app_shell_with_approved_poster():
@@ -15,17 +17,22 @@ def test_landing_is_rendered_before_app_shell_with_approved_poster():
     assert landing_pos < app_pos
     assert 'body class="landing-active"' in INDEX
     assert 'class="nexus-landing-poster"' in INDEX
-    assert './assets/brand/nexus-landing-approved-v8.webp?v=20260910-1820' in INDEX
+    assert './assets/brand/nexus-landing-minimal-v9.svg?v=20260911-0340' in INDEX
     assert 'fetchpriority="high"' in INDEX
 
 
-def test_approved_poster_asset_is_real_webp_and_reasonably_optimized():
-    payload = POSTER.read_bytes()
+def test_approved_poster_asset_is_embedded_webp_svg_and_reasonably_optimized():
+    payload = POSTER.read_text(encoding="utf-8")
+    raw = POSTER.read_bytes()
 
-    assert len(payload) > 50_000
-    assert len(payload) < 500_000
-    assert payload.startswith(b"RIFF")
-    assert payload[8:12] == b"WEBP"
+    assert 20_000 < len(raw) < 150_000
+    assert payload.startswith('<svg xmlns="http://www.w3.org/2000/svg"')
+    assert 'width="480" height="852"' in payload
+    match = re.search(r'data:image/webp;base64,([^\"]+)', payload)
+    assert match is not None
+    image = base64.b64decode(match.group(1))
+    assert image.startswith(b"RIFF")
+    assert image[8:12] == b"WEBP"
 
 
 def test_primary_cta_remains_native_click_target_with_exact_accessible_copy():
