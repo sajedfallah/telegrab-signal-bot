@@ -18,6 +18,10 @@ def _fresh_signal(monkeypatch, tmp_path, *, direction="SHORT"):
     return db, uid, sig
 
 
+def _fresh_event_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
 def test_corrupt_reconcile_timestamp_is_rejected(monkeypatch, tmp_path):
     db, uid, sig = _fresh_signal(monkeypatch, tmp_path)
     from app.autotrade import notification_queue_guard as guard
@@ -51,7 +55,33 @@ def test_valid_epoch_still_rejects_recycled_direction(monkeypatch, tmp_path):
         "signal_id": sig["code"], "ticket": "888",
         "symbol": "XAUUSD.EC", "direction": "LONG",
         "entry_price": 4384.10,
-        "event_time_ms": int(datetime.now(timezone.utc).timestamp() * 1000),
+        "event_time_ms": _fresh_event_ms(),
     }
     reason = guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"]))
     assert reason and "direction mismatch" in reason
+
+
+def test_reconcile_short_alias_matches_sell_signal(monkeypatch, tmp_path):
+    db, uid, sig = _fresh_signal(monkeypatch, tmp_path, direction="SELL")
+    from app.autotrade import notification_queue_guard as guard
+    payload = {
+        "event": "OPEN", "event_id": "RECON-OPEN-95296019-78377594",
+        "signal_id": sig["code"], "ticket": "95296019",
+        "symbol": "XAUUSD.EC", "direction": "SHORT",
+        "entry_price": 4384.10,
+        "event_time_ms": _fresh_event_ms(),
+    }
+    assert guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"])) is None
+
+
+def test_reconcile_long_alias_matches_buy_signal(monkeypatch, tmp_path):
+    db, uid, sig = _fresh_signal(monkeypatch, tmp_path, direction="BUY")
+    from app.autotrade import notification_queue_guard as guard
+    payload = {
+        "event": "OPEN", "event_id": "RECON-OPEN-100-101",
+        "signal_id": sig["code"], "ticket": "100",
+        "symbol": "XAUUSD.EC", "direction": "LONG",
+        "entry_price": 4384.10,
+        "event_time_ms": _fresh_event_ms(),
+    }
+    assert guard._identity_rejection_reason(uid, payload, signal_db_id=int(sig["id"])) is None
