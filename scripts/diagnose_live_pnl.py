@@ -6,6 +6,11 @@ Run from the repository root on the VPS after deploying the target branch:
 
     python scripts/diagnose_live_pnl.py --require-live
 
+For a safer pre-deploy check, run this branch from an isolated git worktree and
+point it at the production database. The database is still opened read-only:
+
+    python scripts/diagnose_live_pnl.py --db-path "C:\\path\\to\\prod\\nexus_bot.db" --require-live
+
 Optional filters:
 
     python scripts/diagnose_live_pnl.py --account 12345678 --require-live
@@ -59,6 +64,12 @@ REQUIRED_LIVE_COLUMNS = {
     "last_seen_at",
 }
 
+_DB_PATH_OVERRIDE: Path | None = None
+
+
+def _db_path() -> Path:
+    return (_DB_PATH_OVERRIDE or Path(db.DB_PATH)).resolve()
+
 
 def _ro_uri(path: Path) -> str:
     # SQLite accepts file:// URIs on both Windows and POSIX. mode=ro guarantees
@@ -68,7 +79,7 @@ def _ro_uri(path: Path) -> str:
 
 @contextmanager
 def _readonly_conn():
-    con = sqlite3.connect(_ro_uri(db.DB_PATH), uri=True, timeout=5.0)
+    con = sqlite3.connect(_ro_uri(_db_path()), uri=True, timeout=5.0)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA query_only = ON")
     con.execute("PRAGMA busy_timeout = 5000")
@@ -170,7 +181,7 @@ def _same_money(a: Any, b: Any) -> bool:
 
 
 def diagnose(*, account: str | None = None, signal_code: str | None = None, require_live: bool = False) -> tuple[int, dict[str, Any]]:
-    path = Path(db.DB_PATH)
+    path = _db_path()
     report: dict[str, Any] = {
         "db_path": str(path),
         "stale_seconds": int(miniapp_signals.ACTIVE_TRUTH_STALE_SECONDS),
@@ -355,12 +366,18 @@ def _print_human(report: dict[str, Any]) -> None:
 
 
 def main() -> int:
+    global _DB_PATH_OVERRIDE
+
     parser = argparse.ArgumentParser(description="Read-only NEXUS MT5 Live PnL smoke test")
+    parser.add_argument("--db-path", help="Read a specific nexus_bot.db file without modifying it")
     parser.add_argument("--account", help="Limit diagnostics to one MT5 account number")
     parser.add_argument("--signal-code", help="Limit diagnostics to one NEXUS signal code")
     parser.add_argument("--require-live", action="store_true", help="Fail when there is no matching OPEN/PENDING live MT5 row")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON")
     args = parser.parse_args()
+
+    if args.db_path:
+        _DB_PATH_OVERRIDE = Path(args.db_path).expanduser().resolve()
 
     code, report = diagnose(account=args.account, signal_code=args.signal_code, require_live=args.require_live)
     if args.json:
