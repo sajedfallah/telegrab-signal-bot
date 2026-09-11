@@ -17,7 +17,7 @@ def test_landing_is_rendered_before_app_shell_with_approved_poster():
     assert landing_pos < app_pos
     assert 'body class="landing-active"' in INDEX
     assert 'class="nexus-landing-poster"' in INDEX
-    assert './assets/brand/nexus-landing-minimal-v9.svg?v=20260911-0340' in INDEX
+    assert 'data-direct-webp-source="./assets/brand/nexus-landing-minimal-v9.svg?v=20260911-0415"' in INDEX
     assert 'fetchpriority="high"' in INDEX
 
 
@@ -41,13 +41,28 @@ def test_primary_cta_remains_native_click_target_with_exact_accessible_copy():
     assert 'ورود به نکسوس' not in INDEX
 
 
-def test_landing_uses_poster_first_full_viewport_layout():
+def test_landing_uses_contained_artboard_without_crop():
     assert '.nexus-landing-poster-frame' in CSS
-    assert 'object-fit: cover' in CSS
+    assert 'aspect-ratio: 480 / 852' in CSS
+    assert 'object-fit: contain' in CSS
+    assert 'object-fit: cover' not in CSS
+    assert 'width: min(100vw, 56.338dvh)' in CSS
+    assert 'height: min(100dvh, 177.5vw)' in CSS
     assert '.nexus-landing-enter' in CSS
     assert 'background: transparent' in CSS
     assert 'body.landing-active > .app-shell' in CSS
-    assert './landing-v5.css?v=20260910-1731' in INDEX
+    assert './landing-v5.css?v=20260911-0415' in INDEX
+
+
+def test_android_webview_path_decodes_embedded_webp_directly():
+    assert 'extractEmbeddedWebp' in JS
+    assert "fetch(embeddedSource" in JS
+    assert "data:image\\/webp;base64" in JS
+    assert "new Blob([bytes], { type: 'image/webp' })" in JS
+    assert 'URL.createObjectURL(blob)' in JS
+    assert "poster.classList.add('is-ready')" in JS
+    assert "poster.classList.add('is-fallback')" in JS
+    assert './landing-v5.js?v=20260911-0415' in INDEX
 
 
 def test_landing_gate_hides_app_until_user_clicks_enter():
