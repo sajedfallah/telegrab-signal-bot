@@ -3,8 +3,9 @@ from __future__ import annotations
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from app import miniapp_signals
+from app import miniapp_admin_api, miniapp_signals
 
 
 def _signal(*, direction: str = "BUY") -> dict:
@@ -156,3 +157,28 @@ def test_closed_signal_has_no_live_snapshot(monkeypatch):
         assert miniapp_signals._live_signal_state(signal) is None
     finally:
         con.close()
+
+
+def test_admin_manual_calculator_preserves_legacy_target_ladder():
+    result = miniapp_admin_api.calculate_auto_targets("XAUUSD", "BUY", 100.0, 90.0, digits=2)
+    assert result["target_multipliers"] == [1.0, 1.5, 2.0, 3.0]
+    assert result["targets"] == [110.0, 115.0, 120.0, 130.0]
+
+
+def test_admin_router_retains_retry_positions_and_command_contracts():
+    paths = {getattr(route, "path", "") for route in miniapp_admin_api.router.routes}
+    assert "/miniapp/api/admin/signals/{request_id}/retry" in paths
+    assert "/miniapp/api/admin/positions" in paths
+    assert "/miniapp/api/admin/signals/{signal_id}/command" in paths
+
+
+def test_loaded_admin_v13_restores_live_pnl_and_retry_ui():
+    html = Path("miniapp/admin.html").read_text(encoding="utf-8")
+    script = Path("miniapp/admin-signal-v13.js").read_text(encoding="utf-8")
+    assert "admin-signal-v13.js" in html
+    assert "liveBlock(item.live)" in script
+    assert "retrySignal" in script
+    assert "/retry" in script
+    assert "FLOATING P&amp;L" in script
+    assert "CURRENT R" in script
+    assert "logList" in script
