@@ -1,0 +1,17 @@
+/* NEXUS Admin v13 — high-contrast operational UI */
+:root{--admin-border:rgba(96,165,250,.42);--admin-border-strong:rgba(6,182,212,.72)}
+.metrics article,.panel,.card,.auto-setup-panel,.setup-fields,.admin-live,.trade-actions,.preview-grid>div,.risk,.targets article,.levels span{border-width:2px!important}
+.metrics article,.panel,.card,.setup-fields{border-color:var(--admin-border)!important}
+.panel,.card,.setup-fields{background:linear-gradient(155deg,#151b24,#10151d)!important;box-shadow:0 16px 38px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.03)!important}
+.setup-fields{display:grid;gap:15px;padding:14px;border:2px solid var(--admin-border);border-radius:18px}
+.setup-fields[hidden]{display:none!important}
+.auto-setup-panel{border:2px solid var(--admin-border-strong)!important}
+.auto-setup-panel .form input,.auto-setup-panel input,.auto-setup-panel select{border-width:2px!important}
+.form input,.form select,.segments button,.direction button,.outline,.ghost,.section-head button,.icon{border-width:2px!important}
+.auto-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.auto-grid .grid{grid-template-columns:1fr 1fr}
+.auto-structure-note{padding:12px;border:2px solid rgba(245,184,74,.35);border-radius:13px;background:rgba(245,184,74,.04);color:var(--muted);font-size:9px;line-height:1.8}
+.operational-note{margin-top:8px;color:var(--muted);font-size:9px;line-height:1.7}
+.metrics.metrics-clean{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.metrics.metrics-clean article:nth-child(n){grid-column:auto!important;min-height:82px!important;flex-direction:column!important}
+@media(max-width:430px){.auto-grid .grid{grid-template-columns:1fr}.metrics.metrics-clean{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
