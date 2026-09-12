@@ -1,7 +1,36 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
+from app import miniapp_vip_preview
 from app.miniapp_performance import _safe_summary, _visible_trade
 from app.services.analytics_service import _r_metrics
+
+
+class _PreviewCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchall(self):
+        return self._rows
+
+
+class _PreviewConn:
+    def __init__(self, rows):
+        self.rows = rows
+        self.sql = ""
+        self.params = ()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=()):
+        self.sql = sql
+        self.params = params
+        return _PreviewCursor(self.rows)
 
 
 def test_track_record_summary_does_not_expose_raw_return_like_metrics():
@@ -72,6 +101,32 @@ def test_non_vip_locked_trade_does_not_expose_premium_levels():
         assert protected not in item
 
 
+def test_non_vip_vip_preview_exposes_only_locked_activity(monkeypatch):
+    rows = [
+        {"symbol": "XAUUSD", "status": "ACTIVE", "created_at": "2026-09-12T01:00:00+00:00", "closed_at": None},
+        {"symbol": "BTCUSDT", "status": "CLOSED", "created_at": "2026-09-12T02:00:00+00:00", "closed_at": "2026-09-12T03:00:00+00:00"},
+        {"symbol": "SOLUSDT", "status": "PENDING", "created_at": "2026-09-12T04:00:00+00:00", "closed_at": None},
+    ]
+    fake = _PreviewConn(rows)
+    monkeypatch.setattr(miniapp_vip_preview.db, "current_cycle_id", lambda: "CURRENT")
+    monkeypatch.setattr(miniapp_vip_preview.db, "conn", lambda: fake)
+    result = miniapp_vip_preview.build_vip_preview(
+        has_vip=False,
+        now=datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc),
+    )
+    assert result["summary"] == {"total": 3, "closed": 1, "active": 1, "waiting": 1}
+    assert result["items"] == [
+        {"symbol": "XAUUSD", "status": "ACTIVE", "locked": True},
+        {"symbol": "BTCUSDT", "status": "CLOSED", "locked": True},
+        {"symbol": "SOLUSDT", "status": "WAITING", "locked": True},
+    ]
+    assert result["cta"]["destination"] == "subscriptions"
+    for item in result["items"]:
+        assert set(item) == {"symbol", "status", "locked"}
+    for protected in ("entry_price", "stop_loss", "tp1", "tp2", "tp3", "direction", "profit", "current_price"):
+        assert protected not in fake.sql.lower()
+
+
 def test_combined_api_exposes_additive_performance_resources():
     from app.combined_api import app
 
@@ -81,3 +136,4 @@ def test_combined_api_exposes_additive_performance_resources():
     assert "/miniapp/api/performance/trades" in paths
     assert "/miniapp/api/performance/trades/{trade_id}" in paths
     assert "/miniapp/api/performance/methodology" in paths
+    assert "/miniapp/api/vip-preview" in paths
