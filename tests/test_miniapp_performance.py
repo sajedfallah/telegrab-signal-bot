@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from app import miniapp_vip_preview
-from app.miniapp_performance import _safe_summary, _visible_trade
-from app.services.analytics_service import _r_metrics
+from app.miniapp_performance import _r_overview, _safe_summary, _visible_trade
+from app.services.analytics_service import _r_metrics, _realized_r
 
 
 class _PreviewCursor:
@@ -59,6 +59,8 @@ def test_canonical_r_metrics_include_losses_streak_and_peak_to_trough_drawdown()
     ]
     metrics = _r_metrics(rows)
     assert metrics["r_sample_size"] == 4
+    assert metrics["r_missing_count"] == 0
+    assert metrics["r_complete"] is True
     assert metrics["net_r"] == 1.0
     assert metrics["average_realized_r"] == 0.25
     assert metrics["profit_factor_r"] == 1.5
@@ -73,9 +75,56 @@ def test_r_metrics_fail_safe_when_required_trade_data_is_missing():
         {"entry_price": 100, "stop_loss": None, "exit_price": 110, "direction": "BUY", "closed_at": "2026-01-01T00:00:00+00:00"}
     ])
     assert metrics["r_sample_size"] == 0
+    assert metrics["r_missing_count"] == 1
+    assert metrics["r_complete"] is False
     assert metrics["net_r"] is None
     assert metrics["profit_factor_r"] is None
     assert metrics["max_drawdown_r"] is None
+
+
+def test_partial_close_without_explicit_r_is_not_reconstructed_from_final_exit():
+    row = {
+        "entry_price": 100,
+        "stop_loss": 90,
+        "exit_price": 120,
+        "direction": "BUY",
+        "result_value": 20,
+        "result_unit": "PIPS",
+        "has_partial": 1,
+    }
+    assert _realized_r(row) is None
+
+
+def test_explicit_r_remains_usable_for_partial_close_result():
+    row = {
+        "entry_price": 100,
+        "stop_loss": 90,
+        "exit_price": 120,
+        "direction": "BUY",
+        "result_value": 1.4,
+        "result_unit": "R",
+        "has_partial": 1,
+    }
+    assert _realized_r(row) == 1.4
+
+
+def test_overview_suppresses_r_metrics_when_period_coverage_is_incomplete():
+    risk = _r_overview({
+        "total": 4,
+        "r_sample_size": 3,
+        "r_missing_count": 1,
+        "r_complete": False,
+        "net_r": 2.0,
+        "profit_factor_r": 2.5,
+        "max_drawdown_r": -1.0,
+    })
+    assert risk["status"] == "INSUFFICIENT_DATA"
+    assert risk["sample_size"] == 3
+    assert risk["total_trades"] == 4
+    assert risk["missing_count"] == 1
+    assert risk["net_r"] is None
+    assert risk["profit_factor"] is None
+    assert risk["max_drawdown_r"] is None
 
 
 def test_non_vip_locked_trade_does_not_expose_premium_levels():
