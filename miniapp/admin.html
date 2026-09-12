@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/miniapp/admin-theme-v5.css?v=20260912-1048">
   <link rel="stylesheet" href="/miniapp/admin-position-compact-v7.css?v=20260912-1135">
   <link rel="stylesheet" href="/miniapp/admin-auto-setup-v8.css?v=20260912-1218">
+  <link rel="stylesheet" href="/miniapp/admin-auto-entry-v11.css?v=20260912-1335">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -30,6 +31,11 @@
       <label>حالت ستاپ<div class="segments setup-mode"><button type="button" data-mode="MANUAL" class="selected">MANUAL</button><button type="button" data-mode="AUTO">AUTO SETUP</button></div></label>
       <section id="autoSetupPanel" class="auto-setup-panel" hidden>
         <div class="auto-setup-head"><div><b>AUTO SETUP</b><small>Entry را دستی وارد کنید؛ ساختار بازار فقط برای SL و TP استفاده می‌شود.</small></div><span class="auto-setup-state">STRUCTURE ENGINE PENDING</span></div>
+        <div id="autoEntryStatic" class="auto-entry-static" hidden>
+          <label for="autoEntry">قیمت ورود</label>
+          <input id="autoEntry" type="text" inputmode="decimal" autocomplete="off" placeholder="3650.00" aria-label="قیمت ورود Auto Setup">
+          <p class="hint">Entry دستی است. SL و TP فقط پس از اتصال Structure Engine محاسبه می‌شوند.</p>
+        </div>
         <div class="auto-setup-grid"><div><span>Structure</span><b>Confirmed Swing 2 / 2</b></div><div><span>SL Buffer</span><b>Symbol-aware</b></div><div><span>Targets</span><b>1R · 2R · 3R</b></div><div><span>Timeframe</span><b id="autoTimeframeValue">M5</b></div><div><span>Trailing</span><b id="autoTrailingValue">—</b></div><div><span>Volume Mode</span><b id="autoVolumeValue">RISK</b></div></div>
         <div class="auto-setup-note">تا زمان اتصال Structure Engine، AUTO به‌صورت Fail-Closed باقی می‌ماند. Entry دستی است؛ SL/TP حدسی تولید نمی‌شود.</div>
       </section>
@@ -55,5 +61,6 @@
 <script src="/miniapp/admin-signal.js?v=4"></script>
 <script src="/miniapp/admin-position-compact-v7.js?v=20260912-1135"></script>
 <script src="/miniapp/admin-auto-setup-v8.js?v=20260912-1218"></script>
+<script src="/miniapp/admin-auto-entry-v11.js?v=20260912-1335"></script>
 </body>
 </html>
