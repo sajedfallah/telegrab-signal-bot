@@ -42,7 +42,7 @@ body.landing-active > .app-shell {
   position: absolute;
   inset: 0;
   overflow: hidden;
-  background: var(--landing-bg);
+  background: radial-gradient(circle at 50% 28%,rgba(57,215,196,.10),transparent 32%),var(--landing-bg);
 }
 
 .nexus-landing-poster {
@@ -57,11 +57,6 @@ body.landing-active > .app-shell {
   -webkit-user-drag: none;
 }
 
-/*
- * The approved artwork already contains the visible CTA. This real HTML button
- * sits directly over that artwork so the visual remains pixel-clean while the
- * landing still has a native, accessible tap target.
- */
 .nexus-landing-enter {
   position: absolute;
   z-index: 2;
@@ -108,15 +103,26 @@ body.landing-active > .app-shell {
   border: 0 !important;
 }
 
+.nexus-fallback-cta{display:none}
+.nexus-landing.landing-fallback .nexus-landing-poster{display:none}
+.nexus-landing.landing-fallback .nexus-landing-enter{
+  top:50%;left:8%;right:8%;height:auto;min-height:180px;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;padding:22px;border:1px solid rgba(57,215,196,.28);
+  border-radius:28px;background:linear-gradient(155deg,rgba(21,27,36,.96),rgba(12,16,22,.98));
+  color:#f4f7fb;box-shadow:0 22px 60px rgba(0,0,0,.45),0 0 34px rgba(57,215,196,.08)
+}
+.nexus-landing.landing-fallback .nexus-fallback-cta{display:grid;gap:8px;text-align:center}
+.nexus-fallback-cta b{font-size:34px;letter-spacing:.14em;color:#fff}
+.nexus-fallback-cta small{font-size:10px;letter-spacing:.18em;color:#39d7c4}
+.nexus-fallback-cta em{margin-top:12px;font-style:normal;font-size:14px;font-weight:900;color:#151006;background:linear-gradient(135deg,#ffc13d,#f5b84a);padding:13px 24px;border-radius:999px}
+
 .nexus-landing.is-leaving {
   opacity: 0;
-  transform: scale(1.006);
+  transform: scale(1.004);
   pointer-events: none;
-  transition: opacity 220ms ease, transform 220ms ease;
+  transition: opacity 180ms ease, transform 180ms ease;
 }
 
-/* Very tall/narrow Telegram viewports crop the poster horizontally. The CTA
- * remains centered, so widen the invisible hit target slightly for that case. */
 @media (max-aspect-ratio: 1 / 2) {
   .nexus-landing-enter {
     left: 7%;
