@@ -132,7 +132,16 @@ def test_academy_destination_uses_official_channel():
     assert destination.channel_url == "https://t.me/nexus_ict_learning"
 
 
-def test_quick_tip_destination_stays_public():
+def test_quick_tip_destination_stays_public(monkeypatch):
+    for name in (
+        "PUBLIC_CONTENT_CHAT_ID",
+        "MARKET_CONTENT_CHANNEL_ID",
+        "PUBLIC_CONTENT_URL",
+        "PUBLIC_CONTENT_TOPIC_ID",
+        "MARKET_CONTENT_TOPIC_ID",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
     class CoreSettings:
         public_channel_id = -1001111111111
         public_channel_url = "https://t.me/nexus_test_public"
@@ -141,3 +150,4 @@ def test_quick_tip_destination_stays_public():
     assert destination.key == "public"
     assert destination.chat_id == CoreSettings.public_channel_id
     assert destination.channel_url == CoreSettings.public_channel_url
+    assert destination.message_thread_id is None
