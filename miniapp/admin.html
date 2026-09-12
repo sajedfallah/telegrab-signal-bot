@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/miniapp/admin-theme-v5.css?v=20260912-1048">
   <link rel="stylesheet" href="/miniapp/admin-position-compact-v7.css?v=20260912-1135">
   <link rel="stylesheet" href="/miniapp/admin-auto-setup-v8.css?v=20260912-1218">
+  <link rel="stylesheet" href="/miniapp/admin-auto-entry-v10.css?v=20260912-1305">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -35,7 +36,7 @@
       </section>
       <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
       <div class="direction"><button type="button" data-side="BUY" class="selected buy">BUY</button><button type="button" data-side="SELL">SELL</button></div>
-      <div class="grid"><label>قیمت ورود<input id="entry" type="number" step="any" inputmode="decimal" placeholder="3650.00" autocomplete="off" required></label><label id="stopLossLabel">حد ضرر<input id="stopLoss" type="number" step="any" inputmode="decimal" placeholder="3645.00" required></label></div>
+      <div class="grid"><label>قیمت ورود<input id="entry" type="text" inputmode="decimal" placeholder="3650.00" autocomplete="off" required></label><label id="stopLossLabel">حد ضرر<input id="stopLoss" type="text" inputmode="decimal" placeholder="3645.00" required></label></div>
       <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
       <label>پروفایل تریلینگ<select id="trailing"><option value="NEXUS_TRAIL_01">01 — Conservative Scalping</option><option value="NEXUS_TRAIL_02">02 — Step Profit Lock</option><option value="NEXUS_TRAIL_03">03 — Dynamic ATR</option><option value="NEXUS_TRAIL_04">04 — Market Structure</option><option value="NEXUS_TRAIL_05">05 — VIP Runner</option><option value="NEXUS_TRAIL_06">06 — Fast Scalping</option><option value="NEXUS_TRAIL_07">07 — Smart Hybrid</option></select></label>
       <label>مدیریت حجم<div class="segments volume-mode"><button type="button" data-volume="RISK" class="selected">RISK</button><button type="button" data-volume="FIXED">FIXED LOT</button></div></label>
@@ -56,5 +57,6 @@
 <script src="/miniapp/admin-position-compact-v7.js?v=20260912-1135"></script>
 <script src="/miniapp/admin-auto-setup-v8.js?v=20260912-1218"></script>
 <script src="/miniapp/admin-auto-setup-v9.js?v=20260912-1248"></script>
+<script src="/miniapp/admin-auto-entry-v10.js?v=20260912-1305"></script>
 </body>
 </html>
