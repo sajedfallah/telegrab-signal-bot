@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="/miniapp/admin-theme-v5.css?v=20260912-1048">
   <link rel="stylesheet" href="/miniapp/admin-position-compact-v7.css?v=20260912-1135">
   <link rel="stylesheet" href="/miniapp/admin-auto-setup-v8.css?v=20260912-1218">
-  <link rel="stylesheet" href="/miniapp/admin-auto-entry-v11.css?v=20260912-1335">
+  <link rel="stylesheet" href="/miniapp/admin-v13.css?v=20260912-1405">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
@@ -19,48 +19,77 @@
     <div class="brand-wrap"><img class="brand-logo" src="/miniapp/assets/brand/nexus-mark.svg?v=20260910-1215" alt="NEXUS" decoding="async"><div class="brand-copy"><div class="brand">NEXUS</div><small>ADMIN SIGNAL DESK</small></div></div>
     <button id="refresh" class="icon" aria-label="بروزرسانی">↻</button>
   </header>
+
   <section class="hero"><div><small>ADMIN OPERATIONS</small><h1>مرکز سیگنال NEXUS</h1></div><div id="mt5Chip" class="chip offline"><i></i><span>MT5 آفلاین</span></div></section>
+
   <section id="dashboard" class="view active">
     <button id="newSignal" class="primary large">＋ صدور سیگنال جدید</button>
-    <div class="metrics"><article><b id="openCount">۰</b><span>درخواست فعال</span></article><article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article><article><b id="waitingCount">۰</b><span>منتظر MT5</span></article></div>
-    <div class="section-head"><h2>آخرین درخواست‌ها</h2><button id="reloadSignals">بروزرسانی</button></div><div id="signalList" class="stack"><div class="empty">هنوز سیگنالی صادر نشده است.</div></div>
+    <div class="metrics metrics-clean">
+      <article><b id="publishedCount">۰</b><span>سیگنال منتشرشده</span></article>
+      <article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article>
+    </div>
+    <div class="section-head"><h2>گزارش‌های عملیاتی</h2><button id="reloadSignals">بروزرسانی</button></div>
+    <div id="signalList" class="stack"><div class="empty">سیگنال عملیاتی ثبت نشده است.</div></div>
+    <p class="operational-note">درخواست‌های در انتظار، ناموفق و منقضی از این نما حذف می‌شوند تا فقط داده‌های عملیاتی نمایش داده شوند.</p>
   </section>
+
   <section id="create" class="view">
     <div class="steps"><span class="on">۱<br><small>ستاپ</small></span><i></i><span>۲<br><small>مدیریت</small></span><i></i><span>۳<br><small>انتشار</small></span></div>
     <form id="signalForm" class="panel form">
-      <label>حالت ستاپ<div class="segments setup-mode"><button type="button" data-mode="MANUAL" class="selected">MANUAL</button><button type="button" data-mode="AUTO">AUTO SETUP</button></div></label>
-      <section id="autoSetupPanel" class="auto-setup-panel" hidden>
-        <div class="auto-setup-head"><div><b>AUTO SETUP</b><small>Entry را دستی وارد کنید؛ ساختار بازار فقط برای SL و TP استفاده می‌شود.</small></div><span class="auto-setup-state">STRUCTURE ENGINE PENDING</span></div>
-        <div id="autoEntryStatic" class="auto-entry-static" hidden>
-          <label for="autoEntry">قیمت ورود</label>
-          <input id="autoEntry" type="text" inputmode="decimal" autocomplete="off" placeholder="3650.00" aria-label="قیمت ورود Auto Setup">
-          <p class="hint">Entry دستی است. SL و TP فقط پس از اتصال Structure Engine محاسبه می‌شوند.</p>
+      <label>حالت ستاپ
+        <div class="segments setup-mode">
+          <button type="button" data-mode="MANUAL" class="selected">MANUAL</button>
+          <button type="button" data-mode="AUTO">AUTO SETUP</button>
         </div>
-        <div class="auto-setup-grid"><div><span>Structure</span><b>Confirmed Swing 2 / 2</b></div><div><span>SL Buffer</span><b>Symbol-aware</b></div><div><span>Targets</span><b>1R · 2R · 3R</b></div><div><span>Timeframe</span><b id="autoTimeframeValue">M5</b></div><div><span>Trailing</span><b id="autoTrailingValue">—</b></div><div><span>Volume Mode</span><b id="autoVolumeValue">RISK</b></div></div>
-        <div class="auto-setup-note">تا زمان اتصال Structure Engine، AUTO به‌صورت Fail-Closed باقی می‌ماند. Entry دستی است؛ SL/TP حدسی تولید نمی‌شود.</div>
+      </label>
+
+      <section id="manualSetupFields" class="setup-fields">
+        <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
+        <div class="direction manual-direction"><button type="button" data-side="BUY" class="selected buy">BUY</button><button type="button" data-side="SELL">SELL</button></div>
+        <div class="grid">
+          <label>قیمت ورود<input id="entry" type="text" inputmode="decimal" placeholder="3650.00" autocomplete="off" required></label>
+          <label>حد ضرر<input id="stopLoss" type="text" inputmode="decimal" placeholder="3645.00" required></label>
+        </div>
+        <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
+        <label>پروفایل تریلینگ<select id="trailing"><option value="NEXUS_TRAIL_01">01 — Conservative Scalping</option><option value="NEXUS_TRAIL_02">02 — Step Profit Lock</option><option value="NEXUS_TRAIL_03">03 — Dynamic ATR</option><option value="NEXUS_TRAIL_04">04 — Market Structure</option><option value="NEXUS_TRAIL_05">05 — VIP Runner</option><option value="NEXUS_TRAIL_06">06 — Fast Scalping</option><option value="NEXUS_TRAIL_07">07 — Smart Hybrid</option></select></label>
+        <label>مدیریت حجم<div class="segments volume-mode"><button type="button" data-volume="RISK" class="selected">RISK</button><button type="button" data-volume="FIXED">FIXED LOT</button></div></label>
+        <label id="fixedLotLabel" hidden>حجم ثابت (Lot)<input id="lotSize" inputmode="decimal" placeholder="0.01"></label>
+        <div id="riskBox" class="risk"><span>Initial R</span><b>—</b></div>
+        <div><div class="mini-title">اهداف</div><div id="targets" class="targets"><p>Entry و Stop Loss را وارد کنید.</p></div></div>
+        <label>مقصد<div class="segments destination"><button type="button" data-value="FREE">FREE</button><button type="button" data-value="VIP">VIP</button><button type="button" data-value="BOTH" class="selected">BOTH</button></div></label>
+        <button type="submit" class="outline submit-preview">ساخت پیش‌نمایش نهایی</button>
       </section>
-      <label>نماد<input id="symbol" value="XAUUSD" maxlength="32" autocomplete="off" required></label>
-      <div class="direction"><button type="button" data-side="BUY" class="selected buy">BUY</button><button type="button" data-side="SELL">SELL</button></div>
-      <div class="grid"><label>قیمت ورود<input id="entry" type="text" inputmode="decimal" placeholder="3650.00" autocomplete="off" required></label><label id="stopLossLabel">حد ضرر<input id="stopLoss" type="text" inputmode="decimal" placeholder="3645.00" required></label></div>
-      <label>تایم‌فریم<select id="timeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
-      <label>پروفایل تریلینگ<select id="trailing"><option value="NEXUS_TRAIL_01">01 — Conservative Scalping</option><option value="NEXUS_TRAIL_02">02 — Step Profit Lock</option><option value="NEXUS_TRAIL_03">03 — Dynamic ATR</option><option value="NEXUS_TRAIL_04">04 — Market Structure</option><option value="NEXUS_TRAIL_05">05 — VIP Runner</option><option value="NEXUS_TRAIL_06">06 — Fast Scalping</option><option value="NEXUS_TRAIL_07">07 — Smart Hybrid</option></select></label>
-      <label>مدیریت حجم<div class="segments volume-mode"><button type="button" data-volume="RISK" class="selected">RISK</button><button type="button" data-volume="FIXED">FIXED LOT</button></div></label>
-      <label id="fixedLotLabel" hidden>حجم ثابت (Lot)<input id="lotSize" inputmode="decimal" placeholder="0.01"></label>
-      <div id="riskBox" class="risk"><span>Initial R</span><b>—</b></div>
-      <div><div class="mini-title">اهداف</div><div id="targets" class="targets"><p>اطلاعات ستاپ را وارد کنید.</p></div></div>
-      <label>مقصد<div class="segments destination"><button type="button" data-value="FREE">FREE</button><button type="button" data-value="VIP">VIP</button><button type="button" data-value="BOTH" class="selected">BOTH</button></div></label>
-      <button type="submit" class="outline submit-preview">ساخت پیش‌نمایش نهایی</button>
+
+      <section id="autoSetupFields" class="setup-fields" hidden>
+        <section class="auto-setup-panel">
+          <div class="auto-setup-head"><div><b>AUTO SETUP</b><small>در این حالت فقط تنظیمات Auto Setup نمایش داده می‌شوند.</small></div><span class="auto-setup-state">STRUCTURE ENGINE PENDING</span></div>
+          <div class="auto-structure-note">Entry توسط ادمین وارد می‌شود؛ SL از آخرین Confirmed Swing 2/2 و TPها بر اساس Initial R ساخته می‌شوند. تا زمان اتصال Structure Engine واقعی، انتشار Fail-Closed باقی می‌ماند.</div>
+        </section>
+        <div class="auto-grid">
+          <label>نماد<input id="autoSymbol" value="XAUUSD" maxlength="32" autocomplete="off"></label>
+          <div class="direction auto-direction"><button type="button" data-auto-side="BUY" class="selected buy">BUY</button><button type="button" data-auto-side="SELL">SELL</button></div>
+          <label>قیمت ورود<input id="autoEntry" type="text" inputmode="decimal" placeholder="3650.00" autocomplete="off"></label>
+          <label>تایم‌فریم<select id="autoTimeframe"><option>M1</option><option selected>M5</option><option>M15</option><option>M30</option><option>H1</option><option>H4</option></select></label>
+          <label>پروفایل تریلینگ<select id="autoTrailing"><option value="NEXUS_TRAIL_01">01 — Conservative Scalping</option><option value="NEXUS_TRAIL_02">02 — Step Profit Lock</option><option value="NEXUS_TRAIL_03">03 — Dynamic ATR</option><option value="NEXUS_TRAIL_04">04 — Market Structure</option><option value="NEXUS_TRAIL_05">05 — VIP Runner</option><option value="NEXUS_TRAIL_06">06 — Fast Scalping</option><option value="NEXUS_TRAIL_07">07 — Smart Hybrid</option></select></label>
+          <label>مدیریت حجم<div class="segments auto-volume-mode"><button type="button" data-auto-volume="RISK" class="selected">RISK</button><button type="button" data-auto-volume="FIXED">FIXED LOT</button></div></label>
+          <label id="autoFixedLotLabel" hidden>حجم ثابت (Lot)<input id="autoLotSize" inputmode="decimal" placeholder="0.01"></label>
+          <div class="auto-setup-grid"><div><span>Structure</span><b>Confirmed Swing 2 / 2</b></div><div><span>SL Buffer</span><b>Symbol-aware</b></div><div><span>Targets</span><b>1R · 2R · 3R</b></div><div><span>Timeframe</span><b id="autoTimeframeValue">M5</b></div><div><span>Trailing</span><b id="autoTrailingValue">NEXUS_TRAIL_01</b></div><div><span>Volume Mode</span><b id="autoVolumeValue">RISK</b></div></div>
+          <label>مقصد<div class="segments auto-destination"><button type="button" data-auto-destination="FREE">FREE</button><button type="button" data-auto-destination="VIP">VIP</button><button type="button" data-auto-destination="BOTH" class="selected">BOTH</button></div></label>
+          <button id="autoValidate" type="button" class="outline submit-preview">بررسی آمادگی Auto Setup</button>
+        </div>
+      </section>
     </form>
   </section>
+
   <section id="positions" class="view"><div class="section-head"><h2>پوزیشن‌ها و سفارش‌ها</h2><button id="reloadPositions">بروزرسانی</button></div><div id="positionList" class="stack"></div></section>
-  <section id="logs" class="view"><div class="section-head"><h2>وضعیت صدور</h2></div><div id="logList" class="stack"></div></section>
+  <section id="logs" class="view"><div class="section-head"><h2>لاگ عملیاتی</h2></div><div id="logList" class="stack"></div></section>
+
   <nav class="bottom"><button data-view="dashboard" class="selected"><b>⌂</b>خانه</button><button data-view="create"><b>＋</b>صدور</button><button data-view="positions"><b>↗</b>پوزیشن‌ها</button><button data-view="logs"><b>≡</b>لاگ</button></nav>
 </main>
+
 <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close">×</button><small>تأیید نهایی</small><h2>بررسی سیگنال</h2><div id="preview"></div><div class="safety">DRAFT → VALIDATE → APPROVE → EXECUTE → PUBLISH</div><button id="publish" class="primary">تأیید و ارسال</button><button id="recalculatePreview" class="outline">محاسبه مجدد</button><button id="cancelPreview" class="ghost">بازگشت و ویرایش</button></div></div>
 <div id="toast" class="toast"></div>
-<script src="/miniapp/admin-signal.js?v=4"></script>
+<script src="/miniapp/admin-signal-v13.js?v=20260912-1405"></script>
 <script src="/miniapp/admin-position-compact-v7.js?v=20260912-1135"></script>
-<script src="/miniapp/admin-auto-setup-v8.js?v=20260912-1218"></script>
-<script src="/miniapp/admin-auto-entry-v11.js?v=20260912-1335"></script>
 </body>
 </html>
