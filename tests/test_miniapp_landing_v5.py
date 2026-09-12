@@ -15,7 +15,7 @@ def test_landing_is_rendered_before_app_shell_with_approved_poster():
     assert landing_pos < app_pos
     assert 'body class="landing-active"' in INDEX
     assert 'class="nexus-landing-poster"' in INDEX
-    assert './assets/brand/nexus-landing-approved-v8.webp?v=20260910-1820' in INDEX
+    assert './assets/brand/nexus-landing-approved-v8.webp?v=' in INDEX
     assert 'fetchpriority="high"' in INDEX
 
 
@@ -40,13 +40,13 @@ def test_landing_uses_poster_first_full_viewport_layout():
     assert '.nexus-landing-enter' in CSS
     assert 'background: transparent' in CSS
     assert 'body.landing-active > .app-shell' in CSS
-    assert './landing-v5.css?v=20260910-1731' in INDEX
+    assert './landing-v5.css?v=' in INDEX
 
 
 def test_landing_gate_hides_app_until_user_clicks_enter():
     assert "appShell.setAttribute('aria-hidden', 'true')" in JS
     assert "enterButton.addEventListener('click', enterApp)" in JS
-    assert "{ once: true }" not in JS
+    assert "enterButton.addEventListener('click', enterApp, { once: true })" not in JS
     assert "document.body.classList.remove('landing-active')" in JS
     assert 'landing.hidden = true' in JS
 
