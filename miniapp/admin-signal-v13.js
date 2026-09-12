@@ -66,6 +66,23 @@
     return Number.isFinite(number) ? `${number > 0 ? '+' : ''}${number.toFixed(digits)}` : '—';
   }
 
+  function pulse(status) {
+    const current = String(status || 'UNAVAILABLE').toLowerCase();
+    return `<span class="admin-live-pulse ${esc(current)}" aria-hidden="true"><svg viewBox="0 0 64 48"><polyline class="pulse-back" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline><polyline class="pulse-front" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline></svg></span>`;
+  }
+
+  function liveBlock(live) {
+    if (!live) return '';
+    const status = String(live.status || 'UNAVAILABLE').toUpperCase();
+    const pnlState = String(live.pnl_state || '').toLowerCase();
+    const sync = live.age_seconds != null ? `${Math.round(Number(live.age_seconds))}s ago` : '—';
+    const label = status === 'LIVE' ? 'MT5 LIVE' : status === 'PENDING' ? 'MT5 PENDING' : status === 'STALE' ? 'STALE' : 'LIVE DATA UNAVAILABLE';
+    if (status === 'UNAVAILABLE') {
+      return `<div class="admin-live unavailable"><div class="admin-live-head">${pulse(status)}<b>${label}</b><small>—</small></div></div>`;
+    }
+    return `<div class="admin-live ${esc(status.toLowerCase())}"><div class="admin-live-head">${pulse(status)}<b>${label}</b><small>${esc(sync)}</small></div><div class="admin-live-grid"><span>CURRENT<b>${esc(live.current_price ?? '—')}</b></span><span>FLOATING P&amp;L<b class="${esc(pnlState)}">${signed(live.floating_pnl)}</b></span><span>CURRENT R<b>${live.current_r == null ? '—' : signed(live.current_r) + 'R'}</b></span><span>VOLUME<b>${esc(live.volume ?? '—')}</b></span><span>LIVE SL<b>${esc(live.stop_loss ?? '—')}</b></span><span>LIVE TP<b>${esc(live.take_profit ?? '—')}</b></span></div></div>`;
+  }
+
   function show(view) {
     document.querySelectorAll('.view').forEach((node) => node.classList.toggle('active', node.id === view));
     document.querySelectorAll('.bottom button').forEach((button) => button.classList.toggle('selected', button.dataset.view === view));
@@ -113,12 +130,7 @@
     try {
       const calc = await api('/signals/calculate', {
         method: 'POST',
-        body: JSON.stringify({
-          symbol: $('symbol').value,
-          direction: state.side,
-          entry,
-          stop_loss: stop,
-        }),
+        body: JSON.stringify({symbol: $('symbol').value, direction: state.side, entry, stop_loss: stop}),
       });
       state.calculation = calc;
       $('riskBox').querySelector('b').textContent = fa(calc.risk);
@@ -143,24 +155,12 @@
     if (!calc) return toast('ابتدا Entry و Stop Loss معتبر وارد کنید.');
     const lot = state.volumeMode === 'FIXED' ? numeric('lotSize') : null;
     if (state.volumeMode === 'FIXED' && (!lot || lot <= 0)) return toast('در حالت Fixed Lot وارد کردن حجم معتبر اجباری است.');
-
     state.preview = {
-      symbol: calc.symbol,
-      direction: calc.direction,
-      entry: calc.entry,
-      stop_loss: calc.stop_loss,
-      risk: calc.risk,
-      targets: calc.targets,
-      destination: state.destination,
-      timeframe: $('timeframe').value,
-      request_id: requestId(),
-      digits: calc.digits,
-      setup_mode: 'MANUAL',
-      trailing_code: $('trailing').value,
-      volume_mode: state.volumeMode,
-      lot_size: lot,
+      symbol: calc.symbol, direction: calc.direction, entry: calc.entry, stop_loss: calc.stop_loss,
+      risk: calc.risk, targets: calc.targets, destination: state.destination, timeframe: $('timeframe').value,
+      request_id: requestId(), digits: calc.digits, setup_mode: 'MANUAL', trailing_code: $('trailing').value,
+      volume_mode: state.volumeMode, lot_size: lot,
     };
-
     $('preview').innerHTML = `<div class="preview-hero"><strong>${esc(calc.symbol)}</strong><em>${esc(calc.direction)}</em></div><div class="preview-grid"><div><span>ورود</span><b>${fa(calc.entry)}</b></div><div><span>حد ضرر</span><b>${fa(calc.stop_loss)}</b></div><div><span>Initial R</span><b>${fa(calc.risk)}</b></div><div><span>Trailing</span><b>${esc($('trailing').value)}</b></div><div><span>Volume</span><b>${esc(state.volumeMode)}${lot ? ' · ' + esc(lot) : ''}</b></div>${calc.targets.map((value, index) => `<div><span>TP${index + 1}</span><b>${fa(value)}</b></div>`).join('')}<div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div></div>`;
     $('modal').hidden = false;
   }
@@ -172,11 +172,9 @@
     const timeframe = $('autoTimeframe').value;
     const trailing = $('autoTrailing').value;
     const lot = state.autoVolumeMode === 'FIXED' ? numeric('autoLotSize') : null;
-
     if (!symbol) return toast('نماد Auto Setup را وارد کنید.');
     if (!entry || entry <= 0) return toast('قیمت ورود Auto Setup را وارد کنید.');
     if (state.autoVolumeMode === 'FIXED' && (!lot || lot <= 0)) return toast('حجم Fixed Lot معتبر وارد کنید.');
-
     $('autoTimeframeValue').textContent = timeframe;
     $('autoTrailingValue').textContent = trailing;
     $('autoVolumeValue').textContent = state.autoVolumeMode;
@@ -206,10 +204,28 @@
     return String(item?.status || '').toUpperCase() === 'PUBLISHED';
   }
 
-  function signalCard(item) {
+  function signalCard(item, {allowRetry = true} = {}) {
     const payload = JSON.parse(item.payload_json || '{}');
+    const status = String(item.status || 'UNKNOWN').toUpperCase();
+    const job = String(item.chart_job?.status || '').toUpperCase();
+    const stage = String(item.signal?.publication_stage || '').toUpperCase();
     const entry = payload.entry ?? item.signal?.entry_price ?? '—';
-    return `<article class="card"><div class="card-head"><strong>${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status PUBLISHED">PUBLISHED</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div></article>`;
+    const retryable = ['FAILED', 'PUBLISH_FAILED', 'EXPIRED'].includes(status) || (['UPLOADED', 'COMPLETED'].includes(job) && status !== 'PUBLISHED' && stage !== 'PUBLISHED');
+    const retry = allowRetry && retryable ? `<button class="outline retry-signal" data-request-id="${esc(item.request_id)}">تلاش مجدد</button>` : '';
+    return `<article class="card"><div class="card-head"><strong>${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
+  }
+
+  async function retrySignal(button) {
+    button.disabled = true;
+    try {
+      const result = await api(`/signals/${encodeURIComponent(button.dataset.requestId)}/retry`, {method: 'POST'});
+      toast(result.publication === 'RETRY_QUEUED' ? 'انتشار مجدد در صف قرار گرفت.' : 'درخواست همان سیگنال احیا شد.');
+      await loadSignals();
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   async function loadSignals() {
@@ -218,11 +234,11 @@
     try {
       const data = await api('/signals');
       setMt5(data.mt5_admin);
-      const visible = (data.items || []).filter(isOperationalSignal);
-      const html = visible.length ? visible.map(signalCard).join('') : '<div class="empty">سیگنال عملیاتی منتشرشده‌ای وجود ندارد.</div>';
-      $('signalList').innerHTML = html;
-      $('logList').innerHTML = html;
-      $('publishedCount').textContent = fa(visible.length);
+      const items = data.items || [];
+      const operational = items.filter(isOperationalSignal);
+      $('signalList').innerHTML = operational.length ? operational.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">سیگنال عملیاتی منتشرشده‌ای وجود ندارد.</div>';
+      $('logList').innerHTML = items.length ? items.map((item) => signalCard(item)).join('') : '<div class="empty">لاگ عملیاتی وجود ندارد.</div>';
+      $('publishedCount').textContent = fa(operational.length);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -267,10 +283,7 @@
     if (['CLOSE_SIGNAL', 'CANCEL_PENDING'].includes(command) && !confirm('این عملیات روی MT5 اجرا می‌شود. ادامه می‌دهید؟')) return;
     button.disabled = true;
     try {
-      await api(`/signals/${box.dataset.signal}/command`, {
-        method: 'POST',
-        body: JSON.stringify({command, account_number: box.dataset.account, value}),
-      });
+      await api(`/signals/${box.dataset.signal}/command`, {method: 'POST', body: JSON.stringify({command, account_number: box.dataset.account, value})});
       toast('فرمان در صف اجرای MT5 ثبت شد.');
     } catch (error) {
       toast(error.message);
@@ -291,48 +304,19 @@
   }
 
   document.querySelectorAll('.bottom button').forEach((button) => button.addEventListener('click', () => show(button.dataset.view)));
-  document.querySelectorAll('.setup-mode button').forEach((button) => button.addEventListener('click', () => {
-    state.setupMode = button.dataset.mode;
-    syncModeUI();
-  }));
-  document.querySelectorAll('.manual-direction button').forEach((button) => button.addEventListener('click', () => {
-    state.side = button.dataset.side;
-    selectButtons('.manual-direction button', button);
-    scheduleRecalculate();
-  }));
-  document.querySelectorAll('.auto-direction button').forEach((button) => button.addEventListener('click', () => {
-    state.autoSide = button.dataset.autoSide;
-    selectButtons('.auto-direction button', button);
-  }));
-  document.querySelectorAll('.destination button').forEach((button) => button.addEventListener('click', () => {
-    state.destination = button.dataset.value;
-    selectButtons('.destination button', button);
-  }));
-  document.querySelectorAll('.auto-destination button').forEach((button) => button.addEventListener('click', () => {
-    state.autoDestination = button.dataset.autoDestination;
-    selectButtons('.auto-destination button', button);
-  }));
-  document.querySelectorAll('.volume-mode button').forEach((button) => button.addEventListener('click', () => {
-    state.volumeMode = button.dataset.volume;
-    selectButtons('.volume-mode button', button);
-    $('fixedLotLabel').hidden = state.volumeMode !== 'FIXED';
-  }));
-  document.querySelectorAll('.auto-volume-mode button').forEach((button) => button.addEventListener('click', () => {
-    state.autoVolumeMode = button.dataset.autoVolume;
-    selectButtons('.auto-volume-mode button', button);
-    $('autoFixedLotLabel').hidden = state.autoVolumeMode !== 'FIXED';
-    $('autoVolumeValue').textContent = state.autoVolumeMode;
-  }));
+  document.querySelectorAll('.setup-mode button').forEach((button) => button.addEventListener('click', () => { state.setupMode = button.dataset.mode; syncModeUI(); }));
+  document.querySelectorAll('.manual-direction button').forEach((button) => button.addEventListener('click', () => { state.side = button.dataset.side; selectButtons('.manual-direction button', button); scheduleRecalculate(); }));
+  document.querySelectorAll('.auto-direction button').forEach((button) => button.addEventListener('click', () => { state.autoSide = button.dataset.autoSide; selectButtons('.auto-direction button', button); }));
+  document.querySelectorAll('.destination button').forEach((button) => button.addEventListener('click', () => { state.destination = button.dataset.value; selectButtons('.destination button', button); }));
+  document.querySelectorAll('.auto-destination button').forEach((button) => button.addEventListener('click', () => { state.autoDestination = button.dataset.autoDestination; selectButtons('.auto-destination button', button); }));
+  document.querySelectorAll('.volume-mode button').forEach((button) => button.addEventListener('click', () => { state.volumeMode = button.dataset.volume; selectButtons('.volume-mode button', button); $('fixedLotLabel').hidden = state.volumeMode !== 'FIXED'; }));
+  document.querySelectorAll('.auto-volume-mode button').forEach((button) => button.addEventListener('click', () => { state.autoVolumeMode = button.dataset.autoVolume; selectButtons('.auto-volume-mode button', button); $('autoFixedLotLabel').hidden = state.autoVolumeMode !== 'FIXED'; $('autoVolumeValue').textContent = state.autoVolumeMode; }));
 
   ['symbol', 'entry', 'stopLoss'].forEach((id) => $(id)?.addEventListener('input', scheduleRecalculate));
   $('autoTimeframe')?.addEventListener('change', () => $('autoTimeframeValue').textContent = $('autoTimeframe').value);
   $('autoTrailing')?.addEventListener('change', () => $('autoTrailingValue').textContent = $('autoTrailing').value);
   $('autoValidate')?.addEventListener('click', validateAutoSetup);
-
-  $('signalForm').addEventListener('submit', (event) => {
-    event.preventDefault();
-    if (state.setupMode === 'MANUAL') openManualPreview();
-  });
+  $('signalForm').addEventListener('submit', (event) => { event.preventDefault(); if (state.setupMode === 'MANUAL') openManualPreview(); });
   $('publish').addEventListener('click', publish);
   $('recalculatePreview').addEventListener('click', () => { $('modal').hidden = true; scheduleRecalculate(); });
   $('newSignal').addEventListener('click', () => show('create'));
@@ -341,10 +325,8 @@
   $('reloadPositions').addEventListener('click', loadPositions);
   $('closeModal').addEventListener('click', () => { $('modal').hidden = true; });
   $('cancelPreview').addEventListener('click', () => { $('modal').hidden = true; });
-  $('positionList').addEventListener('click', (event) => {
-    const button = event.target.closest('button[data-command]');
-    if (button) sendCommand(button);
-  });
+  $('positionList').addEventListener('click', (event) => { const button = event.target.closest('button[data-command]'); if (button) sendCommand(button); });
+  ['signalList', 'logList'].forEach((id) => $(id)?.addEventListener('click', (event) => { const button = event.target.closest('.retry-signal'); if (button) retrySignal(button); }));
 
   syncModeUI();
   bootstrap();
@@ -357,5 +339,5 @@
   setInterval(() => {
     if (document.visibilityState !== 'visible') return;
     if (document.querySelector('#dashboard.view.active') || document.querySelector('#logs.view.active')) loadSignals();
-  }, 15000);
+  }, 5000);
 })();
