@@ -2,6 +2,7 @@
   'use strict';
 
   const source = document.getElementById('entry');
+  const sourceLabel = source?.closest('label');
   const autoEntry = document.getElementById('autoEntry');
   const autoField = document.getElementById('autoEntryStatic');
   const setupButtons = [...document.querySelectorAll('.setup-mode button')];
@@ -39,7 +40,10 @@
 
   function syncMode() {
     const auto = isAuto();
+
     autoField.hidden = !auto;
+    if (sourceLabel) sourceLabel.hidden = auto;
+
     source.disabled = false;
     source.readOnly = false;
     source.removeAttribute('disabled');
@@ -47,17 +51,20 @@
     source.style.pointerEvents = 'auto';
     source.tabIndex = 0;
 
-    if (auto) {
+    if (!auto) {
       syncSourceToAuto();
-      requestAnimationFrame(() => {
-        autoEntry.disabled = false;
-        autoEntry.readOnly = false;
-        autoEntry.removeAttribute('disabled');
-        autoEntry.removeAttribute('readonly');
-        autoEntry.style.pointerEvents = 'auto';
-        autoEntry.tabIndex = 0;
-      });
+      return;
     }
+
+    syncSourceToAuto();
+    requestAnimationFrame(() => {
+      autoEntry.disabled = false;
+      autoEntry.readOnly = false;
+      autoEntry.removeAttribute('disabled');
+      autoEntry.removeAttribute('readonly');
+      autoEntry.style.pointerEvents = 'auto';
+      autoEntry.tabIndex = 0;
+    });
   }
 
   autoEntry.addEventListener('input', syncAutoToSource);
