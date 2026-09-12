@@ -36,29 +36,58 @@ def _rows(p: Period):
     with db.conn() as con:
         return list(con.execute(
             """
-            SELECT id,code,market_type,symbol,direction,entry_price,stop_loss,exit_price,result_value,result_unit,
-                   rr_ratio,destination,trailing_code,trailing_name,created_at,opened_at,closed_at,
-                   free_message_id,vip_message_id,free_last_message_id,vip_last_message_id
+            SELECT signals.id,signals.code,signals.market_type,signals.symbol,signals.direction,
+                   signals.entry_price,signals.stop_loss,signals.exit_price,signals.result_value,signals.result_unit,
+                   signals.rr_ratio,signals.destination,signals.trailing_code,signals.trailing_name,
+                   signals.created_at,signals.opened_at,signals.closed_at,
+                   signals.free_message_id,signals.vip_message_id,signals.free_last_message_id,signals.vip_last_message_id,
+                   EXISTS(
+                     SELECT 1 FROM signal_updates su
+                     WHERE su.signal_id=signals.id
+                       AND UPPER(COALESCE(su.action,'')) LIKE '%PARTIAL%'
+                   ) AS has_partial
             FROM signals
-            WHERE status='CLOSED' AND closed_at>=? AND closed_at<?
-              AND COALESCE(cycle_id, ?) = ?
-            ORDER BY closed_at DESC
+            WHERE signals.status='CLOSED' AND signals.closed_at>=? AND signals.closed_at<?
+              AND COALESCE(signals.cycle_id, ?) = ?
+            ORDER BY signals.closed_at DESC
             """,
             (p.start_iso, p.end_iso, db.current_cycle_id(), db.current_cycle_id()),
         ).fetchall())
 
 
-def _realized_r(row: Any) -> float | None:
+def _get(row: Any, key: str, default: Any = None) -> Any:
     try:
-        entry = float(row["entry_price"] or 0)
-        stop = float(row["stop_loss"] or 0)
-        exit_price = float(row["exit_price"] or 0)
-    except (TypeError, ValueError, KeyError, IndexError):
+        value = row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+    return default if value is None else value
+
+
+def _realized_r(row: Any) -> float | None:
+    unit = str(_get(row, "result_unit", "") or "").strip().upper()
+    raw_result = _get(row, "result_value")
+    if unit == "R" and raw_result is not None:
+        try:
+            value = float(raw_result)
+            return round(value, 4) if value == value else None
+        except (TypeError, ValueError):
+            return None
+
+    # Final exit alone cannot represent realized R after partial closes. Unless
+    # the signal already stores an explicit R result, keep this metric unknown.
+    if bool(_get(row, "has_partial", False)):
+        return None
+
+    try:
+        entry = float(_get(row, "entry_price", 0) or 0)
+        stop = float(_get(row, "stop_loss", 0) or 0)
+        exit_price = float(_get(row, "exit_price", 0) or 0)
+    except (TypeError, ValueError):
         return None
     initial_r = abs(entry - stop)
     if entry <= 0 or stop <= 0 or exit_price <= 0 or initial_r <= 0:
         return None
-    direction = str(row["direction"] or "").upper()
+    direction = str(_get(row, "direction", "") or "").upper()
     if direction not in {"BUY", "LONG", "SELL", "SHORT"}:
         return None
     displacement = exit_price - entry if direction in {"BUY", "LONG"} else entry - exit_price
@@ -66,11 +95,18 @@ def _realized_r(row: Any) -> float | None:
 
 
 def _r_metrics(rows: Iterable) -> dict[str, Any]:
-    ordered = sorted(list(rows), key=lambda row: str(row["closed_at"] or ""))
+    ordered = sorted(list(rows), key=lambda row: str(_get(row, "closed_at", "") or ""))
     values = [value for value in (_realized_r(row) for row in ordered) if value is not None]
+    total_rows = len(ordered)
+    complete = total_rows > 0 and len(values) == total_rows
+    base = {
+        "r_sample_size": len(values),
+        "r_missing_count": max(0, total_rows - len(values)),
+        "r_complete": complete,
+    }
     if not values:
         return {
-            "r_sample_size": 0,
+            **base,
             "net_r": None,
             "average_realized_r": None,
             "profit_factor_r": None,
@@ -110,7 +146,7 @@ def _r_metrics(rows: Iterable) -> dict[str, Any]:
         curve.append(equity)
 
     return {
-        "r_sample_size": len(values),
+        **base,
         "net_r": round(sum(values), 4),
         "average_realized_r": round(sum(values) / len(values), 4),
         "profit_factor_r": profit_factor,
@@ -123,23 +159,24 @@ def _r_metrics(rows: Iterable) -> dict[str, Any]:
 
 def _summarize(rows: Iterable) -> dict:
     rows = list(rows)
-    wins = sum(1 for r in rows if float(r["result_value"] or 0) > 0)
-    losses = sum(1 for r in rows if float(r["result_value"] or 0) < 0)
+    wins = sum(1 for r in rows if float(_get(r, "result_value", 0) or 0) > 0)
+    losses = sum(1 for r in rows if float(_get(r, "result_value", 0) or 0) < 0)
     be = len(rows) - wins - losses
-    forex_pips = sum(float(r["result_value"] or 0) for r in rows if str(r["result_unit"] or "").upper() == "PIPS")
-    crypto_pct = sum(float(r["result_value"] or 0) for r in rows if str(r["result_unit"] or "").upper() == "PERCENT")
+    forex_pips = sum(float(_get(r, "result_value", 0) or 0) for r in rows if str(_get(r, "result_unit", "") or "").upper() == "PIPS")
+    crypto_pct = sum(float(_get(r, "result_value", 0) or 0) for r in rows if str(_get(r, "result_unit", "") or "").upper() == "PERCENT")
     raw_pct = 0.0
     rr_values = []
     for r in rows:
-        entry = float(r["entry_price"] or 0)
-        exit_price = float(r["exit_price"] or 0)
+        entry = float(_get(r, "entry_price", 0) or 0)
+        exit_price = float(_get(r, "exit_price", 0) or 0)
         if entry and exit_price:
-            direction = str(r["direction"] or "").upper()
+            direction = str(_get(r, "direction", "") or "").upper()
             delta = exit_price - entry if direction in {"BUY", "LONG"} else entry - exit_price
             raw_pct += (delta / entry) * 100
-        if r["rr_ratio"] is not None:
+        rr_ratio = _get(r, "rr_ratio")
+        if rr_ratio is not None:
             try:
-                rr_values.append(float(r["rr_ratio"]))
+                rr_values.append(float(rr_ratio))
             except (TypeError, ValueError):
                 pass
     total = len(rows)
@@ -176,7 +213,7 @@ def symbols(key: str = "30", limit: int = 12) -> list[dict]:
     p = period(key)
     groups = defaultdict(list)
     for row in _rows(p):
-        groups[str(row["symbol"] or "—").upper()].append(row)
+        groups[str(_get(row, "symbol", "—") or "—").upper()].append(row)
     result = []
     for symbol, rows in groups.items():
         result.append({"symbol": symbol, **_summarize(rows)})
@@ -189,9 +226,9 @@ def trailing(key: str = "30", limit: int = 10) -> list[dict]:
     groups = defaultdict(list)
     labels = {}
     for row in _rows(p):
-        code = str(row["trailing_code"] or "NO_TRAILING")
+        code = str(_get(row, "trailing_code", "NO_TRAILING") or "NO_TRAILING")
         groups[code].append(row)
-        labels[code] = str(row["trailing_name"] or "—")
+        labels[code] = str(_get(row, "trailing_name", "—") or "—")
     result = []
     for code, rows in groups.items():
         result.append({"code": code, "name": labels[code], **_summarize(rows)})
@@ -203,19 +240,22 @@ def channels(key: str = "30") -> dict[str, dict]:
     p = period(key)
     rows = _rows(p)
     return {
-        "FREE": _summarize([r for r in rows if str(r["destination"]).upper() in {"FREE", "BOTH"}]),
-        "VIP": _summarize([r for r in rows if str(r["destination"]).upper() in {"VIP", "BOTH"}]),
+        "FREE": _summarize([r for r in rows if str(_get(r, "destination", "") or "").upper() in {"FREE", "BOTH"}]),
+        "VIP": _summarize([r for r in rows if str(_get(r, "destination", "") or "").upper() in {"VIP", "BOTH"}]),
     }
 
 
 def _access(row: Any) -> str:
-    return "VIP" if str(row["destination"] or "FREE").upper() == "VIP" else "FREE"
+    return "VIP" if str(_get(row, "destination", "FREE") or "FREE").upper() == "VIP" else "FREE"
 
 
 def _result_source(row: Any) -> str:
+    unit = str(_get(row, "result_unit", "") or "").upper()
+    if unit == "R" and _get(row, "result_value") is not None:
+        return "MANUAL"
     if _realized_r(row) is not None:
         return "CALCULATED"
-    if row["result_value"] is not None:
+    if _get(row, "result_value") is not None:
         return "MANUAL"
     return "UNKNOWN"
 
@@ -232,27 +272,27 @@ def _first_target(signal_id: int) -> float | None:
 
 def _trade_row(row: Any) -> dict[str, Any]:
     realized_r = _realized_r(row)
-    unit = str(row["result_unit"] or "").upper() or None
+    unit = str(_get(row, "result_unit", "") or "").upper() or None
     realized_pnl = None
-    if unit in {"USD", "$", "ACCOUNT_CURRENCY", "MONEY"} and row["result_value"] is not None:
+    if unit in {"USD", "$", "ACCOUNT_CURRENCY", "MONEY"} and _get(row, "result_value") is not None:
         try:
-            realized_pnl = float(row["result_value"])
+            realized_pnl = float(_get(row, "result_value"))
         except (TypeError, ValueError):
             realized_pnl = None
     return {
-        "id": int(row["id"]),
-        "code": str(row["code"] or ""),
-        "symbol": str(row["symbol"] or "—"),
-        "direction": str(row["direction"] or ""),
+        "id": int(_get(row, "id", 0)),
+        "code": str(_get(row, "code", "") or ""),
+        "symbol": str(_get(row, "symbol", "—") or "—"),
+        "direction": str(_get(row, "direction", "") or ""),
         "access": _access(row),
         "status": "CLOSED",
-        "open_time": row["opened_at"] or row["created_at"],
-        "close_time": row["closed_at"],
-        "initial_entry": row["entry_price"],
-        "initial_sl": row["stop_loss"],
-        "initial_tp": _first_target(int(row["id"])),
-        "final_exit": row["exit_price"],
-        "result_value": row["result_value"],
+        "open_time": _get(row, "opened_at") or _get(row, "created_at"),
+        "close_time": _get(row, "closed_at"),
+        "initial_entry": _get(row, "entry_price"),
+        "initial_sl": _get(row, "stop_loss"),
+        "initial_tp": _first_target(int(_get(row, "id", 0))),
+        "final_exit": _get(row, "exit_price"),
+        "result_value": _get(row, "result_value"),
         "result_unit": unit,
         "realized_pnl": realized_pnl,
         "realized_r": realized_r,
@@ -305,9 +345,9 @@ def methodology() -> dict[str, Any]:
         "losses_are_retained": True,
         "be_is_retained": True,
         "win_loss_rule": "result_value > 0 = WIN; result_value < 0 = LOSS; otherwise BE",
-        "realized_r_rule": "directional (final_exit - initial_entry) / abs(initial_entry - initial_sl)",
+        "realized_r_rule": "explicit R result when available; otherwise directional final exit / initial R only when no partial close is recorded",
         "profit_factor_rule": "sum positive realized R / absolute sum negative realized R",
         "drawdown_rule": "peak-to-trough decline of cumulative realized R",
         "verification_note": "Signal performance is separate from per-account AutoTrade broker performance.",
-        "insufficient_data_rule": "R-based metrics are null when Entry, Initial SL, or Final Exit is missing or invalid.",
+        "insufficient_data_rule": "Aggregate R metrics are presented as complete only when every closed trade in the selected period has a valid realized R.",
     }
