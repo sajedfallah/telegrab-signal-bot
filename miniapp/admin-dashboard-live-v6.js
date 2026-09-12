@@ -8,6 +8,7 @@
     return Number.isFinite(n) ? `${n > 0 ? '+' : ''}${n.toFixed(digits)}` : '—';
   };
   const headers = () => ({...(tg?.initData ? {'X-Telegram-Init-Data': tg.initData} : {})});
+  let latest = {positions:[], orders:[]};
 
   function pnlOf(position) {
     const raw = position?.floating_pnl ?? position?.profit ?? position?.pnl ?? position?.profit_float;
@@ -32,7 +33,7 @@
     const pnl = pnlOf(position);
     const pnlClass = pnl == null ? 'flat' : pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : 'flat';
     const side = position?.direction ?? position?.type ?? '';
-    return `<article class="card admin-dashboard-position ${pnlClass}">
+    return `<article class="card admin-dashboard-position ${pnlClass}" data-ticket="${esc(position?.ticket || '')}">
       <div class="card-head">
         <strong>${esc(position?.symbol || '—')} · ${esc(side)}</strong>
         <span class="status PUBLISHED">LIVE</span>
@@ -71,6 +72,39 @@
     return $('dashboardPositionList');
   }
 
+  function inlineLive(position) {
+    const pnl = pnlOf(position);
+    const pnlClass = pnl == null ? 'flat' : pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : 'flat';
+    return `<div class="admin-v6-inline-live">
+      <span>CURRENT<b>${esc(currentOf(position))}</b></span>
+      <span>FLOATING P&amp;L<b class="${pnlClass}">${pnl == null ? '—' : signed(pnl)}</b></span>
+      <span>LIVE SL<b>${esc(position?.stop_loss ?? position?.sl ?? '—')}</b></span>
+      <span>LIVE TP<b>${esc(position?.take_profit ?? position?.tp ?? '—')}</b></span>
+    </div><div class="admin-position-sync">Last MT5 Sync: ${lastSync(position)}</div>`;
+  }
+
+  function enrichPositionTab() {
+    const list = $('positionList');
+    if (!list) return;
+    const rows = [...latest.positions, ...latest.orders];
+    list.querySelectorAll('.card').forEach(card => {
+      card.classList.add('admin-position-card-v6');
+      const ticketNode = [...card.querySelectorAll('b')].find(node => /^\d+$/.test(node.textContent.trim()));
+      const ticket = ticketNode?.textContent?.trim();
+      if (!ticket) return;
+      const row = rows.find(item => String(item?.ticket ?? '') === ticket);
+      if (!row) return;
+      card.querySelector('.admin-v6-inline-live')?.remove();
+      const staleSync = card.querySelector('.admin-position-sync');
+      if (staleSync) staleSync.remove();
+      const actions = card.querySelector('.trade-actions');
+      const wrap = document.createElement('div');
+      wrap.innerHTML = inlineLive(row);
+      const nodes = [...wrap.childNodes];
+      nodes.forEach(node => card.insertBefore(node, actions || null));
+    });
+  }
+
   async function loadDashboardPositions() {
     const host = ensureDashboardHost();
     if (!host || document.visibilityState !== 'visible') return;
@@ -79,27 +113,26 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
       const positions = Array.isArray(data.positions) ? data.positions : [];
+      const orders = Array.isArray(data.orders) ? data.orders : [];
+      latest = {positions, orders};
       host.innerHTML = positions.length ? positions.map(liveCard).join('') : '<div class="empty">پوزیشن فعال NEXUS وجود ندارد.</div>';
       const count = $('positionCount');
-      if (count) count.textContent = new Intl.NumberFormat('fa-IR').format(positions.length + (Array.isArray(data.orders) ? data.orders.length : 0));
+      if (count) count.textContent = new Intl.NumberFormat('fa-IR').format(positions.length + orders.length);
+      window.setTimeout(enrichPositionTab, 80);
     } catch (error) {
       host.innerHTML = `<div class="empty">دریافت وضعیت Live MT5 ناموفق بود.<br>${esc(error.message)}</div>`;
     }
   }
 
-  function upgradeExistingPositionCards() {
+  function observePositionCards() {
     const list = $('positionList');
     if (!list) return;
-    const observer = new MutationObserver(() => {
-      list.querySelectorAll('.card').forEach(card => {
-        card.classList.add('admin-position-card-v6');
-      });
-    });
+    const observer = new MutationObserver(() => window.setTimeout(enrichPositionTab, 0));
     observer.observe(list, {childList:true, subtree:true});
   }
 
   ensureDashboardHost();
-  upgradeExistingPositionCards();
+  observePositionCards();
   loadDashboardPositions();
   window.setInterval(loadDashboardPositions, 5000);
 })();
