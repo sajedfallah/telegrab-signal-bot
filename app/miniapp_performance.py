@@ -32,9 +32,14 @@ def _period_key(value: str) -> str:
 
 def _r_overview(data: dict[str, Any]) -> dict[str, Any]:
     sample = int(data.get("r_sample_size") or 0)
-    if sample <= 0:
+    total = int(data.get("total") or 0)
+    missing = int(data.get("r_missing_count") or max(0, total - sample))
+    complete = bool(data.get("r_complete")) and total > 0
+    if not complete:
         return {
-            "sample_size": 0,
+            "sample_size": sample,
+            "total_trades": total,
+            "missing_count": missing,
             "net_r": None,
             "average_r": None,
             "profit_factor": None,
@@ -46,6 +51,8 @@ def _r_overview(data: dict[str, Any]) -> dict[str, Any]:
         }
     return {
         "sample_size": sample,
+        "total_trades": total,
+        "missing_count": 0,
         "net_r": data.get("net_r"),
         "average_r": data.get("average_realized_r"),
         "profit_factor": data.get("profit_factor_r"),
