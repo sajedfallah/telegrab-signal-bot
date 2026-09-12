@@ -34,9 +34,22 @@
     return `${n > 0 ? '+' : ''}${n.toFixed(digits)}`;
   }
 
-  function pulseHtml(status) {
+  function liveStateClass(status) {
     const key = String(status || 'UNAVAILABLE').toUpperCase();
-    return `<span class="nexus-live-pulse ${h(key.toLowerCase())}" aria-hidden="true"><svg viewBox="0 0 64 48"><polyline class="pulse-back" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline><polyline class="pulse-front" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline></svg></span>`;
+    return `state-${key.toLowerCase().replace(/[^a-z0-9_-]/g, '')}`;
+  }
+
+  function pnlCardClass(live) {
+    const state = String(live?.pnl_state || '').toUpperCase();
+    if (state === 'IN_PROFIT') return 'pnl-profit';
+    if (state === 'IN_LOSS') return 'pnl-loss';
+    if (state === 'BE') return 'pnl-be';
+    return '';
+  }
+
+  function pulseHtml(status) {
+    const stateClass = liveStateClass(status);
+    return `<span class="nexus-live-pulse ${h(stateClass)}" aria-hidden="true"><svg viewBox="0 0 64 48"><polyline class="pulse-back" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline><polyline class="pulse-front" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline></svg></span>`;
   }
 
   function liveHtml(live, { detail = false } = {}) {
@@ -44,10 +57,11 @@
     const status = String(live.status || 'UNAVAILABLE').toUpperCase();
     const pnlState = String(live.pnl_state || '').toLowerCase();
     const active = status === 'LIVE';
+    const stateClass = liveStateClass(status);
     const label = status === 'LIVE' ? 'MT5 LIVE' : status === 'PENDING' ? 'MT5 PENDING' : status === 'STALE' ? 'STALE' : 'LIVE DATA UNAVAILABLE';
     const sync = live.age_seconds != null ? `${Math.round(Number(live.age_seconds))}s ago` : '—';
     if (status === 'UNAVAILABLE') {
-      return `<section class="signal-live-panel unavailable"><div class="signal-live-head">${pulseHtml(status)}<b>${h(label)}</b><small>Broker snapshot unavailable</small></div></section>`;
+      return `<section class="signal-live-panel ${h(stateClass)} unavailable"><div class="signal-live-head">${pulseHtml(status)}<b>${h(label)}</b><small>Broker snapshot unavailable</small></div></section>`;
     }
     const cells = `
       <div><span>Current</span><b>${price(live.current_price)}</b></div>
@@ -57,7 +71,7 @@
     const extras = detail ? `
       <div><span>Live SL</span><b>${price(live.stop_loss)}</b></div>
       <div><span>Live TP</span><b>${price(live.take_profit)}</b></div>` : '';
-    return `<section class="signal-live-panel ${h(status.toLowerCase())}">
+    return `<section class="signal-live-panel ${h(stateClass)}">
       <div class="signal-live-head">${pulseHtml(status)}<b>${h(label)}</b><small>synced ${h(sync)}</small></div>
       <div class="signal-live-grid">${cells}${extras}</div>
       ${!active && status === 'STALE' ? '<div class="signal-live-warning">آخرین Snapshot بروکر قدیمی است؛ اعداد به‌عنوان Live در نظر گرفته نمی‌شوند.</div>' : ''}
@@ -93,6 +107,7 @@
 
   function card(item) {
     const direction = String(item.direction || '').toUpperCase();
+    const pnlClass = item.status !== 'CLOSED' ? pnlCardClass(item.live) : '';
     const details = item.locked ? `
       <div class="signal-v2-lock">${icon('lock')}<div><b>دسترسی VIP لازم است</b><span>جزئیات عملیاتی این سیگنال برای حساب شما ارسال نشده است.</span></div></div>
       <button class="btn primary full" data-unlock-vip>مشاهده پلن‌های VIP</button>` : `
@@ -103,7 +118,7 @@
       </div>
       ${targetHtml(item.targets)}
       ${item.status !== 'CLOSED' ? liveHtml(item.live) : ''}`;
-    return `<article class="signal-v2-card ${item.locked ? 'locked' : ''}" data-signal-id="${h(item.id)}">
+    return `<article class="signal-v2-card ${item.locked ? 'locked' : ''} ${h(pnlClass)}" data-signal-id="${h(item.id)}">
       <div class="signal-top">
         <div class="signal-v2-badges"><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span>${item.code ? `<span class="badge muted">#${h(item.code)}</span>` : ''}${isNew(item) ? '<span class="badge new-signal-badge">جدید</span>' : ''}</div>
         <span class="status-pill ${item.status === 'CLOSED' ? 'neutral' : 'success'}">${h(item.status || '')}</span>
@@ -130,7 +145,7 @@
   function emptyState() {
     const vipLocked = signalState.state === 'ACTIVE' && signalState.access === 'VIP' && !state.bootstrap?.entitlements?.vip;
     if (vipLocked) {
-      return `<div class="empty-state nexus-empty-state">${icon('lock')}<b>سیگنال فعال VIP برای این حساب نمایش داده نمی‌شود</b><span>برای مشاهده سیگنال‌های فعال VIP باید دسترسی VIP فعال باشد.</span><button class="btn primary" data-unlock-vip>مشاهده پلن‌ها</button></div>`;
+      return `<div class="empty-state nexus-empty-state">${icon('lock')}<b>سیگنال فعال VIP برای این حساب نمایش داده نمی‌شود</b><span>برای مشاهده سیگنال‌های فعال VIP باید دسترسی VIP فعال باشد.</span><button class="btn primary" data-unlock-vip>مشاهده پلن‌های VIP</button></div>`;
     }
     const label = signalState.state === 'CLOSED' ? 'سیگنال بسته‌شده‌ای در این فیلتر وجود ندارد' : 'سیگنال فعالی وجود ندارد';
     return `<div class="empty-state nexus-empty-state">${icon('signals')}<b>${h(label)}</b><span>در این فیلتر داده معتبر و قابل نمایش ثبت نشده است.</span></div>`;
