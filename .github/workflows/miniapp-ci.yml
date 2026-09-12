@@ -62,15 +62,6 @@ jobs:
             node --check "$file"
           done
 
-      - name: Run Mini App integration and regression tests
+      - name: Run full regression suite
         run: |
-          python -m pytest \
-            tests/test_miniapp_api.py \
-            tests/test_miniapp_checkout.py \
-            tests/test_miniapp_performance.py \
-            tests/test_miniapp_trades.py \
-            tests/test_miniapp_access_ui_fixes.py \
-            tests/test_miniapp_product_intelligence.py \
-            tests/test_miniapp_payment_onboarding_v4.py \
-            tests/test_miniapp_live_pnl.py \
-            -q
+          python -m pytest tests -q
