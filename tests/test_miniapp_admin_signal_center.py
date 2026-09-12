@@ -61,7 +61,7 @@ def payload(request_id="miniapp-test-0001", destination="BOTH"):
     return {"symbol": "XAUUSD", "direction": "BUY", "entry": 3650,
             "stop_loss": 3645, "destination": destination, "request_id": request_id,
             "timeframe": "M5", "digits": 2, "setup_mode": "MANUAL",
-            "trailing_code": "01", "volume_mode": "RISK"}
+            "trailing_code": "NEXUS_TRAIL_01", "volume_mode": "RISK"}
 
 
 def chart_headers():
