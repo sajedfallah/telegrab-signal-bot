@@ -60,7 +60,8 @@ def headers():
 def payload(request_id="miniapp-test-0001", destination="BOTH"):
     return {"symbol": "XAUUSD", "direction": "BUY", "entry": 3650,
             "stop_loss": 3645, "destination": destination, "request_id": request_id,
-            "timeframe": "M5", "digits": 2}
+            "timeframe": "M5", "digits": 2, "setup_mode": "MANUAL",
+            "trailing_code": "01", "volume_mode": "RISK"}
 
 
 def chart_headers():
@@ -196,14 +197,16 @@ def test_expired_and_tampered_init_data_are_rejected(client):
 
 def test_ui_keeps_tp_inputs_automatic():
     html = Path("miniapp/admin.html").read_text(encoding="utf-8")
-    js = Path("miniapp/admin-signal.js").read_text(encoding="utf-8")
-    assert "اهداف خودکار" in html
+    js = Path("miniapp/admin-signal-v13.js").read_text(encoding="utf-8")
+    assert "admin-signal-v13.js" in html
     assert "/signals/calculate" in js
+    assert "target_multipliers" in js
+    assert "trailing_code" in js
     assert 'id="tp1"' not in html.lower()
 
 
 def test_ui_exposes_existing_mt5_position_commands():
-    js = Path("miniapp/admin-signal.js").read_text(encoding="utf-8")
+    js = Path("miniapp/admin-signal-v13.js").read_text(encoding="utf-8")
     for command in ("MOVE_SL_TO_ENTRY", "PARTIAL_CLOSE", "ACTIVATE_TRAILING", "UPDATE_SL", "UPDATE_TP", "CLOSE_SIGNAL", "CANCEL_PENDING"):
         assert command in js
 
@@ -349,7 +352,7 @@ def test_expired_offline_job_retries_same_signal_and_request(client):
 
 
 def test_retry_control_is_wired_to_existing_api():
-    js = Path("miniapp/admin-signal.js").read_text(encoding="utf-8")
+    js = Path("miniapp/admin-signal-v13.js").read_text(encoding="utf-8")
     assert "retry-signal" in js
     assert "/retry" in js
     for state in ("FAILED", "PUBLISH_FAILED", "EXPIRED", "UPLOADED", "COMPLETED"):
