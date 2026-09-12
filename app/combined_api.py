@@ -10,6 +10,7 @@ from .miniapp_experience import router as miniapp_experience_router
 from .miniapp_home import router as miniapp_home_router
 from .miniapp_signals import router as miniapp_signals_router
 from .miniapp_performance import router as miniapp_performance_router
+from .miniapp_vip_preview import router as miniapp_vip_preview_router
 from .miniapp_trades import router as miniapp_trades_router
 from .miniapp_checkout import router as miniapp_checkout_router
 from .miniapp_account import router as miniapp_account_router
@@ -25,6 +26,7 @@ app.include_router(miniapp_experience_router)
 app.include_router(miniapp_home_router)
 app.include_router(miniapp_signals_router)
 app.include_router(miniapp_performance_router)
+app.include_router(miniapp_vip_preview_router)
 app.include_router(miniapp_trades_router)
 app.include_router(miniapp_checkout_router)
 app.include_router(miniapp_account_router)
