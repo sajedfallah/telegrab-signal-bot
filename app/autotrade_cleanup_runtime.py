@@ -138,6 +138,12 @@ def install_autotrade_durable_cleanup(core) -> None:
     if getattr(core, "_NEXUS_AUTOTRADE_CLEANUP_INSTALLED", False):
         return
 
+    # The queue guard protects both stale/corrupt synthetic reconciliation and
+    # false RECON-CLOSE events while fresh authoritative live state is still
+    # OPEN. Install it in the bot process before the notification worker polls.
+    from .autotrade.notification_queue_guard import install_notification_queue_guard
+    install_notification_queue_guard()
+
     # Install the broker-truth channel lifecycle patch at the same runtime seam
     # as the durable notification worker. This avoids a second startup hook and
     # guarantees automatic MT5 UPDATE events use the canonical reply-chain.
