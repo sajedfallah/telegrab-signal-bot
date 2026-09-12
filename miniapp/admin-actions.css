@@ -1,16 +1,1 @@
-.trade-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 12px;
-}
-.trade-actions button {
-  min-height: 34px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #0a1d2b;
-  color: #9dc4d7;
-  font-size: 9px;
-}
-.trade-actions button.danger { color: var(--red); border-color: #ff647c55; }
-.trade-actions button.safe { color: var(--green); border-color: #19d7a255; }
+.trade-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:12px}.trade-actions button{min-height:38px;padding:7px 8px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.018);color:#c4ccd7;font-size:8px;font-weight:800;line-height:1.4;overflow-wrap:anywhere}.trade-actions button:hover{border-color:var(--line-accent)}.trade-actions button.danger{color:var(--red);border-color:rgba(255,107,118,.24);background:rgba(255,107,118,.04)}.trade-actions button.safe{color:var(--green);border-color:rgba(119,229,189,.24);background:rgba(119,229,189,.04)}@media(max-width:430px){.trade-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:330px){.trade-actions{grid-template-columns:1fr}}
