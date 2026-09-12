@@ -7,16 +7,18 @@ from fastapi import APIRouter, Header
 
 from . import db
 from .miniapp_api import _auth_user, _entitlements
-from .miniapp_signals import CUSTOMER_INACTIVE_STATUSES
+from .miniapp_signals import CUSTOMER_INACTIVE_STATUSES, _mt5_admin_is_live
 
 router = APIRouter(prefix="/miniapp/api", tags=["NEXUS Mini App VIP Preview"])
 
 
-def _preview_status(value: Any) -> str:
-    status = str(value or "").strip().upper()
+def _preview_status(row: dict[str, Any]) -> str:
+    status = str(row.get("status") or "").strip().upper()
     if status == "CLOSED":
         return "CLOSED"
     if "WAIT" in status or "PENDING" in status:
+        return "WAITING"
+    if str(row.get("issuer_type") or "").upper() == "MT5_ADMIN" and not _mt5_admin_is_live(row):
         return "WAITING"
     return "ACTIVE"
 
@@ -30,7 +32,7 @@ def build_vip_preview(*, has_vip: bool, limit: int = 5, now: datetime | None = N
     with db.conn() as con:
         rows = [dict(row) for row in con.execute(
             f"""
-            SELECT symbol,status,created_at,closed_at
+            SELECT id,code,symbol,status,created_at,closed_at,issuer_type,issuer_account
             FROM signals
             WHERE UPPER(COALESCE(destination,'FREE'))='VIP'
               AND created_at>=?
@@ -41,7 +43,7 @@ def build_vip_preview(*, has_vip: bool, limit: int = 5, now: datetime | None = N
             (start, cycle, cycle, *inactive),
         ).fetchall()]
 
-    classified = [_preview_status(row.get("status")) for row in rows]
+    classified = [_preview_status(row) for row in rows]
     summary = {
         "total": len(rows),
         "closed": sum(1 for value in classified if value == "CLOSED"),
@@ -55,7 +57,7 @@ def build_vip_preview(*, has_vip: bool, limit: int = 5, now: datetime | None = N
         "items": [] if has_vip else [
             {
                 "symbol": str(row.get("symbol") or "—"),
-                "status": _preview_status(row.get("status")),
+                "status": _preview_status(row),
                 "locked": True,
             }
             for row in rows[:max(1, min(int(limit), 10))]
