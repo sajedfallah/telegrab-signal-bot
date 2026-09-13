@@ -41,8 +41,8 @@
     const wrapper = document.createElement('div');
     wrapper.innerHTML = card(data);
     const node = wrapper.firstElementChild;
-    const performance = host.querySelector('.home-v2-performance');
-    if (performance) host.insertBefore(node, performance);
+    const conversion = host.querySelector('.home-v066-vip');
+    if (conversion) host.insertBefore(node, conversion);
     else host.appendChild(node);
     node.querySelector('[data-vip-preview-cta]')?.addEventListener('click', () => {
       window.NexusProduct?.track?.('vip_preview_cta', { source: 'home' });

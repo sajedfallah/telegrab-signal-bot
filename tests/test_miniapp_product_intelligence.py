@@ -83,7 +83,7 @@ def test_frontend_has_polish_intelligence_features_and_no_css_only_access_gate()
     product = _text("miniapp/product-intelligence.js")
     css = _text("miniapp/polish-v3.css")
 
-    assert "ورود به نکسوس" in home and "normalizedOrder" in home
+    assert "با شفافیت بیشتری معامله کن" in home and "normalizedOrder" in home
     assert "Win Rate" in home and ".slice(0, 3)" in home
     assert "وضعیت" in signals and "نوع دسترسی" in signals and "عملکرد NEXUS" in signals
     assert "CANCELLED" in signals and "EXPIRED" in signals and "PARTIAL" in signals

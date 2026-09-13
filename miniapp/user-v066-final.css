@@ -1,0 +1,136 @@
+/* NEXUS V066 user surface: selected Carbon / Cobalt / Cyan / Amber tokens.
+   Scoped to the user app shell; no Admin, landing or runtime data overrides. */
+.app-shell {
+  --nx-bg: #080c12;
+  --nx-surface-1: #101722;
+  --nx-surface-2: #151f2c;
+  --nx-border: rgba(80, 118, 172, .24);
+  --nx-cyan: #22d3ee;
+  --nx-cobalt: #2563eb;
+  --nx-amber: #fbbf24;
+  --nx-text: #f5f8fc;
+  --nx-muted: #94a3b8;
+  --bg: var(--nx-bg);
+  --panel: var(--nx-surface-1);
+  --panel2: var(--nx-surface-2);
+  --line: var(--nx-border);
+  --text: var(--nx-text);
+  --muted: var(--nx-muted);
+  --accent: var(--nx-cyan);
+  --nexus-border-outer: rgba(80, 118, 172, .24);
+  --nexus-border-inner: rgba(80, 118, 172, .20);
+  background: radial-gradient(circle at 85% 0%, rgba(37, 99, 235, .10), transparent 34%), var(--nx-bg);
+  color: var(--nx-text);
+  font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+}
+
+.app-shell .topbar {
+  background: linear-gradient(180deg, rgba(8, 12, 18, .98), rgba(8, 12, 18, .82));
+  border-bottom-color: var(--nx-border);
+}
+.app-shell .bottom-nav {
+  background: rgba(8, 12, 18, .96);
+  border-top-color: var(--nx-border);
+  box-shadow: 0 -12px 30px rgba(0, 0, 0, .24);
+}
+.app-shell .nav-item.active { color: var(--nx-amber); }
+.app-shell .eyebrow { color: var(--nx-cyan); }
+.app-shell .btn.primary,
+.app-shell .tab.active {
+  background: linear-gradient(135deg, var(--nx-amber), #f59e0b);
+  color: #1a1205;
+  box-shadow: 0 8px 22px rgba(245, 158, 11, .16);
+}
+.app-shell .btn.ghost,
+.app-shell .tab:not(.active) { border-color: var(--nx-border); }
+
+/* Home: one narrative instead of a stack of operational dashboards. */
+.app-shell .home-v2 { gap: 18px; }
+.app-shell .home-v2-spotlight {
+  padding: 26px 22px;
+  border: 1px solid rgba(59, 130, 246, .34);
+  border-radius: 26px;
+  background: radial-gradient(circle at 10% 0%, rgba(34, 211, 238, .09), transparent 45%),
+    linear-gradient(155deg, #151f2c, #0c131e);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, .25);
+}
+.app-shell .home-v2-spotlight h1 { max-width: 21ch; font-size: clamp(26px, 6vw, 36px); line-height: 1.5; }
+.app-shell .home-v2-spotlight p { max-width: 48ch; color: #bdc9d9; line-height: 1.9; }
+.app-shell .home-v2-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.app-shell .home-v2-section {
+  margin-top: 0;
+  border: 1px solid var(--nx-border);
+  border-radius: 20px;
+  background: linear-gradient(155deg, var(--nx-surface-2), var(--nx-surface-1));
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .14);
+}
+/* The inherited v3/v4 surface rules use !important; limit the correction
+   to the composed Home rather than weakening legacy cards globally. */
+.app-shell .home-v2 > .hero,
+.app-shell .home-v2 > .home-v2-section {
+  border-width: 1px !important;
+  border-color: var(--nx-border) !important;
+}
+.app-shell .home-v2-section .section-head h2 { font-size: 15px; }
+.app-shell .home-v2-performance { border-color: rgba(37, 99, 235, .42); }
+.app-shell .home-v2-performance .metric-primary b { color: var(--nx-cyan); }
+.app-shell .home-stat-grid > div,
+.app-shell .home-signal-card { border-color: var(--nx-border); background: rgba(255, 255, 255, .018); }
+.app-shell .home-v2-recent .home-signal-list { gap: 8px; }
+.app-shell .home-v066-vip { border-color: rgba(245, 158, 11, .38); }
+.app-shell .home-v066-vip-body h3 { font-size: 17px; margin: 12px 0 5px; }
+.app-shell .home-v066-vip-body p { color: var(--nx-muted); line-height: 1.8; margin: 0 0 16px; }
+.app-shell .home-vip-preview { border-color: rgba(245, 158, 11, .28); }
+.app-shell .home-v2-community { padding-block: 14px; }
+.app-shell .home-v066-autotrade { padding-block: 14px; background: #0e151f; }
+.app-shell .home-v066-auto-body { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.app-shell .home-v066-auto-body b { font-size: 12px; }
+.app-shell .home-v066-auto-body p { margin: 5px 0 0; color: var(--nx-muted); font-size: 10px; line-height: 1.7; }
+.app-shell .home-v066-auto-body .text-btn { flex: 0 0 auto; font-size: 10px; }
+
+/* Signals and Performance retain their state semantics and data layout. */
+.app-shell .signal-v2-card {
+  background: linear-gradient(155deg, #151f2c, #101722) !important;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .20);
+}
+.app-shell .signal-v2-card:not(.pnl-profit):not(.pnl-loss):not(.pnl-be) {
+  border-color: rgba(59, 130, 246, .40) !important;
+}
+.app-shell .signal-v2-core > div,
+.app-shell .signal-v2-targets > span,
+.app-shell .signal-live-grid > div,
+.app-shell .track-stat-grid > div,
+.app-shell .track-risk-grid > div,
+.app-shell .track-trade-row { border-color: var(--nx-border); }
+.app-shell [data-open-track-record] { border-color: rgba(245, 158, 11, .52); font-weight: 800; }
+.app-shell .track-summary,
+.app-shell .track-section,
+.app-shell .track-integrity { border-color: var(--nx-border); }
+
+/* Plans and Account share the same quiet surface language. */
+.app-shell .price-v2-card,
+.app-shell .price-v2-comparison,
+.app-shell .account-v2-service,
+.app-shell .profile-card,
+.app-shell .menu-card {
+  border-color: var(--nx-border);
+  background: linear-gradient(155deg, var(--nx-surface-2), var(--nx-surface-1));
+}
+.app-shell .price-v2-card,
+.app-shell .price-v2-comparison,
+.app-shell .account-v2-service,
+.app-shell .profile-card {
+  border-width: 1px !important;
+  border-color: var(--nx-border) !important;
+}
+.app-shell .vip-badge,
+.app-shell .pricing-kicker { color: var(--nx-amber); }
+
+@media (max-width: 390px) {
+  .app-shell .home-v2-actions { grid-template-columns: 1fr; }
+  .app-shell .home-v066-auto-body { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .home-v2-spotlight,
+  .app-shell .signal-v2-card { animation: none; transition: none; }
+}

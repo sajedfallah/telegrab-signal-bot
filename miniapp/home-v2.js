@@ -49,7 +49,6 @@
   }
 
   function spotlight(data) {
-    const item = data || { kind: 'WELCOME', title_fa: 'به NEXUS خوش آمدید', subtitle_fa: 'مرکز روزانه سیگنال، عملکرد و AutoTrade.' };
     return `<section class="hero home-v2-spotlight nexus-animated-hero">
       <div class="nexus-motion-orb orb-a" aria-hidden="true"></div>
       <div class="nexus-motion-orb orb-b" aria-hidden="true"></div>
@@ -57,12 +56,12 @@
         <img class="home-brand-logo" src="./assets/brand/nexus-logo.svg" alt="NEXUS" loading="eager" decoding="async" />
         <div><span class="eyebrow">NEXUS</span><b>Trading Intelligence</b></div>
       </div>
-      <div class="eyebrow">${h(item.kind || 'NEXUS')}</div>
-      <h1>${h(item.title_fa || '')}</h1>
-      <p>${h(item.subtitle_fa || '')}</p>
+      <div class="eyebrow">SIGNALS · PERFORMANCE · TRUST</div>
+      <h1>با شفافیت بیشتری معامله کن</h1>
+      <p>سیگنال‌های ساختاریافته و عملکرد ثبت‌شدهٔ NEXUS را ببین؛ سپس آگاهانه سطح دسترسی مناسب خودت را انتخاب کن.</p>
       <div class="hero-actions home-v2-actions">
-        <button class="btn primary nexus-enter-btn" data-enter-nexus>${icon('arrowUpRight')}<span>ورود به نکسوس</span></button>
-        ${item.cta_fa ? `<button class="btn ghost" data-home-go="${h(item.destination || '')}">${h(item.cta_fa)}</button>` : ''}
+        <button class="btn primary" data-home-go="performance">مشاهده عملکرد ${icon('arrowLeft')}</button>
+        <button class="btn ghost" data-home-go="signals">دیدن سیگنال‌ها</button>
       </div>
     </section>`;
   }
@@ -123,7 +122,7 @@
   function recentSignals(rows) {
     const items = (rows || []).slice(0, 3);
     if (!items.length) {
-      return section('سیگنال‌های اخیر', `<div class="empty-state nexus-empty-state">${icon('signals')}<b>سیگنالی برای نمایش وجود ندارد</b><span>فقط سیگنال‌های معتبر و قابل نمایش در این بخش نشان داده می‌شوند.</span></div>`);
+      return section('سیگنال‌های اخیر', `<div class="empty-state nexus-empty-state">${icon('signals')}<b>سیگنالی برای نمایش وجود ندارد</b><span>فقط سیگنال‌های معتبر و قابل نمایش در این بخش نشان داده می‌شوند.</span></div>`, 'home-v2-recent');
     }
     return section('سیگنال‌های اخیر', `<div class="home-signal-list">${items.map(item => `
       <article class="home-signal-card compact ${item.locked ? 'locked' : ''}" data-home-signal="${h(item.id)}">
@@ -134,7 +133,7 @@
         </div>
         ${resultBadge(item)}
       </article>`).join('')}</div>
-      <button class="text-btn home-section-cta" data-home-go="signals">مشاهده همه سیگنال‌ها ${icon('arrowLeft')}</button>`);
+      <button class="text-btn home-section-cta" data-home-go="signals">مشاهده همه سیگنال‌ها ${icon('arrowLeft')}</button>`, 'home-v2-recent');
   }
 
   function offer(data) {
@@ -160,7 +159,23 @@
   }
 
   function community() {
-    return section('NEXUS Community', `<div class="info-strip"><div><span class="nexus-card-icon small">${icon('community')}</span><b>کانال عمومی و جامعه NEXUS</b></div><button class="text-btn" data-enter-nexus>ورود</button></div>`);
+    return section('جامعه NEXUS', `<div class="info-strip"><div><span class="nexus-card-icon small">${icon('community')}</span><b>تحلیل‌ها و خبرهای کانال عمومی</b></div><button class="text-btn" data-enter-nexus>ورود به کانال</button></div>`, 'home-v2-community');
+  }
+
+  function vipConversion(payload) {
+    const hasVip = Boolean(payload.subscription?.vip);
+    const title = hasVip ? 'دسترسی VIP شما فعال است' : 'گام بعدی: NEXUS VIP';
+    const detail = hasVip
+      ? 'سیگنال‌های ویژه و وضعیت آن‌ها را در Signal Center دنبال کنید.'
+      : 'پس از بررسی نتایج و سیگنال‌های رایگان، امکانات VIP را با نیاز معاملاتی خود مقایسه کنید.';
+    const route = hasVip ? 'signals' : 'subscriptions';
+    const action = hasVip ? 'ورود به Signal Center' : 'مشاهده پلن‌های VIP';
+    return section('NEXUS VIP', `<div class="home-v066-vip-body"><span class="badge vip-badge">${hasVip ? 'ACTIVE' : 'PREMIUM'}</span><h3>${h(title)}</h3><p>${h(detail)}</p><button class="btn primary full" data-home-go="${route}">${action}</button></div>`, 'home-v066-vip');
+  }
+
+  function autotradeTeaser(payload) {
+    const entitled = Boolean(payload.subscription?.autotrade);
+    return section('AutoTrade', `<div class="home-v066-auto-body"><div><b>${entitled ? 'مدیریت معاملات خودکار' : 'وقتی برای اجرای خودکار آماده بودید'}</b><p>${entitled ? 'وضعیت حساب و معاملات را در بخش اختصاصی ببینید.' : 'AutoTrade یک امکان اختیاری در مرحلهٔ بعد از انتخاب سیگنال است.'}</p></div><button class="text-btn" data-home-go="${entitled ? 'trades' : 'subscriptions'}">${entitled ? 'معاملات من' : 'آشنایی با پلن‌ها'}</button></div>`, 'home-v066-autotrade');
   }
 
   function autotradeHealth(data) {
@@ -211,14 +226,17 @@
       subscription: () => subscription(payload.subscription),
       market_insight: () => contentCard('تحلیل امروز', payload.market_insight, 'chart'),
       academy: () => contentCard('آکادمی NEXUS', payload.academy, 'book'),
+      vip_conversion: () => vipConversion(payload),
+      autotrade_teaser: () => autotradeTeaser(payload),
     };
     return map[key]?.() || '';
   }
 
   function normalizedOrder(payload) {
-    const order = Array.isArray(payload.section_order) ? [...payload.section_order] : [];
-    const filtered = order.filter((key, index) => key !== 'spotlight' && order.indexOf(key) === index);
-    return ['spotlight', ...filtered];
+    // This is presentation only: keep the API payload intact and move account,
+    // MT5 and subscription operations to their dedicated screens.
+    return ['spotlight', 'performance', 'recent_signals', 'vip_conversion',
+      'community', 'autotrade_teaser'];
   }
 
   async function switchPerformance(period) {
