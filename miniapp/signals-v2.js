@@ -1,5 +1,4 @@
 (() => {
-  const tgWebApp = window.Telegram?.WebApp;
   const signalState = { state: 'ACTIVE', access: 'ALL', offset: 0, limit: 20, loading: false };
 
   function h(value) {
@@ -178,6 +177,7 @@
       if (more) more.hidden = items.length < signalState.limit;
       bindSignalCards();
     } catch (err) {
+      console.error('[NEXUS][SIGNALS] hydrate failed', err);
       if (!silent && feed) {
         feed.classList.remove('is-loading');
         feed.innerHTML = `<div class="empty-state">دریافت سیگنال‌ها با مشکل مواجه شد.<br><button class="btn ghost" id="retrySignals">تلاش مجدد</button></div>`;
@@ -270,7 +270,13 @@
   }
 
   function hydrateNexusSignals() {
-    if (state.route !== 'signals' || !tgWebApp?.initData) return;
+    if (state.route !== 'signals') return;
+    if (!window.Telegram?.WebApp?.initData) {
+      console.warn('[NEXUS][SIGNALS] missing Telegram initData');
+      renderAuthUnavailable();
+      return;
+    }
+    if (!state.bootstrap) return;
     signalState.offset = 0;
     view.innerHTML = shell();
     document.querySelectorAll('[data-signal-state]').forEach(btn => btn.addEventListener('click', () => selectState(btn.dataset.signalState)));
@@ -284,11 +290,6 @@
   }
 
   window.hydrateNexusSignals = hydrateNexusSignals;
-  document.addEventListener('click', event => {
-    const target = event.target.closest?.('[data-route="signals"],[data-go="signals"],[data-home-go="signals"]');
-    if (!target) return;
-    window.setTimeout(hydrateNexusSignals, 0);
-  }, true);
   window.setInterval(() => {
     if (document.visibilityState !== 'visible' || state.route !== 'signals' || signalState.state !== 'ACTIVE' || signalState.offset !== 0) return;
     loadSignals({ silent: true });

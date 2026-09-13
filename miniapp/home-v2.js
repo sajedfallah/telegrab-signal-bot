@@ -1,5 +1,4 @@
 (() => {
-  const tgWebApp = window.Telegram?.WebApp;
   const DEFAULT_NEXUS_ENTRY_URL = 'https://t.me/nexus_publicc';
   let homeRequest = 0;
 
@@ -258,7 +257,13 @@
   }
 
   async function hydrateNexusHome() {
-    if (state.route !== 'home' || !tgWebApp?.initData) return;
+    if (state.route !== 'home') return;
+    if (!window.Telegram?.WebApp?.initData) {
+      console.warn('[NEXUS][HOME] missing Telegram initData');
+      renderAuthUnavailable();
+      return;
+    }
+    if (!state.bootstrap) return;
     const requestId = ++homeRequest;
     const skeleton = window.NexusProduct?.skeleton?.('home', 5) || '<div class="empty-state">در حال دریافت داشبورد NEXUS...</div>';
     view.innerHTML = `<div class="home-v2-loading">${skeleton}</div>`;
