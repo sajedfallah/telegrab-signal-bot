@@ -93,7 +93,10 @@
   }
 
   function licenseSection(title, rows, historical = false) {
-    const unique = [...new Map((rows || []).map(row => [String(row.id), row])).values()];
+    const valid = (rows || []).filter(row => historical
+      ? String(row.display_status || row.status || '').toUpperCase() !== 'ACTIVE'
+      : String(row.display_status || row.status || '').toUpperCase() === 'ACTIVE');
+    const unique = [...new Map(valid.map(row => [String(row.id), row])).values()];
     return `<section class="account-v2-license-section"><div class="section-head"><h2>${h(title)}</h2><span>${unique.length}</span></div>
       ${unique.length ? `<div class="account-v2-license-list">${unique.map(row => {
         const status = String(row.display_status || row.status || '').toUpperCase();
@@ -199,7 +202,8 @@
     view.innerHTML = window.NexusProduct?.skeleton?.('account', 4) || '<div class="empty-state">در حال دریافت وضعیت حساب...</div>';
     try {
       if (!state.bootstrap) state.bootstrap = await api('/bootstrap');
-      const data = await api('/account/status');
+      const data = await api('/account/status', {cache: 'no-store'});
+      if (state.route !== 'account') return;
       view.innerHTML = `${profile()}
         <section class="page-head account-v2-head"><div><div class="eyebrow">STATUS CENTER</div><h1>حساب من</h1></div></section>
         <div class="account-v2-services">${vipCard(data.vip)}${autotradeCard(data.autotrade)}</div>
@@ -211,8 +215,10 @@
       window.NexusProduct?.fixBidiSurfaces?.(view);
       window.NexusProduct?.track?.('account_view', { vip_state: data.vip?.state, autotrade_state: data.autotrade?.setup_state });
     } catch (err) {
-      view.innerHTML = `<div class="empty-state">دریافت وضعیت حساب با مشکل مواجه شد.<br><button class="btn ghost" id="retryAccountV2">تلاش مجدد</button></div>`;
-      document.getElementById('retryAccountV2')?.addEventListener('click', hydrateAccountV2);
+      if (state.route === 'account') {
+        view.innerHTML = `<div class="empty-state">دریافت وضعیت حساب با مشکل مواجه شد.<br><button class="btn ghost" id="retryAccountV2">تلاش مجدد</button></div>`;
+        document.getElementById('retryAccountV2')?.addEventListener('click', hydrateAccountV2);
+      }
     } finally {
       accountLoading = false;
     }

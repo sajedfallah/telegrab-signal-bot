@@ -1,8 +1,24 @@
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from urllib.parse import urlsplit, urlunsplit
 from .config import settings
 from . import db
+
+
+ADMIN_MINIAPP_VERSION = "20260914-v14-final"
+
+
+def admin_miniapp_url() -> str | None:
+    """Keep the configured HTTPS origin, but use one cache-busted Admin entry."""
+    configured = settings.miniapp_admin_url
+    if not configured:
+        return None
+    parts = urlsplit(configured)
+    if parts.scheme != "https" or not parts.netloc:
+        return None
+    return urlunsplit((parts.scheme, parts.netloc, "/miniapp/admin.html",
+                       f"v={ADMIN_MINIAPP_VERSION}", ""))
 
 
 def kb(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
@@ -53,10 +69,11 @@ def main_menu(lang: str, is_admin: bool = False) -> InlineKeyboardMarkup:
         if is_admin:
             rows.append([("🛠 Admin Panel", "admin")])
     markup = kb(rows)
-    if is_admin and settings.miniapp_admin_url:
+    admin_url = admin_miniapp_url() if is_admin else None
+    if admin_url:
         label = "⚡ مرکز صدور سیگنال" if lang == "fa" else "⚡ Signal Center"
         markup.inline_keyboard.append([
-            InlineKeyboardButton(text=label, web_app=WebAppInfo(url=settings.miniapp_admin_url))
+            InlineKeyboardButton(text=label, web_app=WebAppInfo(url=admin_url))
         ])
     return markup
 
@@ -336,7 +353,14 @@ def admin_menu(lang: str) -> InlineKeyboardMarkup:
             [("⚙️ System Settings", "admin_group_system")],
             [("🌐 Change Language", "change_language"), ("🏠 Main Menu", "main")],
         ]
-    return kb(rows)
+    markup = kb(rows)
+    admin_url = admin_miniapp_url()
+    if admin_url:
+        markup.inline_keyboard.insert(0, [InlineKeyboardButton(
+            text="⚡ مرکز صدور سیگنال" if lang == "fa" else "⚡ Signal Center Mini App",
+            web_app=WebAppInfo(url=admin_url),
+        )])
+    return markup
 
 
 def admin_users_group(lang: str) -> InlineKeyboardMarkup:

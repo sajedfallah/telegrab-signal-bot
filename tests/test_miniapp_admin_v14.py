@@ -4,6 +4,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 from app import db
+from app import ui
+from app.config import settings
 from app.miniapp_admin_api import CreateSignalRequest
 from tests.test_miniapp_admin_signal_center import client, headers, payload
 
@@ -85,3 +87,32 @@ def test_symbol_visuals_are_shared_and_broker_symbol_is_not_rewritten():
     assert "window.NexusSymbolVisuals" in user and "window.NexusSymbolVisuals" in admin
     assert "BTC:" in visuals and "XAU:" in visuals and "US30:" in visuals
     assert "normalize_symbol" not in visuals
+
+
+def test_all_bot_admin_webapp_entries_use_one_versioned_url():
+    original = settings.miniapp_admin_url
+    object.__setattr__(settings, "miniapp_admin_url", "https://nexus.example/old-admin.html?stale=1")
+    try:
+        expected = "https://nexus.example/miniapp/admin.html?v=20260914-v14-final"
+        for markup in (ui.main_menu("fa", is_admin=True), ui.admin_menu("fa"), ui.admin_menu("en")):
+            urls = [button.web_app.url for row in markup.inline_keyboard for button in row if button.web_app]
+            assert urls == [expected]
+    finally:
+        object.__setattr__(settings, "miniapp_admin_url", original)
+
+
+def test_admin_and_account_assets_are_cache_busted():
+    root = Path(__file__).resolve().parents[1] / "miniapp"
+    admin = (root / "admin.html").read_text(encoding="utf-8")
+    user = (root / "index.html").read_text(encoding="utf-8")
+    for asset in ("admin-light-v14.css", "admin-signal-v13.js", "symbol-visuals.js"):
+        assert f"{asset}?v=20260914-v14-final" in admin
+    for asset in ("account-v2.js", "purchase-flow-v4.js", "landing-v5.css", "signals-v2.js"):
+        assert f"{asset}?v=20260914-v14-final" in user
+
+
+def test_landing_enter_motion_is_visible_without_hover_and_respects_reduced_motion():
+    css = (Path(__file__).resolve().parents[1] / "miniapp" / "landing-v5.css").read_text(encoding="utf-8")
+    assert ".nexus-landing:not(.landing-fallback) .nexus-landing-enter::after" in css
+    assert "animation: nexus-enter-light" in css
+    assert ".nexus-landing-enter::after { animation: none !important; }" in css

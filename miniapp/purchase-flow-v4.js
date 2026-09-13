@@ -246,10 +246,13 @@
     if (view.querySelector('[data-purchase-v4-enhanced]')) return;
     try {
       const ctx = await api('/purchase/status');
-      if (state.route !== 'account') return;
+      if (state.route !== 'account' || !view.querySelector('.account-v2-services') || view.querySelector('[data-purchase-v4-enhanced]')) return;
       const marker = document.createElement('div');
       marker.dataset.purchaseV4Enhanced = '1';
-      marker.innerHTML = `${ctx.license ? licenseCard(ctx.license) : ''}${ctx.payment && ['pending','rejected'].includes(ctx.payment.status) ? `<button class="menu-card" data-current-purchase><span>${icon('wallet')}</span><div><b>وضعیت خرید</b><small>${h(statusFa(ctx.payment.status))}</small></div></button>` : ''}${ctx.is_admin ? `<button class="menu-card" data-admin-purchases><span>${icon('shield')}</span><div><b>بررسی رسیدهای پرداخت</b><small>پنل مدیریت Mini App</small></div></button>` : ''}`;
+      // Account licenses have one source of truth: /account/status in account-v2.js.
+      // The purchase status license is only shown inside the purchase modal.
+      marker.innerHTML = `${ctx.payment && ['pending','rejected'].includes(ctx.payment.status) ? `<button class="menu-card" data-current-purchase><span>${icon('wallet')}</span><div><b>وضعیت خرید</b><small>${h(statusFa(ctx.payment.status))}</small></div></button>` : ''}${ctx.is_admin ? `<button class="menu-card" data-admin-purchases><span>${icon('shield')}</span><div><b>بررسی رسیدهای پرداخت</b><small>پنل مدیریت Mini App</small></div></button>` : ''}`;
+      if (!marker.innerHTML) return;
       view.appendChild(marker);
       marker.querySelector('[data-current-purchase]')?.addEventListener('click', () => openPurchaseStatus(ctx.payment.id));
       marker.querySelector('[data-admin-purchases]')?.addEventListener('click', openAdminPayments);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import math
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Any
@@ -436,6 +437,35 @@ def closed_calendar(
             "AND COALESCE(cycle_id,?)=? ORDER BY closed_at ASC,id ASC",
             (start.astimezone(timezone.utc).isoformat(), end.astimezone(timezone.utc).isoformat(), *access_args, cycle, cycle),
         ).fetchall()
+        # Execution receipts are account-owned. Never mix another customer's
+        # realized PnL into this user's calendar or double-count a signal result.
+        close_profit: dict[int, float] = {}
+        if rows:
+            placeholders = ",".join("?" for _ in rows)
+            receipts = con.execute(
+                f"SELECT signal_id,profit FROM autotrade_trade_executions "
+                f"WHERE telegram_id=? AND UPPER(event_type)='CLOSE' "
+                f"AND signal_id IN ({placeholders}) AND profit IS NOT NULL",
+                (uid, *(int(row["id"]) for row in rows)),
+            ).fetchall()
+            for receipt in receipts:
+                profit = float(receipt["profit"])
+                if math.isfinite(profit):
+                    signal_id = int(receipt["signal_id"])
+                    close_profit[signal_id] = close_profit.get(signal_id, 0.0) + profit
+    def realized(item: Any) -> float | None:
+        signal_id = int(item["id"])
+        if signal_id in close_profit:
+            return round(close_profit[signal_id], 2)
+        if str(item["result_unit"] or "").upper() not in {"USD", "$", "MONEY", "ACCOUNT_CURRENCY"}:
+            return None
+        try:
+            value = float(item["result_value"])
+        except (TypeError, ValueError):
+            return None
+        return round(value, 2) if math.isfinite(value) else None
+    def visible(item: Any) -> bool:
+        return has_vip or PUBLIC_CLOSED_VIP_DETAILS or _access_class(dict(item)) != "VIP"
     groups: dict[str, list[Any]] = {}
     for row in rows:
         closed = datetime.fromisoformat(str(row["closed_at"]).replace("Z", "+00:00"))
@@ -444,21 +474,19 @@ def closed_calendar(
         groups.setdefault(closed.astimezone(ZoneInfo("Asia/Tehran")).date().isoformat(), []).append(row)
     days = []
     for date, items in groups.items():
-        visible_money = all(
-            str(item["result_unit"] or "").upper() in {"USD", "$", "MONEY", "ACCOUNT_CURRENCY"}
-            and item["result_value"] is not None
-            and (has_vip or PUBLIC_CLOSED_VIP_DETAILS or _access_class(dict(item)) != "VIP")
-            for item in items
-        )
+        values = [value for item in items if visible(item) if (value := realized(item)) is not None]
         days.append({"day": date, "count": len(items),
-                     "net_pnl": round(sum(float(item["result_value"]) for item in items), 2) if visible_money else None,
-                     "currency": "USD" if visible_money else None})
+                     "net_pnl": round(sum(values), 2) if values else None,
+                     "currency": "USD" if values else None})
     selected = groups.get(day, []) if day else []
     rendered = []
     for item in selected:
         safe = serialize_signal(item, has_vip=has_vip)
-        if _access_class(dict(item)) == "VIP" and not has_vip and not PUBLIC_CLOSED_VIP_DETAILS:
-            safe.update({"result_value": None, "result_unit": None, "locked": True})
+        value = realized(item) if visible(item) else None
+        safe["realized_pnl"] = value
+        if not visible(item):
+            safe.update({"result": None, "result_value": None, "result_unit": None,
+                         "result_label_fa": None, "locked": True})
         rendered.append(safe)
     return {"month": month, "day": day, "timezone": "Asia/Tehran", "days": days, "items": rendered}
 

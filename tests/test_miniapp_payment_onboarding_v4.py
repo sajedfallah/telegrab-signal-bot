@@ -76,7 +76,7 @@ def test_shell_loads_locale_purchase_ui_and_new_logo_with_fresh_cache_key():
     assert "./assets/brand/nexus-mark.svg?v=20260910-1215" in html
     assert "./locale-v4.js?v=20260910-1215" in html
     assert "./ui-v4.css?v=20260910-1215" in html
-    assert "./purchase-flow-v4.js?v=20260910-1215" in html
+    assert "./purchase-flow-v4.js?v=20260914-v14-final" in html
     assert "./compat-v4.js?v=20260910-1215" in html
 
 
