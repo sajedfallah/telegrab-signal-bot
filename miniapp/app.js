@@ -1,4 +1,5 @@
-const tg = window.Telegram?.WebApp;
+const telegramWebApp = () => window.Telegram?.WebApp;
+const tg = telegramWebApp();
 if (tg) {
   tg.ready();
   tg.expand();
@@ -7,6 +8,7 @@ if (tg) {
 
 const API = '/miniapp/api';
 const state = { bootstrap: null, route: 'home', planCategory: 'vip' };
+let bootstrapUnavailable = false;
 const routes = {
   home: 'homeTpl', signals: 'signalsTpl', subscriptions: 'subscriptionsTpl',
   account: 'accountTpl', guide: 'guideTpl', support: 'supportTpl',
@@ -14,7 +16,7 @@ const routes = {
 const view = document.getElementById('view');
 
 function authHeaders(extra = {}) {
-  const initData = tg?.initData || '';
+  const initData = telegramWebApp()?.initData || '';
   return { ...extra, ...(initData ? { 'X-Telegram-Init-Data': initData } : {}) };
 }
 
@@ -27,18 +29,34 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function bootstrap() {
-  if (!tg?.initData) {
-    toast('برای دریافت اطلاعات حساب، Mini App را از داخل Telegram باز کنید.');
+async function bootstrap(allowDeferred = true) {
+  const webApp = telegramWebApp();
+  webApp?.ready?.();
+  if (!webApp?.initData) {
+    if (allowDeferred) {
+      window.setTimeout(() => bootstrap(false), 250);
+      return;
+    }
+    bootstrapUnavailable = true;
+    console.warn('[NEXUS][BOOTSTRAP] missing Telegram initData');
+    renderAuthUnavailable();
     return;
   }
+  bootstrapUnavailable = false;
   try {
     state.bootstrap = await api('/bootstrap');
     hydrateCurrentView();
   } catch (err) {
-    console.error(err);
-    toast(`اتصال به حساب NEXUS ناموفق بود: ${err.message}`);
+    bootstrapUnavailable = true;
+    console.error('[NEXUS][BOOTSTRAP] failed', err);
+    renderAuthUnavailable();
   }
+}
+
+function renderAuthUnavailable() {
+  if (!['home', 'signals'].includes(state.route)) return;
+  view.innerHTML = '<div class="empty-state nexus-auth-error">دریافت اطلاعات NEXUS با مشکل مواجه شد. لطفاً Mini App را از داخل Telegram باز کنید یا دوباره تلاش کنید.<br><button class="btn ghost" id="retryNexusBootstrap" type="button">تلاش مجدد</button></div>';
+  document.getElementById('retryNexusBootstrap')?.addEventListener('click', bootstrap);
 }
 
 function render(route = 'home') {
@@ -58,15 +76,22 @@ function bindActions() {
 
 function hydrateCurrentView() {
   hydrateTelegramUser();
-  if (!state.bootstrap) return;
-  if (state.route === 'signals') hydrateSignals();
+  if (!state.bootstrap) {
+    if (bootstrapUnavailable) renderAuthUnavailable();
+    return;
+  }
+  if (state.route === 'home') window.hydrateNexusHome?.();
+  if (state.route === 'signals') {
+    if (window.hydrateNexusSignals) window.hydrateNexusSignals();
+    else hydrateSignals();
+  }
   if (state.route === 'subscriptions') hydrateSubscriptions();
   if (state.route === 'account') hydrateAccount();
   if (state.route === 'guide') hydrateGuide();
 }
 
 function hydrateTelegramUser() {
-  const user = state.bootstrap?.user || tg?.initDataUnsafe?.user;
+  const user = state.bootstrap?.user || telegramWebApp()?.initDataUnsafe?.user;
   if (!user) return;
   const name = [user.first_name, user.last_name].filter(Boolean).join(' ');
   const nameEl = document.getElementById('userName');
@@ -291,14 +316,14 @@ function showModal(title, html) { ensureModal(); const root = document.getElemen
 function closeModal() { const root = document.getElementById('modalRoot'); if (root) root.hidden = true; document.body.classList.remove('modal-open'); }
 function setModalBusy(busy) { document.querySelector('.modal-sheet')?.classList.toggle('busy', !!busy); }
 
-function openTelegramLink(url) { if (!url) return toast('لینک این بخش تنظیم نشده است.'); if (tg?.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); }
-function openExternal(url) { if (!url) return toast('لینک راهنما هنوز ثبت نشده است.'); if (tg?.openLink) tg.openLink(url); else window.open(url, '_blank', 'noopener'); }
+function openTelegramLink(url) { if (!url) return toast('لینک این بخش تنظیم نشده است.'); const webApp = telegramWebApp(); if (webApp?.openTelegramLink) webApp.openTelegramLink(url); else window.open(url, '_blank', 'noopener'); }
+function openExternal(url) { if (!url) return toast('لینک راهنما هنوز ثبت نشده است.'); const webApp = telegramWebApp(); if (webApp?.openLink) webApp.openLink(url); else window.open(url, '_blank', 'noopener'); }
 function readFile(file) { return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(file); }); }
 function copyText(text) { if (!text) return; navigator.clipboard?.writeText(text).then(() => toast('کپی شد.')).catch(() => toast(text)); }
 function shortDate(v) { if (!v) return '-'; try { return new Date(v).toLocaleDateString('fa-IR'); } catch (_) { return v; } }
 function formatDate(v) { if (!v) return '-'; try { return new Date(v).toLocaleString('fa-IR'); } catch (_) { return v; } }
 function escapeHtml(v) { return String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
-function toast(message) { if (tg?.showPopup) tg.showPopup({ title: 'NEXUS', message: String(message), buttons: [{ type: 'ok' }] }); else alert(message); }
+function toast(message) { const webApp = telegramWebApp(); if (webApp?.showPopup) webApp.showPopup({ title: 'NEXUS', message: String(message), buttons: [{ type: 'ok' }] }); else alert(message); }
 
 ensureModal();
 document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => render(btn.dataset.route)));
