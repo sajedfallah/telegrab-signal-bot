@@ -34,7 +34,7 @@
     const key = String(value || '').toUpperCase();
     if (key === 'ACTIVE') return 'success';
     if (key === 'EXPIRING') return 'warning';
-    if (key === 'EXPIRED') return 'danger';
+    if (['EXPIRED', 'CANCELLED', 'REVOKED'].includes(key)) return 'danger';
     return 'muted';
   }
 
@@ -54,7 +54,7 @@
     return `<article class="account-v2-service account-v2-vip">
       <div class="account-service-title"><div><span class="badge vip-badge">VIP</span><h2>دسترسی VIP</h2></div><span class="status-pill ${stateClass(data?.state)}">${h(stateLabel(data?.state))}</span></div>
       <div class="account-service-summary">
-        <span>${data?.expires_at ? `فعال تا <b>${h(dt(data.expires_at))}</b>` : 'اشتراک فعالی ثبت نشده است.'}</span>
+        <span>${data?.expires_at ? `${['ACTIVE','EXPIRING'].includes(stateName) ? 'معتبر تا' : 'تاریخ ثبت‌شدهٔ پایان'} <b>${h(dt(data.expires_at))}</b>` : 'اشتراک فعالی ثبت نشده است.'}</span>
         ${remaining != null ? `<strong>${h(remaining)} روز باقی‌مانده</strong>` : ''}
       </div>
       <button class="btn ${stateName === 'ACTIVE' ? 'ghost' : 'primary'} full" data-account-action="${h(action)}">${h(cta)}</button>
@@ -82,6 +82,26 @@
       ${data?.last_seen_at ? `<div class="account-meta-line"><span>آخرین Sync</span><b>${h(dtFull(data.last_seen_at))}</b></div>` : ''}
       <button class="btn ${setup === 'CONNECTED' ? 'ghost' : 'primary'} full" data-account-action="${h(data?.cta_action || 'plans')}">${h(data?.cta_fa || 'مشاهده AutoTrade')}</button>
     </article>`;
+  }
+
+  function licenseDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('fa-IR-u-ca-persian', {
+      timeZone: 'Asia/Tehran', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    }).format(date);
+  }
+
+  function licenseSection(title, rows, historical = false) {
+    const unique = [...new Map((rows || []).map(row => [String(row.id), row])).values()];
+    return `<section class="account-v2-license-section"><div class="section-head"><h2>${h(title)}</h2><span>${unique.length}</span></div>
+      ${unique.length ? `<div class="account-v2-license-list">${unique.map(row => {
+        const status = String(row.display_status || row.status || '').toUpperCase();
+        const label = ({ACTIVE:'فعال',EXPIRED:'منقضی',CANCELLED:'لغوشده',REVOKED:'ابطال‌شده',SUPERSEDED:'جایگزین‌شده'})[status] || status;
+        return `<article class="account-v2-license ${historical ? 'historical' : 'current'}"><div><b>License #${h(row.id)}</b><span class="status-pill ${stateClass(status)}">${h(label)}</span></div>
+          <small>${row.vip_access ? 'VIP' : ''}${row.vip_access && row.autotrade_access ? ' · ' : ''}${row.autotrade_access ? 'AutoTrade' : ''}</small>
+          <p>${historical ? 'تاریخ ثبت‌شدهٔ پایان' : 'معتبر تا'}: <time datetime="${h(row.display_expires_at || '')}">${h(licenseDate(row.display_expires_at))}</time></p></article>`;
+      }).join('')}</div>` : '<div class="empty-state compact-empty">موردی ثبت نشده است.</div>'}</section>`;
   }
 
   function profile() {
@@ -171,8 +191,11 @@
     }));
   }
 
+  let accountLoading = false;
   async function hydrateAccountV2() {
     if (state.route !== 'account') return;
+    if (accountLoading) return;
+    accountLoading = true;
     view.innerHTML = window.NexusProduct?.skeleton?.('account', 4) || '<div class="empty-state">در حال دریافت وضعیت حساب...</div>';
     try {
       if (!state.bootstrap) state.bootstrap = await api('/bootstrap');
@@ -180,6 +203,8 @@
       view.innerHTML = `${profile()}
         <section class="page-head account-v2-head"><div><div class="eyebrow">STATUS CENTER</div><h1>حساب من</h1></div></section>
         <div class="account-v2-services">${vipCard(data.vip)}${autotradeCard(data.autotrade)}</div>
+        ${licenseSection('لایسنس‌های فعال', data.licenses?.active)}
+        ${licenseSection('تاریخچه لایسنس', data.licenses?.history, true)}
         ${utilityGrid(data)}
         <div class="note-card">دسترسی‌ها، تاریخ انقضا و وضعیت AutoTrade از backend خوانده می‌شوند. مقدار کامل License در این صفحه نمایش داده نمی‌شود.</div>`;
       bind();
@@ -188,6 +213,8 @@
     } catch (err) {
       view.innerHTML = `<div class="empty-state">دریافت وضعیت حساب با مشکل مواجه شد.<br><button class="btn ghost" id="retryAccountV2">تلاش مجدد</button></div>`;
       document.getElementById('retryAccountV2')?.addEventListener('click', hydrateAccountV2);
+    } finally {
+      accountLoading = false;
     }
   }
 

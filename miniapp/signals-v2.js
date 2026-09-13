@@ -1,5 +1,11 @@
 (() => {
-  const signalState = { state: 'ACTIVE', access: 'ALL', offset: 0, limit: 20, loading: false };
+  function todayTehran() {
+    const parts = new Intl.DateTimeFormat('en-US', {timeZone:'Asia/Tehran', year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+    const get = key => parts.find(part => part.type === key)?.value;
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  }
+  const signalState = { state: 'ACTIVE', access: 'ALL', offset: 0, limit: 20, loading: false,
+    month: todayTehran().slice(0, 7), day: todayTehran() };
 
   function h(value) {
     return String(value ?? '').replace(/[&<>'"]/g, c => ({
@@ -10,6 +16,7 @@
   function icon(name, className = 'nexus-inline-icon') {
     return window.NexusIcons?.svg?.(name, className) || '';
   }
+  function symbolMark(symbol) { return window.NexusSymbolVisuals?.mark?.(symbol) || ''; }
 
   function track(name, metadata = {}) {
     window.NexusProduct?.track?.(name, metadata);
@@ -123,7 +130,7 @@
         <span class="status-pill ${item.status === 'CLOSED' ? 'neutral' : 'success'}">${h(item.status || '')}</span>
       </div>
       <div class="signal-v2-title">
-        <div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div>
+        <div class="signal-symbol-heading">${symbolMark(item.symbol)}<div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div></div>
         <div class="signal-v2-side">${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}${resultChip(item)}</div>
       </div>
       ${details}
@@ -148,6 +155,48 @@
     }
     const label = signalState.state === 'CLOSED' ? 'سیگنال بسته‌شده‌ای در این فیلتر وجود ندارد' : 'سیگنال فعالی وجود ندارد';
     return `<div class="empty-state nexus-empty-state">${icon('signals')}<b>${h(label)}</b><span>در این فیلتر داده معتبر و قابل نمایش ثبت نشده است.</span></div>`;
+  }
+  function closedDt(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('fa-IR-u-ca-persian', {timeZone:'Asia/Tehran',year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(date);
+  }
+
+  function calendarMarkup(data) {
+    const [year, month] = data.month.split('-').map(Number);
+    const first = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 1) % 7;
+    const count = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const byDay = new Map((data.days || []).map(item => [Number(item.day.slice(-2)), item]));
+    const cells = Array.from({length: first}, () => '<span class="closed-calendar-pad"></span>');
+    for (let index = 1; index <= count; index++) {
+      const row = byDay.get(index), date = `${data.month}-${String(index).padStart(2, '0')}`;
+      const pnl = row?.net_pnl;
+      cells.push(`<button type="button" class="closed-calendar-day ${date === data.day ? 'selected' : ''}" data-closed-day="${date}"><b>${index}</b>${pnl == null ? (row ? '<small>نتیجه ناموجود</small>' : '') : `<small class="${pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : 'flat'}">${signed(pnl)} $</small>`}</button>`);
+    }
+    const timeline = !data.day ? '<div class="empty-state">برای مشاهده Timeline یک روز را انتخاب کنید.</div>' : (data.items || []).length ? `<div class="closed-day-timeline">${data.items.map(item => `<article class="closed-day-item" data-open-signal="${h(item.id)}"><span class="closed-day-node"></span>${symbolMark(item.symbol)}<div><b>${h(item.symbol)} · ${h(item.direction || '')}</b><small>${h(item.result || 'CLOSED')} · ${item.result_unit === 'USD' && item.result_value != null ? signed(item.result_value) + ' $' : 'PnL ناموجود'}</small><small>ورود: ${h(closedDt(item.published_at))}</small><small>بستن: ${h(closedDt(item.closed_at))}</small></div></article>`).join('')}</div>` : '<div class="empty-state">در این روز سیگنالی بسته نشده است.</div>';
+    return `<section class="closed-calendar"><div class="closed-calendar-head"><button type="button" data-month-shift="-1" aria-label="ماه قبل">‹</button><strong>${h(new Intl.DateTimeFormat('fa-IR-u-ca-gregory', {month:'long', year:'numeric', timeZone:'UTC'}).format(new Date(Date.UTC(year, month-1, 1))))}</strong><button type="button" data-month-shift="1" aria-label="ماه بعد">›</button></div><div class="closed-calendar-grid">${['ش','ی','د','س','چ','پ','ج'].map(label => `<span class="weekday">${label}</span>`).join('')}${cells.join('')}</div><button type="button" class="text-btn" data-closed-today>امروز</button></section><h2 class="closed-day-title">${data.day ? `سیگنال‌های بسته‌شده · ${h(data.day)}` : 'روز موردنظر را انتخاب کنید'}</h2>${timeline}`;
+  }
+
+  async function loadClosedCalendar() {
+    if (signalState.loading || state.route !== 'signals') return;
+    signalState.loading = true;
+    try {
+      const query = new URLSearchParams({month: signalState.month, access: signalState.access, ...(signalState.day ? {day: signalState.day} : {})});
+      const data = await api(`/signals/closed-calendar?${query}`);
+      const feed = document.getElementById('signalFeed');
+      if (feed) feed.innerHTML = calendarMarkup(data);
+      document.getElementById('signalLoadMore').hidden = true;
+      feed?.querySelectorAll('[data-closed-day]').forEach(button => button.addEventListener('click', () => { signalState.day = button.dataset.closedDay; loadClosedCalendar(); }));
+      feed?.querySelectorAll('[data-month-shift]').forEach(button => button.addEventListener('click', () => {
+        const [year, month] = signalState.month.split('-').map(Number);
+        signalState.month = new Date(Date.UTC(year, month - 1 + Number(button.dataset.monthShift), 1)).toISOString().slice(0, 7);
+        signalState.day = null;
+        loadClosedCalendar();
+      }));
+      feed?.querySelector('[data-closed-today]')?.addEventListener('click', () => { signalState.day = todayTehran(); signalState.month = signalState.day.slice(0,7); loadClosedCalendar(); });
+      bindSignalCards();
+    } catch (error) { document.getElementById('signalFeed').innerHTML = `<div class="empty-state">${h(error.message)}</div>`; }
+    finally { signalState.loading = false; if (signalState.state !== 'CLOSED') loadSignals(); }
   }
 
   async function loadSignals({ append = false, silent = false } = {}) {
@@ -186,6 +235,7 @@
       if (!silent && more) more.hidden = true;
     } finally {
       signalState.loading = false;
+      if (signalState.state === 'CLOSED') loadClosedCalendar();
     }
   }
 
@@ -194,7 +244,7 @@
     signalState.offset = 0;
     document.querySelectorAll('[data-signal-state]').forEach(btn => btn.classList.toggle('active', btn.dataset.signalState === value));
     track('signal_filter', { filter: 'state', value });
-    loadSignals();
+    if (value === 'CLOSED') loadClosedCalendar(); else loadSignals();
   }
 
   function selectAccess(value) {
@@ -202,7 +252,7 @@
     signalState.offset = 0;
     document.querySelectorAll('[data-signal-access]').forEach(btn => btn.classList.toggle('active', btn.dataset.signalAccess === value));
     track('signal_filter', { filter: 'access', value });
-    loadSignals();
+    if (signalState.state === 'CLOSED') loadClosedCalendar(); else loadSignals();
   }
 
   function timelineHtml(items, className = '') {
@@ -286,7 +336,7 @@
       loadSignals({ append: true });
     });
     view.querySelector('[data-open-track-record]')?.addEventListener('click', () => window.NexusTrackRecord?.open?.());
-    loadSignals();
+    if (signalState.state === 'CLOSED') loadClosedCalendar(); else loadSignals();
   }
 
   window.hydrateNexusSignals = hydrateNexusSignals;

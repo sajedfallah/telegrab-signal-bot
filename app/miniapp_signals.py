@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -69,32 +70,11 @@ def _live_cutoff() -> str:
 
 
 def _active_truth_clause(state: str) -> tuple[str, tuple[Any, ...]]:
-    if str(state or "").upper() != "ACTIVE":
-        return "1=1", ()
-    # MT5-admin signals are customer-visible as ACTIVE only while the broker
-    # snapshot proves an OPEN/PENDING NEXUS-managed position/order. Matching by
-    # execution ticket also covers brokers that clear the position comment.
-    return """
-        (
-          UPPER(COALESCE(signals.issuer_type,'')) <> 'MT5_ADMIN'
-          OR EXISTS (
-            SELECT 1
-            FROM mt5_live_state live
-            WHERE live.account_number = signals.issuer_account
-              AND live.nexus_managed = 1
-              AND UPPER(COALESCE(live.status,'')) IN ('OPEN','PENDING')
-              AND live.last_seen_at >= ?
-              AND (
-                UPPER(COALESCE(live.signal_code,'')) = UPPER(COALESCE(signals.code,''))
-                OR EXISTS (
-                  SELECT 1 FROM autotrade_trade_executions exec
-                  WHERE exec.signal_id = signals.id
-                    AND exec.ticket = live.ticket
-                )
-              )
-          )
-        )
-    """, (_live_cutoff(),)
+    """Preserve the Home query contract without hiding canonical active rows.
+
+    Broker freshness belongs in the live overlay, not in signal visibility.
+    """
+    return "1=1", ()
 
 
 def _mt5_admin_is_live(data: dict[str, Any]) -> bool:
@@ -405,7 +385,6 @@ def signals(
     access_key = access.upper()
     state_sql, state_args = _state_clause(state_key)
     access_sql, access_args = _access_clause(access_key)
-    truth_sql, truth_args = _active_truth_clause(state_key)
 
     if state_key == "ACTIVE" and not has_vip:
         visibility_sql = "UPPER(COALESCE(destination,'FREE')) <> 'VIP'"
@@ -413,12 +392,12 @@ def signals(
         visibility_sql = "1=1"
 
     cycle = db.current_cycle_id()
-    params = (*state_args, *access_args, *truth_args, cycle, cycle, limit, offset)
+    params = (*state_args, *access_args, cycle, cycle, limit, offset)
     with db.conn() as con:
         rows = con.execute(
             f"""
             SELECT * FROM signals
-            WHERE {state_sql} AND {access_sql} AND {visibility_sql} AND {truth_sql}
+            WHERE {state_sql} AND {access_sql} AND {visibility_sql}
               AND COALESCE(cycle_id, ?) = ?
             ORDER BY id DESC LIMIT ? OFFSET ?
             """,
@@ -431,6 +410,57 @@ def signals(
         "offset": offset,
         "items": [serialize_signal(row, has_vip=has_vip) for row in rows],
     }
+
+
+@router.get("/signals/closed-calendar")
+def closed_calendar(
+    month: str = Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+    day: str | None = Query(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    access: str = Query(default="ALL"),
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+) -> dict[str, Any]:
+    uid = int(_auth_user(x_telegram_init_data)["id"])
+    has_vip = bool(_entitlements(uid).get("vip"))
+    try:
+        start = datetime.strptime(month, "%Y-%m").replace(tzinfo=ZoneInfo("Asia/Tehran"))
+        if day and (datetime.strptime(day, "%Y-%m-%d").strftime("%Y-%m-%d") != day or not day.startswith(month)):
+            raise ValueError("day is outside selected month")
+    except ValueError as exc:
+        raise HTTPException(422, "invalid calendar date") from exc
+    end = (start.replace(year=start.year + 1, month=1) if start.month == 12 else start.replace(month=start.month + 1))
+    access_sql, access_args = _access_clause(access.upper())
+    cycle = db.current_cycle_id()
+    with db.conn() as con:
+        rows = con.execute(
+            f"SELECT * FROM signals WHERE status='CLOSED' AND closed_at>=? AND closed_at<? AND {access_sql} "
+            "AND COALESCE(cycle_id,?)=? ORDER BY closed_at ASC,id ASC",
+            (start.astimezone(timezone.utc).isoformat(), end.astimezone(timezone.utc).isoformat(), *access_args, cycle, cycle),
+        ).fetchall()
+    groups: dict[str, list[Any]] = {}
+    for row in rows:
+        closed = datetime.fromisoformat(str(row["closed_at"]).replace("Z", "+00:00"))
+        if closed.tzinfo is None:
+            closed = closed.replace(tzinfo=timezone.utc)
+        groups.setdefault(closed.astimezone(ZoneInfo("Asia/Tehran")).date().isoformat(), []).append(row)
+    days = []
+    for date, items in groups.items():
+        visible_money = all(
+            str(item["result_unit"] or "").upper() in {"USD", "$", "MONEY", "ACCOUNT_CURRENCY"}
+            and item["result_value"] is not None
+            and (has_vip or PUBLIC_CLOSED_VIP_DETAILS or _access_class(dict(item)) != "VIP")
+            for item in items
+        )
+        days.append({"day": date, "count": len(items),
+                     "net_pnl": round(sum(float(item["result_value"]) for item in items), 2) if visible_money else None,
+                     "currency": "USD" if visible_money else None})
+    selected = groups.get(day, []) if day else []
+    rendered = []
+    for item in selected:
+        safe = serialize_signal(item, has_vip=has_vip)
+        if _access_class(dict(item)) == "VIP" and not has_vip and not PUBLIC_CLOSED_VIP_DETAILS:
+            safe.update({"result_value": None, "result_unit": None, "locked": True})
+        rendered.append(safe)
+    return {"month": month, "day": day, "timezone": "Asia/Tehran", "days": days, "items": rendered}
 
 
 @router.get("/signals/{signal_id}")
@@ -447,8 +477,6 @@ def signal_detail(
     data = dict(row)
     if not _customer_visible_status(data.get("status")):
         raise HTTPException(status_code=404, detail="signal not found")
-    if str(data.get("status") or "").upper() != "CLOSED" and not _mt5_admin_is_live(data):
-        raise HTTPException(status_code=404, detail="signal is no longer active")
     if _access_class(data) == "VIP" and str(data.get("status") or "").upper() != "CLOSED" and not has_vip:
         raise HTTPException(status_code=403, detail="VIP access required")
     item = serialize_signal(row, has_vip=has_vip, include_timeline=True)

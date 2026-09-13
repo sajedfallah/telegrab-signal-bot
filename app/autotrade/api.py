@@ -593,7 +593,7 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     errors: list[str] = []
     try:
         from ..config import settings
-        from ..signals.card_generator import build_chart_frame, build_signal_card
+        from ..signals.card_generator import build_publication_signal_image, publication_card_payload
         from aiogram import Bot
         from aiogram.enums import ParseMode
         from aiogram.types import BufferedInputFile
@@ -622,27 +622,8 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
                 "published": False, "complete": False}
 
     try:
-        if raw:
-            chart_frame = await asyncio.to_thread(build_chart_frame, raw)
-        else:
-            # A broker/terminal may be unable to capture a screenshot (for
-            # example while the chart is still loading). Never send an empty
-            # dark frame: publish a useful signal card so the channel still
-            # receives a visible image and the result reply has an anchor.
-            card_signal = {
-                "code": row["code"], "market_type": row["market_type"],
-                "symbol": row["symbol"], "direction": row["direction"],
-                "order_type": row["order_type"], "entry": row["entry_price"],
-                "stop_loss": row["stop_loss"], "risk_percent": row["risk_percent"],
-                "trailing_code": row["trailing_code"] or "—",
-                "trailing_name": row["trailing_name"] or "—",
-                "rr": row["rr_ratio"] or "—",
-                "volume_mode": row["volume_mode"] or "RISK",
-                "lot_size": row["lot_size"], "leverage": row["leverage"],
-            }
-            for target in db.get_signal_targets(int(row["id"])):
-                card_signal[f"tp{int(target['target_no'])}"] = target["price"]
-            chart_frame = await asyncio.to_thread(build_signal_card, None, card_signal)
+        card_signal = publication_card_payload(row, db.get_signal_targets(int(row["id"])))
+        chart_frame = await asyncio.to_thread(build_publication_signal_image, raw or None, card_signal)
     except Exception as exc:
         errors.append(f"CHART_RENDER: {exc}")
         chart_frame = b""
@@ -654,23 +635,13 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
                             actor_id=row["created_by"], correlation_id=str(row["code"]), payload={"chart": bool(raw)})
 
     destination = str(row["destination"] or "BOTH").upper()
-    targets = db.get_signal_targets(int(row["id"]))
-    target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
-    tp_lines = "\n".join(f"🎯 TP{n}: <code>{target_map[n]:g}</code>" for n in sorted(target_map)) or "🎯 TP: —"
-    order_type = str(row["order_type"] or "MARKET").upper()
-    caption = (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{row['code']}</b>  🟦 {order_type}\n\n"
-        f"📌 Symbol: <b>{str(row['symbol']).upper()}</b>\n"
-        f"↕️ Direction: <b>{str(row['direction']).upper()}</b>\n"
-        f"⏱ Timeframe: <b>{str(row['timeframe'] or 'M5').upper()}</b>\n"
-        f"📍 Entry: <code>{float(row['entry_price']):g}</code>\n"
-        f"🛑 Stop Loss: <code>{float(row['stop_loss']):g}</code>\n"
-        f"{tp_lines}\n"
-        f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>\n"
-        f"📌 Status: <b>{'PENDING' if exec_status == 'PENDING' else 'ACTIVE'}</b>\n"
-        f"🔧 Trailing: <b>{row['trailing_code'] or '—'}</b>"
-    )
+    # The MT5 and Mini App paths share the existing channel caption contract.
+    try:
+        from ..main import _signal_caption
+        caption = _signal_caption(row, status="PENDING" if exec_status == "PENDING" else "ACTIVE")
+    except Exception as exc:
+        return {"free_message_id": None, "vip_message_id": None,
+                "errors": [*errors, f"CAPTION_RENDER: {exc}"], "published": False, "complete": False}
 
     # Preserve already-published destinations so a retry sends only missing
     # channels and can still determine that the overall publication completed.

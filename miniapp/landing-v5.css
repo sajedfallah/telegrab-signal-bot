@@ -79,7 +79,12 @@ body.landing-active > .app-shell {
 }
 
 .nexus-landing-enter:active {
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(34, 211, 238, .10);
+  box-shadow: inset 0 0 0 2px rgba(34, 211, 238, .40);
+}
+
+@media (hover: hover) {
+  .nexus-landing-enter:hover { box-shadow: inset 0 0 0 2px rgba(34, 211, 238, .65), 0 0 28px rgba(37, 99, 235, .24); background: rgba(34, 211, 238, .06); }
 }
 
 .nexus-landing-enter:focus-visible {
@@ -118,10 +123,12 @@ body.landing-active > .app-shell {
 
 .nexus-landing.is-leaving {
   opacity: 0;
-  transform: scale(1.004);
+  transform: scale(.985);
   pointer-events: none;
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity 340ms ease, transform 340ms ease;
 }
+.app-shell.nexus-app-entering { animation: nexus-app-arrive 340ms ease both; }
+@keyframes nexus-app-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
 
 @media (max-aspect-ratio: 1 / 2) {
   .nexus-landing-enter {
@@ -145,4 +152,5 @@ body.landing-active > .app-shell {
   .nexus-landing {
     transition: none !important;
   }
+  .app-shell.nexus-app-entering { animation: none; }
 }

@@ -116,6 +116,28 @@ def build_account_status(uid: int) -> dict[str, Any]:
             (uid,),
         ).fetchone()
         payment_count = int(con.execute("SELECT COUNT(*) FROM payments WHERE telegram_id=?", (uid,)).fetchone()[0])
+        license_rows = con.execute(
+            """SELECT id,status,starts_at,expires_at,vip_expires_at,autotrade_expires_at,
+                      vip_access,autotrade_access
+               FROM licenses WHERE telegram_id=? ORDER BY id DESC LIMIT 50""",
+            (uid,),
+        ).fetchall()
+    now = datetime.now(timezone.utc)
+    licenses_active: list[dict[str, Any]] = []
+    licenses_history: list[dict[str, Any]] = []
+    for row in license_rows:
+        item = dict(row)
+        service_expiries = [
+            _parse_dt(item.get("vip_expires_at")) if item.get("vip_access") else None,
+            _parse_dt(item.get("autotrade_expires_at")) if item.get("autotrade_access") else None,
+        ]
+        expiry = max((value for value in service_expiries if value), default=None) or _parse_dt(item.get("expires_at"))
+        valid = str(item.get("status") or "").lower() == "active" and bool(expiry and expiry > now)
+        item["display_expires_at"] = expiry.isoformat() if expiry else None
+        item["display_status"] = "ACTIVE" if valid else (
+            "EXPIRED" if str(item.get("status") or "").lower() == "active" else str(item.get("status") or "").upper()
+        )
+        (licenses_active if valid else licenses_history).append(item)
     mt5_data = dict(mt5) if mt5 is not None else None
     auto_state = _autotrade_customer_state(uid, auto)
     return {
@@ -132,6 +154,7 @@ def build_account_status(uid: int) -> dict[str, Any]:
             "last_seen_at": mt5_data.get("last_seen_at") if mt5_data else None,
         },
         "payments_count": payment_count,
+        "licenses": {"active": licenses_active, "history": licenses_history},
         "is_admin": uid in settings.admin_ids,
     }
 

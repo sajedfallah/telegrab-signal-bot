@@ -20,6 +20,7 @@
     mt5: null,
     loadingSignals: false,
     loadingPositions: false,
+    entrySource: 'MANUAL',
   };
 
   const headers = () => ({
@@ -154,14 +155,16 @@
     const calc = state.calculation;
     if (!calc) return toast('ابتدا Entry و Stop Loss معتبر وارد کنید.');
     const lot = state.volumeMode === 'FIXED' ? numeric('lotSize') : null;
+    const riskPercent = state.volumeMode === 'RISK' ? numeric('riskPercent') : null;
     if (state.volumeMode === 'FIXED' && (!lot || lot <= 0)) return toast('در حالت Fixed Lot وارد کردن حجم معتبر اجباری است.');
+    if (state.volumeMode === 'RISK' && (!riskPercent || riskPercent <= 0 || riskPercent > 100)) return toast('درصد ریسک معتبر وارد کنید.');
     state.preview = {
       symbol: calc.symbol, direction: calc.direction, entry: calc.entry, stop_loss: calc.stop_loss,
       risk: calc.risk, targets: calc.targets, destination: state.destination, timeframe: $('timeframe').value,
       request_id: requestId(), digits: calc.digits, setup_mode: 'MANUAL', trailing_code: $('trailing').value,
-      volume_mode: state.volumeMode, lot_size: lot,
+      volume_mode: state.volumeMode, lot_size: lot, risk_percent: riskPercent,
     };
-    $('preview').innerHTML = `<div class="preview-hero"><strong>${esc(calc.symbol)}</strong><em>${esc(calc.direction)}</em></div><div class="preview-grid"><div><span>ورود</span><b>${fa(calc.entry)}</b></div><div><span>حد ضرر</span><b>${fa(calc.stop_loss)}</b></div><div><span>Initial R</span><b>${fa(calc.risk)}</b></div><div><span>Trailing</span><b>${esc($('trailing').value)}</b></div><div><span>Volume</span><b>${esc(state.volumeMode)}${lot ? ' · ' + esc(lot) : ''}</b></div>${calc.targets.map((value, index) => `<div><span>TP${index + 1}</span><b>${fa(value)}</b></div>`).join('')}<div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div></div>`;
+    $('preview').innerHTML = `<div class="preview-hero"><strong>${esc(calc.symbol)}</strong><em>${esc(calc.direction)}</em></div><div class="preview-grid"><div><span>ورود</span><b>${fa(calc.entry)}</b></div><div><span>منبع ورود</span><b>${esc(state.entrySource)}</b></div><div><span>حد ضرر</span><b>${fa(calc.stop_loss)}</b></div><div><span>Initial R</span><b>${fa(calc.risk)}</b></div><div><span>Timeframe</span><b>${esc($('timeframe').value)}</b></div><div><span>Trailing</span><b>${esc($('trailing').value)}</b></div><div><span>Volume</span><b>${esc(state.volumeMode)} · ${esc(lot ?? riskPercent)}${lot ? ' lot' : '%'}</b></div><div><span>Destination</span><b>${esc(state.destination)}</b></div>${calc.targets.map((value, index) => `<div><span>TP${index + 1}</span><b>${fa(value)}</b></div>`).join('')}<div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div></div>`;
     $('modal').hidden = false;
   }
 
@@ -172,9 +175,11 @@
     const timeframe = $('autoTimeframe').value;
     const trailing = $('autoTrailing').value;
     const lot = state.autoVolumeMode === 'FIXED' ? numeric('autoLotSize') : null;
+    const riskPercent = state.autoVolumeMode === 'RISK' ? numeric('autoRiskPercent') : null;
     if (!symbol) return toast('نماد Auto Setup را وارد کنید.');
     if (!entry || entry <= 0) return toast('قیمت ورود Auto Setup را وارد کنید.');
     if (state.autoVolumeMode === 'FIXED' && (!lot || lot <= 0)) return toast('حجم Fixed Lot معتبر وارد کنید.');
+    if (state.autoVolumeMode === 'RISK' && (!riskPercent || riskPercent <= 0 || riskPercent > 100)) return toast('درصد ریسک معتبر وارد کنید.');
     $('autoTimeframeValue').textContent = timeframe;
     $('autoTrailingValue').textContent = trailing;
     $('autoVolumeValue').textContent = state.autoVolumeMode;
@@ -200,8 +205,24 @@
     }
   }
 
-  function isOperationalSignal(item) {
-    return String(item?.status || '').toUpperCase() === 'PUBLISHED';
+  async function useMarketPrice() {
+    try {
+      const symbol = String($('symbol').value || '').trim();
+      if (!symbol) return toast('ابتدا نماد را انتخاب کنید.');
+      const quote = await api(`/market-quote?symbol=${encodeURIComponent(symbol)}`);
+      const age = Number(quote.age_seconds);
+      if (!quote.fresh || !Number.isFinite(age) || age > 15) throw new Error('قیمت بازار تازه نیست؛ ورود دستی را استفاده کنید.');
+      const price = Number(state.side === 'BUY' ? quote.ask : quote.bid);
+      if (!Number.isFinite(price) || price <= 0) throw new Error('Bid/Ask معتبر موجود نیست.');
+      $('entry').value = String(price);
+      state.entrySource = 'MARKET';
+      $('quoteStatus').textContent = `${state.side === 'BUY' ? 'Ask' : 'Bid'} ${price} · ${Math.round(age)}s`;
+      scheduleRecalculate();
+    } catch (error) {
+      state.entrySource = 'MANUAL';
+      $('quoteStatus').textContent = 'قیمت معتبر MT5 موجود نیست؛ ورود دستی الزامی است.';
+      toast(error.message);
+    }
   }
 
   function signalCard(item, {allowRetry = true} = {}) {
@@ -212,7 +233,7 @@
     const entry = payload.entry ?? item.signal?.entry_price ?? '—';
     const retryable = ['FAILED', 'PUBLISH_FAILED', 'EXPIRED'].includes(status) || (['UPLOADED', 'COMPLETED'].includes(job) && status !== 'PUBLISHED' && stage !== 'PUBLISHED');
     const retry = allowRetry && retryable ? `<button class="outline retry-signal" data-request-id="${esc(item.request_id)}">تلاش مجدد</button>` : '';
-    return `<article class="card"><div class="card-head"><strong>${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
+    return `<article class="card"><div class="card-head"><strong>${item.signal?.code ? esc(item.signal.code) + ' · ' : ''}${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
   }
 
   async function retrySignal(button) {
@@ -232,12 +253,12 @@
     if (state.loadingSignals) return;
     state.loadingSignals = true;
     try {
-      const data = await api('/signals');
+      const [data, canonical, rejected] = await Promise.all([api('/signals'), api('/active-signals'), api('/rejected-logs')]);
       setMt5(data.mt5_admin);
-      const items = data.items || [];
-      const operational = items.filter(isOperationalSignal);
+      const operational = canonical.items || [];
       $('signalList').innerHTML = operational.length ? operational.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">سیگنال عملیاتی منتشرشده‌ای وجود ندارد.</div>';
-      $('logList').innerHTML = items.length ? items.map((item) => signalCard(item)).join('') : '<div class="empty">لاگ عملیاتی وجود ندارد.</div>';
+      const rejectedItems = rejected.items || [];
+      $('logList').innerHTML = rejectedItems.length ? rejectedItems.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">درخواست ردشده‌ای وجود ندارد.</div>';
       $('publishedCount').textContent = fa(operational.length);
     } catch (error) {
       toast(error.message);
@@ -249,11 +270,12 @@
   function positionCard(position, isOrder = false) {
     const signalId = Number(position.signal_id || 0);
     const account = esc(state.mt5?.account_number || '');
-    const rawProfit = position.floating_pnl ?? position.profit ?? position.pnl ?? position.profit_float ?? 0;
-    const profit = Number(rawProfit);
+    const rawProfit = position.floating_pnl ?? position.profit ?? position.pnl ?? position.profit_float;
+    const profit = rawProfit == null ? null : Number(rawProfit);
     const age = position.last_seen_at ? Math.max(0, Math.round((Date.now() - new Date(position.last_seen_at).getTime()) / 1000)) : null;
-    const actions = signalId ? `<div class="trade-actions" data-signal="${signalId}" data-account="${account}">${isOrder ? '<button data-command="CANCEL_PENDING" class="danger">لغو Pending</button>' : '<button data-command="MOVE_SL_TO_ENTRY" class="safe">Break Even</button><button data-command="PARTIAL_CLOSE">Partial Close</button><button data-command="ACTIVATE_TRAILING">Trailing</button><button data-command="UPDATE_SL">تغییر SL</button><button data-command="UPDATE_TP">تغییر TP</button><button data-command="CLOSE_SIGNAL" class="danger">بستن معامله</button>'}</div>` : '';
-    return `<article class="card"><div class="card-head"><strong>${esc(position.symbol || '—')} · ${esc(position.direction || position.type || '')}</strong><span class="status">${isOrder ? 'PENDING' : 'LIVE'}</span></div><div class="levels admin-position-levels"><span>TICKET<b>${esc(position.ticket || '—')}</b></span><span>ENTRY<b>${esc(position.entry_price || position.price_open || '—')}</b></span><span>CURRENT<b>${esc(position.current_price || '—')}</b></span><span>VOLUME<b>${esc(position.volume || '—')}</b></span><span>P&amp;L<b class="${profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'flat'}">${signed(profit)}</b></span><span>SL / TP<b>${esc(position.stop_loss || '—')} / ${esc(position.take_profit || '—')}</b></span></div><div class="admin-position-sync">Last MT5 Sync: ${age == null ? '—' : esc(age + 's ago')}</div>${actions}</article>`;
+    const freshness = !state.mt5?.online ? 'OFFLINE' : age == null ? 'UNAVAILABLE' : age > 120 ? 'STALE' : isOrder ? 'PENDING' : 'LIVE';
+    const actions = signalId ? `<details class="admin-action-sheet"><summary>اقدامات ${isOrder ? 'سفارش' : 'پوزیشن'}</summary><div class="trade-actions" data-signal="${signalId}" data-account="${account}">${isOrder ? '<button data-command="CANCEL_PENDING" class="danger">لغو Pending</button>' : '<button data-command="MOVE_SL_TO_ENTRY" class="safe">Break Even</button><button data-command="PARTIAL_CLOSE">Partial Close</button><button data-command="ACTIVATE_TRAILING">Trailing</button><button data-command="UPDATE_SL">تغییر SL</button><button data-command="UPDATE_TP">تغییر TP</button><button data-command="CLOSE_SIGNAL" class="danger">بستن معامله</button>'}</div></details>` : '';
+    return `<article class="card"><div class="card-head"><strong>${window.NexusSymbolVisuals?.mark?.(position.symbol) || ''}${position.signal_code ? esc(position.signal_code) + ' · ' : ''}${esc(position.symbol || '—')} · ${esc(position.direction || position.type || '')}</strong><span class="status">${freshness}</span></div><div class="levels admin-position-levels"><span>TICKET<b>${esc(position.ticket || '—')}</b></span><span>ENTRY<b>${esc(position.entry_price ?? position.price_open ?? '—')}</b></span><span>CURRENT<b>${esc(position.current_price ?? '—')}</b></span><span>VOLUME<b>${esc(position.volume ?? '—')}</b></span><span>P&amp;L<b class="${profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'flat'}">${rawProfit == null ? '—' : signed(profit)}</b></span><span>SL / TP<b>${esc(position.stop_loss ?? '—')} / ${esc(position.take_profit ?? '—')}</b></span></div><div class="admin-position-sync">Last MT5 Sync: ${age == null ? '—' : esc(age + 's ago')}</div>${actions}</article>`;
   }
 
   async function loadPositions() {
@@ -262,9 +284,9 @@
     try {
       const data = await api('/positions');
       setMt5(data.mt5_admin);
-      const all = [...(data.positions || []).map((item) => positionCard(item)), ...(data.orders || []).map((item) => positionCard(item, true))];
-      $('positionList').innerHTML = all.join('') || '<div class="empty">پوزیشن یا سفارش فعال وجود ندارد.</div>';
-      $('positionCount').textContent = fa(all.length);
+      const open = data.positions || [], pending = data.orders || [];
+      $('positionList').innerHTML = `<h3>Open Positions</h3>${open.map((item) => positionCard(item)).join('') || '<div class="empty">پوزیشن بازی وجود ندارد.</div>'}<h3>Pending Orders</h3>${pending.map((item) => positionCard(item, true)).join('') || '<div class="empty">سفارش Pending وجود ندارد.</div>'}`;
+      $('positionCount').textContent = fa(state.mt5?.online ? open.filter(item => item.last_seen_at && Date.now() - new Date(item.last_seen_at).getTime() <= 120000).length : 0);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -309,10 +331,17 @@
   document.querySelectorAll('.auto-direction button').forEach((button) => button.addEventListener('click', () => { state.autoSide = button.dataset.autoSide; selectButtons('.auto-direction button', button); }));
   document.querySelectorAll('.destination button').forEach((button) => button.addEventListener('click', () => { state.destination = button.dataset.value; selectButtons('.destination button', button); }));
   document.querySelectorAll('.auto-destination button').forEach((button) => button.addEventListener('click', () => { state.autoDestination = button.dataset.autoDestination; selectButtons('.auto-destination button', button); }));
-  document.querySelectorAll('.volume-mode button').forEach((button) => button.addEventListener('click', () => { state.volumeMode = button.dataset.volume; selectButtons('.volume-mode button', button); $('fixedLotLabel').hidden = state.volumeMode !== 'FIXED'; }));
-  document.querySelectorAll('.auto-volume-mode button').forEach((button) => button.addEventListener('click', () => { state.autoVolumeMode = button.dataset.autoVolume; selectButtons('.auto-volume-mode button', button); $('autoFixedLotLabel').hidden = state.autoVolumeMode !== 'FIXED'; $('autoVolumeValue').textContent = state.autoVolumeMode; }));
+  document.querySelectorAll('.volume-mode button').forEach((button) => button.addEventListener('click', () => { state.volumeMode = button.dataset.volume; selectButtons('.volume-mode button', button); $('fixedLotLabel').hidden = state.volumeMode !== 'FIXED'; $('riskPercentLabel').hidden = state.volumeMode !== 'RISK'; }));
+  document.querySelectorAll('.auto-volume-mode button').forEach((button) => button.addEventListener('click', () => { state.autoVolumeMode = button.dataset.autoVolume; selectButtons('.auto-volume-mode button', button); $('autoFixedLotLabel').hidden = state.autoVolumeMode !== 'FIXED'; $('autoRiskPercentLabel').hidden = state.autoVolumeMode !== 'RISK'; $('autoVolumeValue').textContent = state.autoVolumeMode; }));
 
   ['symbol', 'entry', 'stopLoss'].forEach((id) => $(id)?.addEventListener('input', scheduleRecalculate));
+  $('entry')?.addEventListener('input', () => { state.entrySource = 'MANUAL'; $('quoteStatus').textContent = 'ورود دستی'; });
+  $('useMarketPrice')?.addEventListener('click', useMarketPrice);
+  $('clearRejectedLogs')?.addEventListener('click', async () => {
+    if (!confirm('فقط درخواست‌های ردشده پاک شوند؟ تاریخچه سیگنال و معاملات محفوظ می‌ماند.')) return;
+    try { const result = await api('/rejected-logs', {method: 'DELETE'}); toast(`${result.deleted} لاگ ردشده پاک شد.`); await loadSignals(); }
+    catch (error) { toast(error.message); }
+  });
   $('autoTimeframe')?.addEventListener('change', () => $('autoTimeframeValue').textContent = $('autoTimeframe').value);
   $('autoTrailing')?.addEventListener('change', () => $('autoTrailingValue').textContent = $('autoTrailing').value);
   $('autoValidate')?.addEventListener('click', validateAutoSetup);

@@ -30,7 +30,7 @@ def test_final_user_layer_is_scoped_and_landing_is_packaged():
     html = (MINIAPP / "index.html").read_text(encoding="utf-8")
     css = (MINIAPP / "user-v066-final.css").read_text(encoding="utf-8")
     poster = MINIAPP / "assets" / "brand" / "nexus-landing-approved-final.webp"
-    assert './user-v066-final.css?v=20260913-final-user-ui' in html
+    assert './user-v066-final.css?v=20260914-next-ui' in html
     assert './assets/brand/nexus-landing-approved-final.webp?v=' in html
     assert poster.read_bytes()[:4] == b"RIFF"
     assert ".app-shell" in css

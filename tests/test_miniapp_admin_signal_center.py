@@ -339,6 +339,46 @@ def test_positions_resolve_actionable_signal_id_from_live_state(client):
     assert client.get("/miniapp/api/admin/positions", headers=headers()).json()["positions"][0]["signal_id"] is None
 
 
+def test_mt5_issued_signal_without_request_is_visible_to_admin_and_user_with_live_and_stale_truth(client):
+    import app.combined_api  # Register User Mini App routes on the shared API app.
+    db.ensure_admin_identity(ADMIN_ID)
+    signal = db.create_signal(
+        market_type="CRYPTO", symbol="BTCUSD", direction="BUY", entry_price=77345,
+        stop_loss=77066, targets=[77624, 77763.5], risk_percent=1, rr_ratio=1,
+        destination="FREE", chart_file_id=None, created_by=ADMIN_ID,
+        volume_mode="FIXED", lot_size=0.06,
+    )
+    signal_id = int(signal["id"])
+    code = str(signal["code"])
+    with db.conn() as con:
+        con.execute("UPDATE signals SET status='ACTIVE',issuer_type='MT5_ADMIN',issuer_account=? WHERE id=?", (ACCOUNT, signal_id))
+        assert con.execute("SELECT COUNT(*) FROM miniapp_admin_signal_requests WHERE signal_id=?", (signal_id,)).fetchone()[0] == 0
+    db.upsert_mt5_live_snapshot(ACCOUNT, positions=[{
+        "identifier": "95402848", "ticket": "95402848", "signal_code": code, "symbol": "BTCUSD",
+        "direction": "BUY", "volume": 0.06, "entry_price": 77345, "current_price": 77350,
+        "stop_loss": 77066, "take_profit": 77624, "profit": 1.25,
+        "magic": 65001, "nexus_managed": True,
+    }])
+    admin = client.get("/miniapp/api/admin/active-signals", headers=headers())
+    assert admin.status_code == 200, admin.text
+    admin_item = next(item for item in admin.json()["items"] if item["signal"]["id"] == signal_id)
+    assert admin_item["live"]["status"] == "LIVE"
+    assert admin_item["live"]["floating_pnl"] == 1.25
+    user = client.get("/miniapp/api/signals?state=ACTIVE&access=FREE", headers=headers())
+    assert user.status_code == 200, user.text
+    user_item = next(item for item in user.json()["items"] if item["id"] == signal_id)
+    assert user_item["live"]["status"] == "LIVE"
+    with db.conn() as con:
+        con.execute("UPDATE mt5_live_state SET last_seen_at='2020-01-01T00:00:00+00:00' WHERE ticket='95402848'")
+    stale_admin = client.get("/miniapp/api/admin/active-signals", headers=headers()).json()["items"]
+    stale_user = client.get("/miniapp/api/signals?state=ACTIVE&access=FREE", headers=headers()).json()["items"]
+    assert next(item for item in stale_admin if item["signal"]["id"] == signal_id)["live"]["status"] == "STALE"
+    assert next(item for item in stale_user if item["id"] == signal_id)["live"]["status"] == "STALE"
+    detail = client.get(f"/miniapp/api/signals/{signal_id}", headers=headers())
+    assert detail.status_code == 200
+    assert detail.json()["live"]["status"] == "STALE"
+
+
 def test_expired_offline_job_retries_same_signal_and_request(client):
     created = client.post("/miniapp/api/admin/signals", headers=headers(), json=payload("offline-expired-retry")).json()
     with db.conn() as con:

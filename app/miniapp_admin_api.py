@@ -190,6 +190,7 @@ class CreateSignalRequest(CalculateRequest):
     trailing_code: str
     volume_mode: str = Field(default="RISK", pattern="^(?:RISK|FIXED)$")
     lot_size: float | None = Field(default=None, gt=0)
+    risk_percent: float | None = Field(default=None, gt=0, le=100)
 
     @field_validator("request_id")
     @classmethod
@@ -213,6 +214,10 @@ class CreateSignalRequest(CalculateRequest):
             raise ValueError("lot_size is required for FIXED volume")
         if self.volume_mode == "RISK" and self.lot_size is not None:
             raise ValueError("lot_size must be empty for RISK volume")
+        if self.volume_mode == "RISK" and self.risk_percent is None:
+            self.risk_percent = 1.0  # legacy clients omitted this field
+        if self.volume_mode == "FIXED" and self.risk_percent is not None:
+            raise ValueError("risk_percent must be empty for FIXED volume")
         # Fail closed: do not fabricate a structural stop before the MT5
         # completed-candle source and confirmed swing engine are available.
         if self.setup_mode == "AUTO":
@@ -371,6 +376,37 @@ def calculate(req: CalculateRequest, x_telegram_init_data: str | None = Header(d
         raise HTTPException(422, str(exc)) from exc
 
 
+@router.get("/market-quote")
+def market_quote(symbol: str = Query(min_length=3, max_length=32), x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
+    _admin(x_telegram_init_data)
+    # mt5_live_state.current_price is not a Bid/Ask quote. A future Admin EA
+    # may include authenticated quotes in its existing heartbeat payload;
+    # absent that feed we fail closed rather than infer a midpoint.
+    canonical = normalize_symbol(symbol)
+    mt5 = _admin_mt5_status()
+    if mt5["online"] and mt5.get("account_number"):
+        with db.conn() as con:
+            row = con.execute(
+                "SELECT payload_json FROM mt5_heartbeats_v060 WHERE role='ADMIN' AND account_number=?",
+                (mt5["account_number"],),
+            ).fetchone()
+        try:
+            quotes = json.loads(row["payload_json"] or "{}").get("quotes", {}) if row else {}
+            quote = quotes.get(canonical) if isinstance(quotes, dict) else None
+            if isinstance(quote, dict):
+                bid, ask = float(quote["bid"]), float(quote["ask"])
+                captured = datetime.fromisoformat(str(quote["captured_at"]).replace("Z", "+00:00"))
+                if captured.tzinfo is None:
+                    raise ValueError("quote timestamp must include timezone")
+                age = (datetime.now(timezone.utc) - captured.astimezone(timezone.utc)).total_seconds()
+                if all(math.isfinite(value) for value in (bid, ask)) and 0 < bid <= ask and -5 <= age <= 15:
+                    return {"symbol": canonical, "bid": bid, "ask": ask, "age_seconds": round(age, 2), "fresh": True,
+                            "source": "MT5_ADMIN_HEARTBEAT", "account_number": mt5["account_number"]}
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            pass
+    raise HTTPException(503, f"Fresh MT5 Bid/Ask quote unavailable for {canonical}; use manual entry")
+
+
 @router.post("/signals", status_code=201)
 def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     user = _admin(x_telegram_init_data)
@@ -392,7 +428,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         row = db.create_signal(
             market_type=infer_category(calc["symbol"]), symbol=calc["symbol"], direction=calc["direction"],
             entry_price=calc["entry"], stop_loss=calc["stop_loss"], targets=calc["targets"],
-            risk_percent=0, rr_ratio=3.0, destination=req.destination, chart_file_id=None,
+            risk_percent=req.risk_percent if req.volume_mode == "RISK" else 0, rr_ratio=3.0, destination=req.destination, chart_file_id=None,
             created_by=int(user["id"]), timeframe=req.timeframe, order_type="MARKET",
             volume_mode=req.volume_mode, lot_size=req.lot_size,
             trailing_code=req.trailing_code,
@@ -411,7 +447,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
                    "timeframe": req.timeframe, "trailing_code": req.trailing_code,
                    "trailing_name": str(trail.get("name") or req.trailing_code),
                    "trailing_config": trail, "volume_mode": req.volume_mode,
-                   "lot_size": req.lot_size, "mt5_account": account}
+                   "lot_size": req.lot_size, "risk_percent": req.risk_percent, "mt5_account": account}
         with db.conn() as con:
             con.execute(
                 "INSERT OR IGNORE INTO miniapp_admin_signal_requests(request_id,admin_telegram_id,signal_id,status,error_message,payload_json,created_at,updated_at) VALUES(?,?,?,?,NULL,?,?,?)",
@@ -440,6 +476,54 @@ def list_signals(limit: int = Query(30, ge=1, le=100), x_telegram_init_data: str
     with db.conn() as con:
         rows = con.execute("SELECT * FROM miniapp_admin_signal_requests WHERE admin_telegram_id=? ORDER BY id DESC LIMIT ?", (int(user["id"]), limit)).fetchall()
     return {"items": [_sync_request(row) for row in rows], "mt5_admin": _admin_mt5_status()}
+
+
+@router.get("/rejected-logs")
+def rejected_logs(limit: int = Query(100, ge=1, le=500), x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
+    user = _admin(x_telegram_init_data)
+    init_miniapp_admin_schema()
+    with db.conn() as con:
+        rows = con.execute(
+            "SELECT * FROM miniapp_admin_signal_requests WHERE admin_telegram_id=? "
+            "AND UPPER(status)='REJECTED' ORDER BY id DESC LIMIT ?", (int(user["id"]), limit)
+        ).fetchall()
+    return {"items": [_sync_request(row) for row in rows]}
+
+
+@router.delete("/rejected-logs")
+def clear_rejected_logs(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
+    user = _admin(x_telegram_init_data)
+    init_miniapp_admin_schema()
+    with db.conn() as con:
+        result = con.execute(
+            "DELETE FROM miniapp_admin_signal_requests WHERE admin_telegram_id=? AND UPPER(status)='REJECTED'",
+            (int(user["id"]),),
+        )
+    return {"ok": True, "deleted": result.rowcount}
+
+
+@router.get("/active-signals")
+def active_signals(limit: int = Query(30, ge=1, le=100), x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
+    """Canonical Admin feed: MT5 signals do not have Mini App request rows."""
+    from .config import settings
+    _admin(x_telegram_init_data)
+    accounts = tuple(str(account) for account in settings.nexus_admin_mt5_accounts)
+    if not accounts:
+        return {"items": []}
+    placeholders = ",".join("?" for _ in accounts)
+    with db.conn() as con:
+        rows = con.execute(
+            f"""SELECT * FROM signals
+                WHERE UPPER(COALESCE(status,''))='ACTIVE'
+                  AND issuer_type IN ('MT5_ADMIN','WEB_ADMIN')
+                  AND issuer_account IN ({placeholders})
+                ORDER BY id DESC LIMIT ?""",
+            (*accounts, limit),
+        ).fetchall()
+    return {"items": [
+        {"signal": dict(row), "status": str(row["status"]), "live": _admin_live_signal(row)}
+        for row in rows
+    ]}
 
 
 @router.get("/signals/{request_id}")

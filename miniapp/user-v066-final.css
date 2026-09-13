@@ -21,13 +21,17 @@
   --nexus-border-inner: rgba(80, 118, 172, .20);
   background: radial-gradient(circle at 85% 0%, rgba(37, 99, 235, .10), transparent 34%), var(--nx-bg);
   color: var(--nx-text);
-  font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+  font-family: var(--nexus-fa-font);
 }
 
 .app-shell .topbar {
-  background: linear-gradient(180deg, rgba(8, 12, 18, .98), rgba(8, 12, 18, .82));
+  background: rgba(8, 12, 18, .94);
   border-bottom-color: var(--nx-border);
+  box-shadow: none;
 }
+.app-shell .topbar .brand-logo { width: 52px!important; height: 52px!important; }
+.app-shell .nexus-page-back { right: auto; left: 12px; top: calc(env(safe-area-inset-top, 0px) + 66px); min-height: 36px; padding: 0 10px; box-shadow: none; }
+.app-shell .nexus-page-back[hidden] { display: none!important; }
 .app-shell .bottom-nav {
   background: rgba(8, 12, 18, .96);
   border-top-color: var(--nx-border);
@@ -125,6 +129,20 @@
 }
 .app-shell .vip-badge,
 .app-shell .pricing-kicker { color: var(--nx-amber); }
+
+.app-shell .account-v2-license-section { margin-top: 18px; }
+.app-shell .account-v2-license-section .section-head span { color: var(--nx-muted); font-size: 12px; }
+.app-shell .account-v2-license-list { display: grid; gap: 9px; }
+.app-shell .account-v2-license {
+  padding: 13px 15px;
+  border: 1px solid var(--nx-border);
+  border-radius: 16px;
+  background: var(--nx-surface-1);
+}
+.app-shell .account-v2-license.historical { background: #0e141c; }
+.app-shell .account-v2-license > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.app-shell .account-v2-license small { display: block; margin-top: 7px; color: var(--nx-muted); }
+.app-shell .account-v2-license p { margin: 8px 0 0; color: var(--nx-muted); font-size: 11px; }
 
 @media (max-width: 390px) {
   .app-shell .home-v2-actions { grid-template-columns: 1fr; }

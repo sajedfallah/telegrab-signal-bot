@@ -5,6 +5,11 @@ import uvicorn
 
 load_dotenv(encoding="utf-8-sig")
 
+# Match run.py: repair only clearly recoverable UTF-8 mojibake before the
+# frozen Settings object is materialized by API imports.
+from app.payment_display_sanitizer import repair_payment_owner_env
+repair_payment_owner_env()
+
 os.environ.setdefault("PUBLIC_CHANNEL_ID", "0")
 os.environ.setdefault("PUBLIC_CHANNEL_URL", "https://t.me")
 

@@ -13,7 +13,7 @@ def test_visible_back_button_is_part_of_global_topbar():
     assert 'class="nexus-page-back"' in INDEX
     assert 'بازگشت' in INDEX
     assert './navigation-v7.css?v=20260910-1845' in INDEX
-    assert './navigation-v7.js?v=20260910-1845' in INDEX
+    assert './navigation-v7.js?v=20260914-next-ui' in INDEX
 
 
 def test_back_navigation_tracks_previous_routes_and_custom_views():
@@ -25,7 +25,9 @@ def test_back_navigation_tracks_previous_routes_and_custom_views():
     assert "function goBack()" in NAV_JS
 
 
-def test_home_back_returns_to_landing_using_shared_lifecycle():
+def test_main_pages_hide_back_and_nested_routes_keep_shared_lifecycle():
+    assert "['landing', 'home', 'signals', 'subscriptions', 'account'].includes(currentRoute)" in NAV_JS
+    assert "backButton.hidden =" in NAV_JS
     assert "currentRoute === 'home' ? 'landing' : 'home'" in NAV_JS
     assert "window.NexusLanding.show()" in NAV_JS
     assert "window.NexusLanding =" in LANDING_JS

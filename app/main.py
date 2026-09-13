@@ -27,7 +27,7 @@ from aiogram.types import CallbackQuery, ChatJoinRequest, InlineKeyboardButton, 
 
 from .config import settings
 from . import db
-from .signals.card_generator import build_chart_frame, build_report_card
+from .signals.card_generator import build_chart_frame, build_report_card, build_publication_signal_image, publication_card_payload
 from .signals.calculator import risk_reward, result_metric
 from .states import Flow
 from .storage.sqlite_storage import SQLiteStorage
@@ -2940,7 +2940,10 @@ async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes, captio
 
 async def _publish_signal(bot: Bot, row, *, only_missing: bool = False) -> tuple[int | None, int | None, list[str]]:
     chart = await _download_bytes(bot, row["chart_file_id"])
-    chart_frame = await asyncio.to_thread(build_chart_frame, chart)
+    chart_frame = await asyncio.to_thread(
+        build_publication_signal_image, chart,
+        publication_card_payload(row, db.get_signal_targets(int(row["id"]))),
+    )
     caption = _signal_caption(row, get_lang(int(row["created_by"])))
     # Publication is idempotent: an already delivered channel message is the
     # canonical signal post and must never be published again for the same Signal.

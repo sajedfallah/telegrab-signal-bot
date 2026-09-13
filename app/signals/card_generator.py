@@ -214,6 +214,14 @@ def _brand_gradient(width: int, height: int) -> Image.Image:
 
 def build_chart_frame(chart_bytes: bytes | None) -> bytes:
     """Premium NEXUS 2026 chart frame. The MT5 chart is never cropped."""
+    chart_present = False
+    if chart_bytes:
+        try:
+            with Image.open(BytesIO(chart_bytes)) as source:
+                source.verify()
+            chart_present = True
+        except Exception:
+            chart_present = False
     chart = _load_chart(chart_bytes)
     max_chart_w, max_chart_h = 1280, 900
     scale = min(max_chart_w / chart.width, max_chart_h / chart.height, 1.0)
@@ -258,6 +266,9 @@ def build_chart_frame(chart_bytes: bytes | None) -> bytes:
         width=chart_border,
     )
     canvas.paste(chart, (chart_x, chart_y))
+    if not chart_present:
+        _text(draw, (chart_x + chart.width // 2, chart_y + chart.height // 2),
+              "MT5 CHART UNAVAILABLE", 25, bold=True, fill=BRAND_CYAN, anchor="mm")
 
     logo_x1 = chart_x + chart.width + margin
     rail_x2 = canvas_w - margin
@@ -275,7 +286,7 @@ def build_chart_frame(chart_bytes: bytes | None) -> bytes:
     badge_y = min(rail_y2 - 82, rail_y1 + 550)
     draw.rounded_rectangle((logo_x1 + 42, badge_y, rail_x2 - 42, badge_y + 40),
                            radius=20, fill=(4, 36, 49), outline=BRAND_CYAN, width=1)
-    _text(draw, ((logo_x1 + rail_x2) // 2, badge_y + 11), "VERIFIED CHART", 14,
+    _text(draw, ((logo_x1 + rail_x2) // 2, badge_y + 11), "VERIFIED CHART" if chart_present else "CHART UNAVAILABLE", 14,
           bold=True, fill=BRAND_CYAN, anchor="ma")
 
     # Cyan corner signatures make the frame recognizable even at small size.
@@ -348,6 +359,56 @@ def build_signal_card(chart_bytes: bytes | None, signal: dict) -> bytes:
     out = BytesIO()
     canvas.save(out, format="PNG", optimize=True)
     return out.getvalue()
+
+
+def build_publication_signal_image(chart_bytes: bytes | None, signal: dict) -> bytes:
+    """One Telegram image renderer for both MT5 and Mini App issuance.
+
+    The supplied MT5 chart pixels remain untouched inside the existing frame.
+    A missing screenshot is explicitly represented by the existing information
+    card; WEB_ADMIN's upstream chart gate never permits this fallback.
+    """
+    frame = Image.open(BytesIO(build_chart_frame(chart_bytes))).convert("RGB")
+    footer_h = 240
+    canvas = _brand_gradient(frame.width, frame.height + footer_h)
+    canvas.paste(frame, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    top = frame.height + 18
+    draw.line((30, top - 9, frame.width - 30, top - 9), fill=BRAND_CYAN, width=2)
+    symbol = str(signal.get("symbol") or "—").upper()
+    direction = str(signal.get("direction") or "—").upper()
+    _text(draw, (32, top), f"{signal.get('code') or 'NEXUS'}  |  {symbol}  {direction}", 27, bold=True, fill=TEXT)
+    fields = [
+        ("ENTRY", signal.get("entry")), ("STOP LOSS", signal.get("stop_loss")),
+        ("TP1", signal.get("tp1")), ("TP2", signal.get("tp2")),
+        ("TP3", signal.get("tp3")), ("TP4", signal.get("tp4")),
+    ]
+    col_w = max(1, (frame.width - 64) // 3)
+    for index, (label, value) in enumerate(fields):
+        x = 32 + index % 3 * col_w
+        y = top + 52 + index // 3 * 67
+        _text(draw, (x, y), label, 15, bold=True, fill=(112, 153, 183))
+        _text(draw, (x, y + 23), str(value) if value is not None else "—", 23, bold=True, fill=TEXT)
+    out = BytesIO()
+    canvas.save(out, format="PNG", optimize=True)
+    return out.getvalue()
+
+
+def publication_card_payload(row, targets) -> dict:
+    """Map canonical stored signal numbers; never recompute TP levels."""
+    data = dict(row)
+    result = {
+        "code": data.get("code"), "symbol": data.get("symbol"),
+        "direction": data.get("direction"), "market_type": data.get("market_type"),
+        "order_type": data.get("order_type"), "entry": data.get("entry_price"),
+        "stop_loss": data.get("stop_loss"), "risk_percent": data.get("risk_percent"),
+        "trailing_code": data.get("trailing_code"), "trailing_name": data.get("trailing_name"),
+        "rr": data.get("rr_ratio"), "volume_mode": data.get("volume_mode"),
+        "lot_size": data.get("lot_size"), "leverage": data.get("leverage"),
+    }
+    for target in targets:
+        result[f"tp{int(target['target_no'])}"] = target["price"]
+    return result
 
 
 def build_result_card(chart_bytes: bytes | None, signal: dict, result_value: str, result_label: str) -> bytes:

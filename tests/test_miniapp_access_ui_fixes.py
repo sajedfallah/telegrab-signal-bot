@@ -68,13 +68,10 @@ def test_active_state_excludes_draft_and_terminal_records():
         assert status in sql
 
 
-def test_active_mt5_truth_clause_requires_current_broker_snapshot():
+def test_active_mt5_truth_clause_never_hides_canonical_signal_for_stale_snapshot():
     sql, args = miniapp_signals._active_truth_clause("ACTIVE")
-    assert "mt5_live_state" in sql
-    assert "OPEN" in sql and "PENDING" in sql
-    assert "nexus_managed" in sql
-    assert "last_seen_at" in sql
-    assert len(args) == 1
+    assert sql == "1=1"
+    assert args == ()
 
 
 def test_non_vip_active_feed_filters_vip_only_rows_at_sql_layer(monkeypatch):
@@ -95,7 +92,7 @@ def test_non_vip_active_feed_filters_vip_only_rows_at_sql_layer(monkeypatch):
     assert result["items"] == []
     assert "<> 'VIP'" in fake.sql
     assert "DRAFT" in fake.sql
-    assert "mt5_live_state" in fake.sql
+    assert "mt5_live_state" not in fake.sql
 
 
 def test_non_vip_cannot_open_active_vip_signal_detail(monkeypatch):
@@ -110,7 +107,7 @@ def test_non_vip_cannot_open_active_vip_signal_detail(monkeypatch):
     assert exc.value.detail == "VIP access required"
 
 
-def test_stale_mt5_admin_active_signal_detail_is_hidden(monkeypatch):
+def test_stale_mt5_admin_active_signal_detail_remains_visible(monkeypatch):
     row = _vip_active_row() | {"destination": "FREE", "issuer_type": "MT5_ADMIN", "issuer_account": "10001"}
     fake = _FakeConn(one=None)
     monkeypatch.setattr(miniapp_signals, "_auth_user", lambda _: {"id": 123})
@@ -119,11 +116,10 @@ def test_stale_mt5_admin_active_signal_detail_is_hidden(monkeypatch):
     monkeypatch.setattr(miniapp_signals.db, "get_signal", lambda _: row)
     monkeypatch.setattr(miniapp_signals.db, "conn", lambda: fake)
 
-    with pytest.raises(HTTPException) as exc:
-        miniapp_signals.signal_detail(91, x_telegram_init_data="signed")
-    assert exc.value.status_code == 404
-    assert exc.value.detail == "signal is no longer active"
-    assert "mt5_live_state" in fake.sql
+    result = miniapp_signals.signal_detail(91, x_telegram_init_data="signed")
+    assert result["id"] == 91
+    assert result["status"] == "ACTIVE"
+    assert "mt5_live_state" not in fake.sql
 
 
 def test_closed_signal_has_explicit_profit_or_loss_label(monkeypatch):

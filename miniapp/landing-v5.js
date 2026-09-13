@@ -37,6 +37,7 @@
     appShell.style.visibility = '';
     appShell.style.pointerEvents = '';
     document.body.classList.remove('landing-active');
+    appShell.classList.remove('nexus-app-entering');
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   };
 
@@ -45,6 +46,7 @@
     enterButton.disabled = false;
     landing.hidden = false;
     landing.classList.remove('is-leaving');
+    appShell.classList.remove('nexus-app-entering');
     appShell.setAttribute('aria-hidden', 'true');
     document.body.classList.add('landing-active');
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -54,6 +56,11 @@
     if (entered || enterButton.disabled) return;
     entered = true;
     enterButton.disabled = true;
+    appShell.removeAttribute('aria-hidden');
+    appShell.style.visibility = 'visible';
+    appShell.style.pointerEvents = 'none';
+    document.body.classList.remove('landing-active');
+    appShell.classList.add('nexus-app-entering');
     landing.classList.add('is-leaving');
 
     try {
@@ -67,7 +74,7 @@
         if (typeof window.render === 'function') window.render('home');
         if (typeof window.hydrateNexusHome === 'function') window.hydrateNexusHome();
       } catch (_) {}
-    }, 180);
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 340);
   };
 
   const resetForNextOpen = () => {

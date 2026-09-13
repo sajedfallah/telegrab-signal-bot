@@ -1,0 +1,25 @@
+/* V14 applies only to admin.html; User Mini App remains unchanged. */
+:root{color-scheme:light;--bg:#f4f7fb;--panel:#fff;--panel2:#fff;--line:#dce4ee;--line-accent:#dce4ee;--text:#0f172a;--muted:#64748b;--accent:#2563eb;--accent2:#0891b2;--gold:#2563eb;--green:#059669;--red:#dc2626;--orange:#d97706;--admin-border:#dce4ee;--admin-border-strong:#93c5fd;--card-shadow:0 8px 24px rgba(15,23,42,.06)}
+html,body{background:#f4f7fb;color:var(--text)}
+.top{background:rgba(244,247,251,.95);backdrop-filter:blur(12px)}
+.brand-logo{filter:none}.brand-copy small,.hero small,.mini-title{color:#1d4ed8}
+.panel,.card,.setup-fields,.metrics article{background:#fff!important;border:1px solid #dce4ee!important;box-shadow:var(--card-shadow)!important}
+.auto-setup-panel,.admin-live,.trade-actions,.preview-grid>div,.risk,.targets article,.levels span{border-width:1px!important}
+.form label{color:#334155}.form input,.form select{background:#fff;color:#0f172a;border-color:#cbd5e1!important}
+.form input:focus,.form select:focus{border-color:#2563eb!important;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.segments button,.direction button,.outline,.ghost,.section-head button,.icon{background:#fff;color:#334155;border:1px solid #cbd5e1!important}
+.segments button.selected,.primary,.submit-preview{background:#2563eb;color:#fff;border:1px solid #2563eb;box-shadow:0 8px 22px rgba(37,99,235,.16)}
+.outline.submit-preview{color:#fff}.direction .buy.selected{color:#047857;background:#ecfdf5}.direction button[data-side=SELL].selected{color:#b91c1c;background:#fef2f2}
+.levels span,.admin-live-grid span,.preview-grid>div,.targets article{background:#f8fafc;color:#64748b}.risk{background:#eff6ff}.auto-structure-note{background:#fffbeb}
+.bottom{background:rgba(255,255,255,.97);border-color:#dce4ee}.bottom button{color:#64748b}.bottom button.selected{color:#1d4ed8}
+.sheet{background:#fff;border-color:#dce4ee;box-shadow:0 -18px 60px rgba(15,23,42,.18)}.modal{background:rgba(15,23,42,.42)}.toast{background:#0f172a;color:#fff;border-color:#2563eb}
+.entry-source{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.entry-source button{padding:8px 12px}.entry-source small{color:#64748b;line-height:1.6}
+#clearRejectedLogs{color:#b91c1c;background:#fff;border-color:#fecaca}
+.admin-action-sheet{margin-top:10px;border:1px solid #dce4ee;border-radius:12px;padding:7px;background:#f8fafc}
+.admin-action-sheet summary{min-height:34px;display:flex;align-items:center;cursor:pointer;color:#1d4ed8;font-weight:800;font-size:11px}
+#positions .card.admin-position-card-v7.expanded{background:#fff!important;border-color:#93c5fd!important}
+#positions .admin-position-card-v7.expanded .trade-actions{background:#fff}
+#positions .admin-position-card-v7.expanded .admin-action-sheet:not([open]) .trade-actions{display:none!important}
+#positions .admin-position-more{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid rgba(37,99,235,.35);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}

@@ -51,6 +51,17 @@
     </div>`;
   }
 
+  function performanceChart(risk) {
+    const curve = risk?.status === 'OK' ? risk.equity_curve_r : null;
+    if (!Array.isArray(curve) || curve.length < 2 || !curve.every(value => Number.isFinite(Number(value)))) {
+      return '<div class="track-insufficient">داده معتبر کافی برای نمودار عملکرد وجود ندارد.</div>';
+    }
+    const values = curve.map(Number);
+    const low = Math.min(0, ...values), high = Math.max(0, ...values), span = Math.max(0.01, high - low);
+    const points = values.map((value, index) => `${(index / (values.length - 1) * 100).toFixed(2)},${(92 - (value - low) / span * 84).toFixed(2)}`).join(' ');
+    return `<section class="track-equity-chart" aria-label="نمودار تجمعی R بر پایه معاملات بسته‌شده"><div class="section-head"><h2>روند عملکرد · R</h2></div><svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="روند تجمعی ${h(values.length)} معامله"><line x1="0" y1="${(92 - (0 - low) / span * 84).toFixed(2)}" x2="100" y2="${(92 - (0 - low) / span * 84).toFixed(2)}" class="track-zero-line"/><polyline points="${points}"/></svg><small>داده: همان equity_curve_r محاسبه‌شده برای KPIهای Risk. آخرین مقدار ${h(num(values.at(-1), 2, 'R'))}</small></section>`;
+  }
+
   function symbols(rows) {
     if (!rows?.length) return '<div class="empty-state">داده کافی برای تفکیک نمادها وجود ندارد.</div>';
     return `<div class="track-table">${rows.map(row => `<article>
@@ -83,6 +94,7 @@
       ]);
       setBody(`
         <section class="track-summary">${summaryGrid(overview.summary)}<p>Track Record بر پایه سیگنال‌های CLOSED ثبت‌شده NEXUS است؛ بازده حساب معاملاتی کاربر نیست.</p></section>
+        ${performanceChart(overview.risk)}
         <section class="track-section"><div class="section-head"><h2>Risk / R Metrics</h2></div>${rMetrics(overview.risk)}</section>
         <section class="track-section"><div class="section-head"><h2>تفکیک نمادها</h2></div>${symbols(details.symbols)}</section>
         <section class="track-section"><div class="section-head"><h2>رایگان / VIP</h2></div>${channels(details.channels)}</section>
