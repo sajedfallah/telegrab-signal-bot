@@ -42,7 +42,7 @@ def test_live_dashboard_hydration_preserves_preview_contract():
         "health.recovery",
         "recent_signals",
         "signal_distribution",
-        "Preview data retained",
+        "preview data retained",
     )
     for marker in required:
         assert marker in js, marker
