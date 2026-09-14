@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
@@ -12,10 +14,41 @@ from .telegram_tenant_domain import get_connection_private, resolve_destination
 
 
 TERMINAL_EVENTS = {"TP_HIT", "SL_HIT", "MANUAL_CLOSE", "CLOSED"}
+DELIVERY_STATUSES = {"CLAIMED", "SENT", "UNKNOWN"}
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def init_lifecycle_delivery_schema(con: sqlite3.Connection) -> None:
+    statements = (
+        """CREATE TABLE IF NOT EXISTS provider_lifecycle_deliveries(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id INTEGER NOT NULL,
+            publication_id INTEGER NOT NULL,
+            signal_id INTEGER NOT NULL,
+            destination_key TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload_hash TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'CLAIMED'
+                CHECK(status IN ('CLAIMED','SENT','UNKNOWN')),
+            reply_to_message_id INTEGER,
+            telegram_message_id INTEGER,
+            event_id INTEGER,
+            error_code TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(tenant_id,publication_id,idempotency_key),
+            FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
+            FOREIGN KEY(publication_id) REFERENCES signal_publications(id) ON DELETE CASCADE,
+            FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_provider_lifecycle_delivery_lookup ON provider_lifecycle_deliveries(tenant_id,signal_id,destination_key,status)",
+    )
+    for statement in statements:
+        con.execute(statement)
 
 
 def _publication(
@@ -40,6 +73,16 @@ def _value(payload: dict[str, Any], *names: str) -> Any:
         if payload.get(name) is not None:
             return payload[name]
     return None
+
+
+def _payload_hash(event_type: str, payload: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        {"event_type": str(event_type).upper(), "payload": payload},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def format_position_update(event_type: str, payload: dict[str, Any]) -> str:
@@ -90,6 +133,86 @@ def format_position_update(event_type: str, payload: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _claim_delivery(
+    con: sqlite3.Connection,
+    *,
+    tenant_id: int,
+    publication: dict[str, Any],
+    signal_id: int,
+    destination_key: str,
+    idempotency_key: str,
+    event_type: str,
+    payload: dict[str, Any],
+    reply_to_message_id: int,
+) -> tuple[dict[str, Any], bool]:
+    init_lifecycle_delivery_schema(con)
+    key = idempotency_key.strip()
+    if not key:
+        raise ValueError("idempotency_key is required")
+    if len(key) > 160:
+        raise ValueError("idempotency_key is too long")
+    digest = _payload_hash(event_type, payload)
+    now = _now()
+    try:
+        cur = con.execute(
+            "INSERT INTO provider_lifecycle_deliveries(tenant_id,publication_id,signal_id,destination_key,idempotency_key,event_type,payload_hash,status,reply_to_message_id,created_at,updated_at) "
+            "VALUES(?,?,?,?,?,?,?,'CLAIMED',?,?,?)",
+            (
+                tenant_id,
+                int(publication["id"]),
+                signal_id,
+                destination_key.strip().upper(),
+                key,
+                event_type,
+                digest,
+                int(reply_to_message_id),
+                now,
+                now,
+            ),
+        )
+        delivery_id = int(cur.lastrowid)
+        # Durability boundary before external Telegram I/O. A process crash after
+        # Telegram accepts the message cannot cause an automatic duplicate retry.
+        con.commit()
+        return {
+            "id": delivery_id,
+            "status": "CLAIMED",
+            "payload_hash": digest,
+            "event_type": event_type,
+            "reply_to_message_id": int(reply_to_message_id),
+        }, True
+    except sqlite3.IntegrityError:
+        row = con.execute(
+            "SELECT id,status,event_type,payload_hash,reply_to_message_id,telegram_message_id,event_id,error_code "
+            "FROM provider_lifecycle_deliveries WHERE tenant_id=? AND publication_id=? AND idempotency_key=?",
+            (tenant_id, int(publication["id"]), key),
+        ).fetchone()
+        if row is None:
+            raise
+        existing = dict(row)
+        if existing["event_type"] != event_type or existing["payload_hash"] != digest:
+            raise RuntimeError("idempotency key reused with different lifecycle event")
+        return existing, False
+
+
+def _sent_receipt(
+    delivery: dict[str, Any], publication: dict[str, Any], *, signal_id: int, destination_key: str
+) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "idempotent_replay": True,
+        "delivery_id": int(delivery["id"]),
+        "event_id": int(delivery["event_id"]) if delivery.get("event_id") is not None else None,
+        "event_type": str(delivery["event_type"]),
+        "publication_id": int(publication["id"]),
+        "signal_id": signal_id,
+        "destination_key": destination_key.strip().upper(),
+        "reply_to_message_id": int(delivery["reply_to_message_id"]),
+        "message_id": int(delivery["telegram_message_id"]),
+        "publication_status": str(publication.get("status") or "PUBLISHED"),
+    }
+
+
 def reply_signal_event(
     con: sqlite3.Connection,
     *,
@@ -98,14 +221,17 @@ def reply_signal_event(
     destination_key: str,
     event_type: str,
     payload: dict[str, Any],
+    idempotency_key: str,
     actor_user_id: int | None = None,
     timeout_seconds: float = 10.0,
     client: httpx.Client | None = None,
 ) -> dict[str, Any]:
-    """Send one lifecycle update through the publication's tenant-owned Telegram route.
+    """Send one idempotent lifecycle update through a tenant-owned Telegram route.
 
-    Replies chain from the publication's last_message_id (falling back to root_message_id).
-    There is deliberately no global BOT_TOKEN/channel fallback.
+    A durable delivery claim is committed before external I/O. Retrying the same
+    idempotency key returns the stored receipt after success. CLAIMED/UNKNOWN
+    outcomes are never re-sent automatically because Telegram may already have
+    accepted the prior request. There is no global BOT_TOKEN/channel fallback.
     """
     kind = str(event_type).upper()
     if kind not in EVENT_TYPES:
@@ -137,6 +263,22 @@ def reply_signal_event(
     reply_to = publication.get("last_message_id") or publication.get("root_message_id")
     if reply_to is None:
         raise RuntimeError("signal publication has no Telegram root message")
+
+    delivery, is_new = _claim_delivery(
+        con,
+        tenant_id=tenant_id,
+        publication=publication,
+        signal_id=signal_id,
+        destination_key=destination_key,
+        idempotency_key=idempotency_key,
+        event_type=kind,
+        payload=payload,
+        reply_to_message_id=int(reply_to),
+    )
+    if not is_new:
+        if delivery["status"] == "SENT":
+            return _sent_receipt(delivery, publication, signal_id=signal_id, destination_key=destination_key)
+        raise RuntimeError("lifecycle delivery outcome requires reconciliation")
 
     request: dict[str, Any] = {
         "chat_id": str(publication["telegram_chat_id"]),
@@ -172,8 +314,16 @@ def reply_signal_event(
             "WHERE id=? AND tenant_id=? AND signal_id=?",
             (message_id, status, now, int(publication["id"]), tenant_id, signal_id),
         )
+        con.execute(
+            "UPDATE provider_lifecycle_deliveries SET status='SENT',telegram_message_id=?,event_id=?,error_code=NULL,updated_at=? "
+            "WHERE id=? AND tenant_id=?",
+            (message_id, event_id, now, int(delivery["id"]), tenant_id),
+        )
+        con.commit()
         return {
             "ok": True,
+            "idempotent_replay": False,
+            "delivery_id": int(delivery["id"]),
             "event_id": event_id,
             "event_type": kind,
             "publication_id": int(publication["id"]),
@@ -183,8 +333,22 @@ def reply_signal_event(
             "message_id": message_id,
             "publication_status": status,
         }
-    except (httpx.HTTPError, ValueError) as exc:
-        raise RuntimeError("Telegram lifecycle reply failed") from exc
+    except Exception as exc:
+        # Once the outbound request has started, delivery can be ambiguous. Persist
+        # UNKNOWN and refuse automatic resend for the same idempotency key.
+        try:
+            con.execute(
+                "UPDATE provider_lifecycle_deliveries SET status='UNKNOWN',error_code=?,updated_at=? WHERE id=? AND tenant_id=?",
+                ("telegram_delivery_uncertain", _now(), int(delivery["id"]), tenant_id),
+            )
+            con.commit()
+        except Exception:
+            pass
+        if isinstance(exc, (RuntimeError, ValueError)):
+            raise
+        if isinstance(exc, httpx.HTTPError):
+            raise RuntimeError("Telegram lifecycle reply failed") from exc
+        raise
     finally:
         if own_client:
             session.close()
