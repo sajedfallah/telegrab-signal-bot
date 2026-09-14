@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="./user-v066-final.css?v=20260914-next-ui" />
   <link rel="stylesheet" href="./symbol-visuals.css?v=20260914-next-ui" />
   <link rel="stylesheet" href="./live-charts.css?v=20260914-livecharts-v1" />
+  <link rel="stylesheet" href="./live-charts-static-home.css?v=20260914-livecharts-static1" />
 </head>
 <body class="landing-active">
   <section class="nexus-landing" id="nexusLanding" aria-label="NEXUS Landing">
@@ -33,6 +34,12 @@
   </section>
   <div class="app-shell">
     <header class="topbar"><div class="brand-wrap"><img class="brand-logo" src="./assets/brand/nexus-mark.svg?v=20260910-1215" alt="NEXUS" decoding="async" /><div><div class="brand">NEXUS</div><div class="brand-sub">Trading Intelligence</div></div></div><div class="topbar-actions"><button class="nexus-page-back" id="nexusBackBtn" type="button" aria-label="بازگشت به صفحه قبلی"><span class="nexus-back-arrow" aria-hidden="true">←</span><span class="nexus-back-label">بازگشت</span></button><button class="icon-btn notification-btn" id="notificationsBtn" aria-label="اعلان‌ها"><span data-nexus-icon="bell"></span><i class="notification-badge" id="notificationBadge" hidden>0</i></button><button class="icon-btn" id="langBtn" aria-label="language">FA</button></div></header>
+    <section class="nexus-live-charts-static-entry" id="nexusLiveChartsStaticEntry" aria-label="Live Charts">
+      <button type="button" class="live-chart-entry-card" onclick="window.NexusLiveCharts && window.NexusLiveCharts.open()">
+        <span class="live-chart-entry-copy"><b>Live Charts</b><small>نمودار زنده بازار · Crypto · Gold · Forex</small></span>
+        <span class="live-chart-entry-action">باز کردن ←</span>
+      </button>
+    </section>
     <main id="view" class="view"></main>
     <nav class="bottom-nav" aria-label="main navigation"><button data-route="home" class="nav-item active"><span class="nav-icon-wrap" data-nexus-icon="home"></span><small>خانه</small></button><button data-route="signals" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="signals"></span><small>سیگنال‌ها</small></button><button data-route="subscriptions" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="plans"></span><small>پلن‌ها</small></button><button data-route="account" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="account"></span><small>حساب من</small></button></nav>
   </div>
