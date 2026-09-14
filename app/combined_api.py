@@ -9,6 +9,7 @@ from .miniapp_api import router as miniapp_router
 from .provider_lifecycle_api import router as provider_lifecycle_router
 from .provider_panel_api import router as provider_panel_router
 from .provider_reconciliation_api import router as provider_reconciliation_router
+from .provider_revenue_api import router as provider_revenue_router
 from .provider_subscribers_api import router as provider_subscribers_router
 
 
@@ -23,6 +24,7 @@ app.include_router(provider_panel_router)
 app.include_router(provider_lifecycle_router)
 app.include_router(provider_reconciliation_router)
 app.include_router(provider_subscribers_router)
+app.include_router(provider_revenue_router)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
