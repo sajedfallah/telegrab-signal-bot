@@ -15,6 +15,7 @@ from .provider_credentials import (
 )
 from .provider_permissions import ProviderPermission, require_permission
 from .provider_publish import publish_signal_text
+from .provider_subscribers import subscriber_summary
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
 from .telegram_tenant_domain import (
     create_connection as telegram_create_connection,
@@ -127,20 +128,26 @@ def _recovery_state(con, tenant_id: int) -> dict[str, Any]:
             "open_reconciliation_count": 0,
             "requires_attention": False,
         }
-    unknown_count = int(con.execute(
-        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='UNKNOWN'",
-        (tenant_id,),
-    ).fetchone()[0])
-    claimed_count = int(con.execute(
-        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='CLAIMED'",
-        (tenant_id,),
-    ).fetchone()[0])
+    unknown_count = int(
+        con.execute(
+            "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='UNKNOWN'",
+            (tenant_id,),
+        ).fetchone()[0]
+    )
+    claimed_count = int(
+        con.execute(
+            "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='CLAIMED'",
+            (tenant_id,),
+        ).fetchone()[0]
+    )
     open_count = 0
     if _table_exists(con, "provider_delivery_reconciliations"):
-        open_count = int(con.execute(
-            "SELECT COUNT(*) FROM provider_delivery_reconciliations WHERE tenant_id=? AND status='OPEN'",
-            (tenant_id,),
-        ).fetchone()[0])
+        open_count = int(
+            con.execute(
+                "SELECT COUNT(*) FROM provider_delivery_reconciliations WHERE tenant_id=? AND status='OPEN'",
+                (tenant_id,),
+            ).fetchone()[0]
+        )
     requires_attention = bool(unknown_count or claimed_count or open_count)
     return {
         "status": "attention" if requires_attention else "healthy",
@@ -162,7 +169,8 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
             signal_count = int(con.execute("SELECT COUNT(*) FROM signals WHERE tenant_id=?", (ctx.tenant_id,)).fetchone()[0])
             rows = con.execute(
                 "SELECT id,code,market_type,symbol,direction,entry_price,stop_loss,tp1,status,result_value,result_unit,created_at,closed_at "
-                "FROM signals WHERE tenant_id=? ORDER BY id DESC LIMIT 8", (ctx.tenant_id,)
+                "FROM signals WHERE tenant_id=? ORDER BY id DESC LIMIT 8",
+                (ctx.tenant_id,),
             ).fetchall()
             recent_signals = [dict(row) for row in rows]
             closed = con.execute(
@@ -179,16 +187,20 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
                 win_rate = round((wins / len(closed)) * 100, 1)
             groups = con.execute(
                 "SELECT COALESCE(NULLIF(market_type,''),'Other') AS market_type,COUNT(*) AS count FROM signals "
-                "WHERE tenant_id=? GROUP BY COALESCE(NULLIF(market_type,''),'Other') ORDER BY count DESC", (ctx.tenant_id,)
+                "WHERE tenant_id=? GROUP BY COALESCE(NULLIF(market_type,''),'Other') ORDER BY count DESC",
+                (ctx.tenant_id,),
             ).fetchall()
             distribution = [{"label": str(row["market_type"]), "count": int(row["count"])} for row in groups]
+
         telegram_state = _telegram_state(con, ctx.tenant_id)
         recovery_state = _recovery_state(con, ctx.tenant_id)
+        subscriber_state = subscriber_summary(con, tenant_id=ctx.tenant_id)
+        subscriber_ready = subscriber_state.get("status") == "ready"
         return {
             "source": "live_database",
             "tenant_id": ctx.tenant_id,
             "kpis": {
-                "active_subscribers": None,
+                "active_subscribers": subscriber_state.get("active_subscribers") if subscriber_ready else None,
                 "monthly_revenue": None,
                 "total_signals": signal_count,
                 "win_rate": win_rate,
@@ -201,22 +213,29 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
                 "recovery": recovery_state,
                 "mt5": {"status": "unavailable", "reason": "tenant TradingConnection domain pending"},
                 "copy_trade": {"status": "unavailable", "reason": "tenant Copy Trade domain pending"},
-                "subscription": {"status": "unavailable", "reason": "provider subscription domain pending"},
+                "subscription": {
+                    "status": "ready" if subscriber_ready else "unavailable",
+                    "reason": subscriber_state.get("reason"),
+                    "active_subscribers": subscriber_state.get("active_subscribers"),
+                    "total_customers": subscriber_state.get("total_customers"),
+                    "active_plans": subscriber_state.get("active_plans"),
+                },
             },
             "availability": {
-                "active_subscribers": False,
+                "active_subscribers": subscriber_ready,
                 "monthly_revenue": False,
                 "revenue_series": False,
                 "signals": True,
                 "telegram": True,
                 "recovery": recovery_state["status"] != "unavailable",
+                "subscribers": subscriber_ready,
             },
         }
 
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.7"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.8"}
 
 
 @router.get("/bootstrap")
