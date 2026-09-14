@@ -24,7 +24,7 @@ def test_live_chart_tools_keep_existing_market_sources_untouched():
 def test_expected_drawing_tools_and_signal_overlay_exist():
     js = (MINIAPP / "live-chart-tools-v22.js").read_text(encoding="utf-8")
     for tool in ("horizontal", "trend", "rectangle", "fib", "risk"):
-        assert f'data-chart-tool=\\"{tool}\\"' in js
+        assert f'data-chart-tool="{tool}"' in js
     assert "data-chart-nexus-overlay" in js
     assert "NEXUS Signal Overlay" in js
     assert "TP 2R" in js
