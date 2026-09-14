@@ -8,6 +8,11 @@ body:not(.landing-active) .app-shell:has(.bottom-nav .nav-item[data-route="home"
   display: block;
 }
 
+/* Suppress the older injected Home entry so only one card can ever be visible. */
+.home-v2 > .nexus-live-charts-entry {
+  display: none !important;
+}
+
 .nexus-live-charts-static-entry .live-chart-entry-card {
   width: 100%;
   border: 1px solid rgba(73, 174, 255, .24);
