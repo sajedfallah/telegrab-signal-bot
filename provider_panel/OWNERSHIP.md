@@ -1,0 +1,3 @@
+# Tenant Ownership Rules for UI Integration
+
+Provider Panel resources belong to the authenticated provider tenant. Future API responses for signals, publications, customers, licenses, credits, reports, branding, Telegram destinations and trading connections must be derived from that resolved tenant context. UI-provided resource identifiers are never sufficient authorization. Super Admin capabilities remain in a separate control surface.
