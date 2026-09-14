@@ -38,6 +38,7 @@ def test_live_dashboard_hydration_preserves_preview_contract():
         "/provider/api/bootstrap",
         "/provider/api/subscribers",
         "/provider/api/revenue",
+        "/provider/api/reports?days=",
         "X-Telegram-Init-Data",
         "X-Tenant-Id",
         "dashboard.health",
@@ -47,8 +48,10 @@ def test_live_dashboard_hydration_preserves_preview_contract():
         "active_subscribers",
         "applySubscribersLive",
         "applyRevenueLive",
-        "subscriberTable",
-        "Live settled revenue",
+        "applyReportsLive",
+        "reportRevenueByPlan",
+        "reportPaymentHistory",
+        "Reporting currency required",
         "Preview data retained",
     )
     for marker in required:
