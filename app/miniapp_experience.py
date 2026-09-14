@@ -39,15 +39,19 @@ def _segment(vip: bool, autotrade: bool) -> str:
 
 def _navigation(segment: str, lifecycle: str) -> list[dict[str, str]]:
     if lifecycle != "EXPIRED" and segment in {"AUTOTRADE", "BUNDLE"}:
-        third = {"route": "trades", "label_fa": "معاملات", "label_en": "Trades", "icon": "trades"}
+        utility = {"route": "trades", "label_fa": "معاملات", "label_en": "Trades", "icon": "trades"}
     elif segment == "VIP" and lifecycle != "EXPIRED":
-        third = {"route": "subscriptions", "label_fa": "ارتقا", "label_en": "Upgrade", "icon": "plans"}
+        utility = {"route": "subscriptions", "label_fa": "ارتقا", "label_en": "Upgrade", "icon": "plans"}
     else:
-        third = {"route": "subscriptions", "label_fa": "پلن‌ها", "label_en": "Plans", "icon": "plans"}
+        utility = {"route": "subscriptions", "label_fa": "پلن‌ها", "label_en": "Plans", "icon": "plans"}
+
+    # Live Charts is a permanent product surface and must not disappear when the
+    # lifecycle-aware navigation is re-rendered by the /experience response.
     return [
         {"route": "home", "label_fa": "خانه", "label_en": "Home", "icon": "home"},
         {"route": "signals", "label_fa": "سیگنال‌ها", "label_en": "Signals", "icon": "signals"},
-        third,
+        {"route": "charts", "label_fa": "چارت", "label_en": "Charts", "icon": "chart"},
+        utility,
         {"route": "account", "label_fa": "حساب من", "label_en": "Account", "icon": "account"},
     ]
 
