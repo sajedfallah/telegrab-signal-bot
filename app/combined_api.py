@@ -33,6 +33,13 @@ app.include_router(miniapp_account_router)
 app.include_router(miniapp_product_intelligence_router)
 app.include_router(miniapp_purchase_flow_router)
 
+# WEB_ADMIN signals created by the Admin Mini App must execute on the
+# authenticated Admin MT5 account before chart capture / Telegram publication.
+# This is an additive runtime bridge: customer AutoTrade, MT5_ADMIN issuance and
+# the existing DB schema remain unchanged.
+from .autotrade.miniapp_execution_runtime import install_miniapp_execution_gate
+install_miniapp_execution_gate(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
