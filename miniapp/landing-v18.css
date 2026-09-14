@@ -1,0 +1,380 @@
+/* NEXUS Landing V18 — poster-first landing with animated glowing CTA.
+   Presentation only. Existing landing-v5.js keeps the same enter/reveal lifecycle. */
+
+:root{
+  --nx-landing-bg:#020b18;
+  --nx-landing-bg-2:#041426;
+  --nx-landing-blue:#169cff;
+  --nx-landing-blue-2:#4f7dff;
+  --nx-landing-violet:#8d6cff;
+  --nx-landing-text:#f7fbff;
+}
+
+html,body{
+  background:var(--nx-landing-bg)!important;
+}
+
+body.landing-active{
+  overflow:hidden!important;
+  overscroll-behavior:none;
+  background:var(--nx-landing-bg)!important;
+}
+
+body.landing-active>.app-shell{
+  visibility:hidden;
+  pointer-events:none;
+}
+
+.nexus-landing{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  width:100vw;
+  height:100dvh;
+  overflow:hidden;
+  display:grid;
+  place-items:center;
+  isolation:isolate;
+  background:
+    radial-gradient(circle at 50% 18%,rgba(0,155,255,.13),transparent 34%),
+    radial-gradient(circle at 50% 82%,rgba(23,95,184,.14),transparent 32%),
+    linear-gradient(180deg,var(--nx-landing-bg) 0%,var(--nx-landing-bg-2) 56%,#020912 100%);
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+.nexus-landing[hidden]{display:none!important}
+
+.nexus-landing::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  opacity:.13;
+  background-image:
+    radial-gradient(rgba(255,255,255,.16) .5px,transparent .65px),
+    radial-gradient(rgba(31,156,255,.13) .45px,transparent .6px);
+  background-size:20px 20px,27px 27px;
+  background-position:0 0,8px 10px;
+  mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),rgba(0,0,0,.16));
+}
+
+.nexus-landing-poster-frame{
+  position:relative;
+  z-index:1;
+  width:min(100vw,640px);
+  height:100dvh;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  overflow:hidden;
+  background:transparent;
+}
+
+.nexus-landing-poster{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  object-position:center top;
+  display:block;
+  pointer-events:none;
+  -webkit-user-drag:none;
+  filter:drop-shadow(0 26px 55px rgba(0,0,0,.28));
+}
+
+/* ------------------------------------------------------------------
+   CTA — cleaned adaptation of the supplied Uiverse glow button.
+   ------------------------------------------------------------------ */
+.nexus-landing-enter{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  bottom:max(30px,calc(22px + env(safe-area-inset-bottom)));
+  transform:translateX(-50%);
+  width:auto;
+  min-width:0;
+  height:auto;
+  min-height:0;
+  max-height:none;
+  padding:0;
+  border:0;
+  border-radius:999px;
+  appearance:none;
+  -webkit-appearance:none;
+  background:transparent!important;
+  box-shadow:none!important;
+  outline:none;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+.glowing-box{
+  --animation-speed:2s;
+  isolation:isolate;
+  overflow:hidden;
+  border-radius:999px;
+  display:inline-block;
+  position:relative;
+  transition:
+    transform .26s cubic-bezier(.22,1,.36,1),
+    box-shadow .34s cubic-bezier(.22,1,.36,1);
+}
+
+.glowing-box:hover{
+  transform:scale(1.035);
+  box-shadow:0 12px 34px rgba(45,137,255,.18),0 0 28px rgba(89,184,255,.10);
+}
+
+.glowing-box:active{transform:scale(.985)}
+
+.glowing-box-active .glowing-box-animations,
+.glowing-box-active .glowing-box-borders-masker{opacity:1}
+
+.glowing-box-animations,
+.glowing-box-borders{
+  left:50%;
+  position:absolute;
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:100%;
+}
+
+.glowing-box-animations{
+  opacity:0;
+  pointer-events:none;
+  transition:1s ease opacity;
+}
+
+.glowing-box-animations::before,
+.glowing-box-borders::before{
+  content:"";
+  float:left;
+  padding-top:100%;
+}
+
+.glowing-box-animations::after,
+.glowing-box-borders::after{
+  clear:both;
+  content:"";
+  display:block;
+}
+
+.glowing-box-animations *{
+  height:100%;
+  left:0;
+  position:absolute;
+  top:0;
+  width:100%;
+}
+
+.glowing-box-glow{
+  filter:blur(12px);
+  opacity:.16;
+}
+
+.glowing-box-stars-masker{
+  -webkit-mask-image:radial-gradient(circle,#000 1.1px,transparent 1.4px);
+  mask-image:radial-gradient(circle,#000 1.1px,transparent 1.4px);
+  -webkit-mask-repeat:repeat;
+  mask-repeat:repeat;
+  -webkit-mask-size:15px 15px;
+  mask-size:15px 15px;
+}
+
+.glowing-box-borders,
+.glowing-box-glow,
+.glowing-box-stars{
+  animation:borderTurn var(--animation-speed) infinite linear;
+  background-image:conic-gradient(
+    from 0deg at 50% 50%,
+    rgba(255,255,255,.72) 0deg,
+    rgba(53,188,255,.84) 34deg,
+    rgba(72,110,255,.08) 94deg,
+    rgba(255,255,255,0) 176deg,
+    rgba(141,108,255,.20) 258deg,
+    rgba(255,255,255,.70) 360deg
+  );
+  background-position:center;
+  background-repeat:no-repeat;
+  background-size:cover;
+}
+
+.glowing-box-borders{animation-name:borderTurnWithTranslate}
+
+.glowing-box-borders-masker{
+  border-radius:999px;
+  inset:0;
+  left:0;
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;
+  mask-composite:exclude;
+  opacity:0;
+  padding:1px;
+  pointer-events:none;
+  position:absolute;
+  top:0;
+  transition:1s ease opacity;
+}
+
+.glowing-box-button{
+  position:relative;
+  z-index:1;
+  min-width:min(78vw,320px);
+  min-height:54px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  padding:13px 30px;
+  overflow:visible;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:999px;
+  cursor:pointer;
+  color:#fff;
+  background:
+    radial-gradient(107.5% 107.5% at 50% 215%,rgba(255,255,255,.25) 0%,rgba(255,255,255,0) 100%),
+    linear-gradient(115deg,rgba(7,25,49,.94),rgba(9,34,69,.96));
+  box-shadow:
+    0 12px 34px rgba(0,0,0,.34),
+    0 0 26px rgba(0,154,255,.13),
+    inset 0 1px 0 rgba(255,255,255,.10);
+  font-family:Vazirmatn,sans-serif;
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:0;
+  line-height:1.35;
+  white-space:nowrap;
+  transition:box-shadow .3s ease,background .3s ease;
+}
+
+.glowing-box-button::after{
+  background:radial-gradient(73% 117% at 50% 126%,rgba(29,91,200,.58) 0%,rgba(255,255,255,0) 100%);
+  border-radius:999px;
+  content:"";
+  height:calc(100% + 4px);
+  left:-2px;
+  opacity:0;
+  position:absolute;
+  top:-2px;
+  transition:.7s opacity ease;
+  width:calc(100% + 4px);
+  pointer-events:none;
+}
+
+.glowing-box-button:hover::after{opacity:.8}
+
+.glowing-box-button:focus-visible{
+  outline:none;
+  box-shadow:
+    0 0 0 3px rgba(37,149,255,.20),
+    0 0 0 6px rgba(37,149,255,.08),
+    0 14px 38px rgba(0,0,0,.34),
+    0 0 30px rgba(0,154,255,.18);
+}
+
+.glowing-span{
+  background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,#fff 92%);
+  -webkit-background-clip:text;
+  background-clip:text;
+  color:transparent;
+  -webkit-text-fill-color:transparent;
+  display:block;
+  position:relative;
+  z-index:1;
+}
+
+.nexus-enter-arrow{
+  position:relative;
+  z-index:1;
+  display:inline-grid;
+  place-items:center;
+  width:23px;
+  height:23px;
+  border-radius:50%;
+  color:#bfe8ff;
+  background:rgba(51,165,255,.12);
+  border:1px solid rgba(105,202,255,.20);
+  font:900 17px/1 Arial,sans-serif;
+  direction:ltr;
+}
+
+.nexus-visually-hidden{
+  position:absolute!important;
+  width:1px!important;
+  height:1px!important;
+  padding:0!important;
+  margin:-1px!important;
+  overflow:hidden!important;
+  clip:rect(0,0,0,0)!important;
+  white-space:nowrap!important;
+  border:0!important;
+}
+
+/* Existing JS fallback remains fail-safe if the poster asset is missing. */
+.nexus-fallback-cta{display:none}
+.nexus-landing.landing-fallback .nexus-landing-poster{display:none}
+.nexus-landing.landing-fallback .glowing-box{display:none}
+.nexus-landing.landing-fallback .nexus-landing-enter{
+  bottom:auto;
+  top:50%;
+  left:8%;
+  right:8%;
+  width:auto;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+  border:1px solid rgba(59,179,255,.28)!important;
+  border-radius:28px;
+  background:linear-gradient(155deg,rgba(10,28,50,.98),rgba(4,14,28,.99))!important;
+  color:#f4f7fb;
+  box-shadow:0 22px 60px rgba(0,0,0,.45),0 0 34px rgba(38,153,255,.10)!important;
+}
+.nexus-landing.landing-fallback .nexus-fallback-cta{display:grid;gap:8px;text-align:center}
+.nexus-fallback-cta b{font-size:34px;letter-spacing:.14em;color:#fff}
+.nexus-fallback-cta small{font-size:10px;letter-spacing:.18em;color:#51bdff}
+.nexus-fallback-cta em{margin-top:12px;font-style:normal;font-size:15px;font-weight:900;color:#fff;background:linear-gradient(135deg,#168fff,#4f7dff);padding:13px 24px;border-radius:999px}
+
+.nexus-landing.is-leaving{
+  opacity:0;
+  transform:scale(.988);
+  pointer-events:none;
+  transition:opacity 340ms ease,transform 340ms ease;
+}
+
+.app-shell.nexus-app-entering{animation:nexus-app-arrive 340ms ease both}
+@keyframes nexus-app-arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+
+@keyframes borderTurnWithTranslate{
+  0%{transform:translate(-50%,-50%) rotate(0deg)}
+  100%{transform:translate(-50%,-50%) rotate(360deg)}
+}
+@keyframes borderTurn{
+  0%{transform:rotate(0deg)}
+  100%{transform:rotate(360deg)}
+}
+
+@media(max-width:430px){
+  .nexus-landing-poster-frame{width:100vw}
+  .nexus-landing-enter{bottom:max(24px,calc(18px + env(safe-area-inset-bottom)))}
+  .glowing-box-button{min-width:min(82vw,310px);min-height:52px;font-size:15px;padding:12px 24px}
+}
+
+@media(orientation:landscape){
+  .nexus-landing-poster-frame{width:min(100vw,720px)}
+  .nexus-landing-poster{object-fit:contain;object-position:center center}
+  .nexus-landing-enter{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)))}
+  .glowing-box-button{min-width:240px;min-height:46px;padding:10px 24px;font-size:14px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .glowing-box-borders,.glowing-box-glow,.glowing-box-stars{animation:none!important}
+  .glowing-box,.nexus-landing,.app-shell.nexus-app-entering{transition:none!important;animation:none!important}
+}
