@@ -75,7 +75,7 @@ def test_tenant_header_is_not_authorization(monkeypatch, tmp_path):
             self.con.close()
 
     monkeypatch.setattr("app.provider_panel_api.db.conn", lambda: Conn())
-    monkeypatch.setattr("app.provider_panel_api._validate_init_data", lambda _: {"id": 1001})
+    monkeypatch.setattr("app.provider_panel_api._authenticate_provider", lambda _: {"id": 1001})
 
     ok = _tenant_context("signed", nexus_id)
     assert ok.tenant_id == nexus_id
