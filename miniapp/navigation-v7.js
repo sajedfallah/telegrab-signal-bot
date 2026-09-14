@@ -30,7 +30,7 @@
   function updateBackButton() {
     backButton.dataset.currentRoute = currentRoute;
     backButton.setAttribute('aria-label', currentRoute === 'home' ? 'بازگشت به صفحه ورود' : 'بازگشت به صفحه قبلی');
-    backButton.hidden = ['landing', 'home', 'signals', 'subscriptions', 'account'].includes(currentRoute);
+    backButton.hidden = ['landing', 'home', 'signals', 'charts', 'subscriptions', 'account'].includes(currentRoute);
   }
 
   function applyHomeAnalysisLabel(root = document) {
@@ -77,6 +77,8 @@
         window.NexusTrackRecord.open();
       } else if (route === 'trades' && window.NexusTrades?.open) {
         window.NexusTrades.open();
+      } else if (route === 'charts' && window.NexusLiveCharts?.open) {
+        window.NexusLiveCharts.open();
       } else {
         render(route);
       }
