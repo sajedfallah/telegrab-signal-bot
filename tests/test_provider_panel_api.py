@@ -11,7 +11,7 @@ from app.provider_panel_api import (
     _dashboard,
     _tenant_context,
     create_telegram_connection,
-    test_telegram_connection,
+    probe_telegram_connection,
 )
 from app.telegram_tenant_domain import create_connection, create_destination
 from app.tenancy import TenantContext, TenantRole, grant_membership, init_tenant_schema
@@ -127,7 +127,7 @@ def test_telegram_connection_token_is_encrypted_and_tested_without_leak(monkeypa
     monkeypatch.setattr("app.provider_panel_api.db.conn", lambda: Conn())
     monkeypatch.setattr("app.provider_panel_api._authenticate_provider", lambda _: {"id": 1001})
     monkeypatch.setattr(
-        "app.provider_panel_api.test_telegram_bot_token",
+        "app.provider_panel_api.probe_telegram_bot_token",
         lambda supplied: {"ok": True, "bot_id": 77, "username": "provider_bot", "first_name": "Provider"} if supplied == token else {"ok": False, "error": "unexpected"},
     )
 
@@ -142,7 +142,7 @@ def test_telegram_connection_token_is_encrypted_and_tested_without_leak(monkeypa
     assert token.encode() not in encrypted
     con.close()
 
-    tested = test_telegram_connection(created["connection_id"], "signed", nexus_id)
+    tested = probe_telegram_connection(created["connection_id"], "signed", nexus_id)
     assert tested["ok"] is True
     assert tested["username"] == "provider_bot"
     assert token not in repr(tested)
