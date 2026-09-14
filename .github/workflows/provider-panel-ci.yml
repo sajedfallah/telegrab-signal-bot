@@ -17,6 +17,8 @@ on:
       - 'app/telegram_webapp_auth.py'
       - 'app/combined_api.py'
       - 'app/tenancy.py'
+      - 'scripts/provider_domain_migration.py'
+      - 'tests/test_provider_domain_migration.py'
       - 'tests/test_provider_panel_static.py'
       - 'tests/test_provider_panel_api.py'
       - 'tests/test_provider_credentials.py'
@@ -47,6 +49,8 @@ on:
       - 'app/telegram_webapp_auth.py'
       - 'app/combined_api.py'
       - 'app/tenancy.py'
+      - 'scripts/provider_domain_migration.py'
+      - 'tests/test_provider_domain_migration.py'
       - 'tests/test_provider_panel_static.py'
       - 'tests/test_provider_panel_api.py'
       - 'tests/test_provider_credentials.py'
@@ -69,9 +73,9 @@ jobs:
           python-version: '3.12'
       - name: Install test dependencies
         run: python -m pip install pytest fastapi pydantic aiogram httpx cryptography
-      - name: Validate Provider Panel tenant, RBAC, publish, lifecycle and reconciliation contracts
-        run: python -m pytest -q tests/test_provider_panel_static.py tests/test_provider_panel_api.py tests/test_provider_credentials.py tests/test_provider_lifecycle.py tests/test_provider_reconciliation.py tests/test_provider_permissions.py tests/test_provider_publish.py tests/test_provider_publish_api.py tests/test_provider_telegram_destination_api.py tests/test_signal_domain.py tests/test_telegram_tenant_domain.py tests/test_phase1_tenancy.py
+      - name: Validate Provider tenant, migration, RBAC, publish, lifecycle and reconciliation contracts
+        run: python -m pytest -q tests/test_provider_domain_migration.py tests/test_provider_panel_static.py tests/test_provider_panel_api.py tests/test_provider_credentials.py tests/test_provider_lifecycle.py tests/test_provider_reconciliation.py tests/test_provider_permissions.py tests/test_provider_publish.py tests/test_provider_publish_api.py tests/test_provider_telegram_destination_api.py tests/test_signal_domain.py tests/test_telegram_tenant_domain.py tests/test_phase1_tenancy.py
       - name: Python syntax check
-        run: python -m py_compile app/provider_panel_api.py app/provider_credentials.py app/provider_lifecycle.py app/provider_lifecycle_api.py app/provider_reconciliation.py app/provider_reconciliation_api.py app/provider_permissions.py app/provider_publish.py app/signal_domain.py app/telegram_tenant_domain.py app/telegram_webapp_auth.py app/combined_api.py app/tenancy.py
+        run: python -m py_compile scripts/provider_domain_migration.py app/provider_panel_api.py app/provider_credentials.py app/provider_lifecycle.py app/provider_lifecycle_api.py app/provider_reconciliation.py app/provider_reconciliation_api.py app/provider_permissions.py app/provider_publish.py app/signal_domain.py app/telegram_tenant_domain.py app/telegram_webapp_auth.py app/combined_api.py app/tenancy.py
       - name: JavaScript syntax check
         run: node --check provider_panel/app.js
