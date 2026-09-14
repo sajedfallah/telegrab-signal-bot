@@ -51,11 +51,12 @@ def _live_item(row: dict[str, Any]) -> dict[str, Any]:
 
 def _history_item(row: Any) -> dict[str, Any]:
     item = dict(row)
+    event_type = str(item.get("event_type") or "").strip().upper()
     return {
         "id": int(item["id"]),
         "signal_id": int(item["signal_id"]) if item.get("signal_id") is not None else None,
         "ticket": str(item.get("ticket") or ""),
-        "event_type": str(item.get("event_type") or ""),
+        "event_type": event_type,
         "symbol": item.get("symbol"),
         "direction": item.get("direction"),
         "volume": item.get("volume"),
@@ -72,7 +73,10 @@ def _history_item(row: Any) -> dict[str, Any]:
         "realized_r": item.get("realized_r"),
         "position_id": item.get("position_id"),
         "deal_id": item.get("deal_id"),
-        "status": item.get("status"),
+        # The closed-trades screen is a user-facing projection. Ledger processing
+        # states such as UPDATED/IGNORED remain in the execution timeline, but a
+        # terminal CLOSE row is always presented as CLOSED here.
+        "status": "CLOSED" if event_type == "CLOSE" else item.get("status"),
         "error_text": item.get("error_text"),
         "created_at": item.get("created_at"),
         "updated_at": item.get("updated_at"),
@@ -80,14 +84,35 @@ def _history_item(row: Any) -> dict[str, Any]:
 
 
 def _history(uid: int, *, limit: int, offset: int) -> list[dict[str, Any]]:
+    """Return one terminal closed-trade card per broker ticket.
+
+    ``autotrade_trade_executions`` is intentionally a lifecycle ledger and can
+    contain many OPEN/UPDATE/IGNORED processing rows for one ticket. Those rows
+    belong in the execution timeline, not as separate cards in the Closed tab.
+    Keep the ledger intact and project only the latest CLOSE event per ticket.
+    """
     with db.conn() as con:
         rows = con.execute(
             """
+            WITH closed AS (
+                SELECT
+                    e.id,e.signal_id,e.ticket,e.event_type,e.symbol,e.direction,e.volume,e.entry_price,
+                    e.stop_loss,e.take_profit,e.exit_price,e.profit,e.gross_profit,e.commission,e.swap,
+                    e.slippage,e.risk_cash,e.realized_r,e.position_id,e.deal_id,e.status,e.error_text,
+                    e.created_at,e.updated_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY e.ticket
+                        ORDER BY e.id DESC
+                    ) AS rn
+                FROM autotrade_trade_executions e
+                WHERE e.telegram_id=?
+                  AND UPPER(COALESCE(e.event_type,''))='CLOSE'
+            )
             SELECT id,signal_id,ticket,event_type,symbol,direction,volume,entry_price,stop_loss,take_profit,
                    exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,
                    status,error_text,created_at,updated_at
-            FROM autotrade_trade_executions
-            WHERE telegram_id=?
+            FROM closed
+            WHERE rn=1
             ORDER BY id DESC LIMIT ? OFFSET ?
             """,
             (uid, limit, offset),
