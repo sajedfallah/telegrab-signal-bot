@@ -59,8 +59,16 @@ def test_cross_tenant_connection_cannot_be_used_for_destination() -> None:
         )
 
 
-def test_inactive_connection_is_not_resolved_for_publish() -> None:
+def test_inactive_connection_cannot_create_destination() -> None:
     con, nexus, _ = _db()
     connection = create_connection(con, tenant_id=nexus, label="primary", status="DISABLED")
-    create_destination(con, tenant_id=nexus, connection_id=connection, destination_key="FREE", chat_id="-100444", kind="FREE")
+    with pytest.raises(RuntimeError):
+        create_destination(
+            con,
+            tenant_id=nexus,
+            connection_id=connection,
+            destination_key="FREE",
+            chat_id="-100444",
+            kind="FREE",
+        )
     assert resolve_destination(con, tenant_id=nexus, destination_key="FREE") is None
