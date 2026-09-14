@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from app.provider_lifecycle import _payload_hash, init_lifecycle_delivery_schema
-from app.provider_reconciliation import list_reconciliation_queue, resolve_delivery
+from app.provider_reconciliation import list_reconciliation_queue, reconciliation_health, resolve_delivery
 from app.signal_domain import init_signal_domain_schema
 from app.tenancy import init_tenant_schema
 
@@ -57,6 +57,21 @@ def test_reconciliation_queue_is_tenant_scoped() -> None:
     assert [item["delivery_id"] for item in ot] == [200]
 
 
+def test_reconciliation_health_is_tenant_scoped_and_flags_attention() -> None:
+    con, nexus, other, _ = _db()
+    nx = reconciliation_health(con, tenant_id=nexus)
+    ot = reconciliation_health(con, tenant_id=other)
+    assert nx == {
+        "status": "attention",
+        "unknown_delivery_count": 1,
+        "claimed_delivery_count": 0,
+        "open_reconciliation_count": 1,
+        "requires_attention": True,
+    }
+    assert ot["unknown_delivery_count"] == 1
+    assert ot["open_reconciliation_count"] == 1
+
+
 def test_confirmed_sent_finalizes_receipt_event_publication_and_audit() -> None:
     con, nexus, _, payload = _db()
     result = resolve_delivery(
@@ -82,6 +97,7 @@ def test_confirmed_sent_finalizes_receipt_event_publication_and_audit() -> None:
     audit = con.execute("SELECT action,entity_id FROM provider_audit_log WHERE tenant_id=?", (nexus,)).fetchone()
     assert tuple(audit) == ("DELIVERY_RECONCILED", 100)
     assert list_reconciliation_queue(con, tenant_id=nexus) == []
+    assert reconciliation_health(con, tenant_id=nexus)["requires_attention"] is False
 
 
 def test_confirmed_not_sent_allows_only_new_key_retry_and_keeps_original_blocked() -> None:
