@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.provider_panel_api import _dashboard, _tenant_context
+from app.telegram_tenant_domain import create_connection, create_destination
 from app.tenancy import TenantContext, TenantRole, grant_membership, init_tenant_schema
 
 
@@ -32,6 +33,10 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
             (2, other_id, 'OT1', 'Crypto', 'BTCUSDT', 'SELL', 1, 2, 0, 'SL_HIT', -50, 'USD', 'x', 'x'),
         ],
     )
+    connection = create_connection(con, tenant_id=nexus_id, label="primary", status="ACTIVE")
+    create_destination(con, tenant_id=nexus_id, connection_id=connection, destination_key="VIP", chat_id="-100111", kind="VIP")
+    other_connection = create_connection(con, tenant_id=other_id, label="primary", status="ACTIVE")
+    create_destination(con, tenant_id=other_id, connection_id=other_connection, destination_key="VIP", chat_id="-100222", kind="VIP")
     con.commit()
     con.close()
 
@@ -50,6 +55,8 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
     assert all(row["symbol"] != "BTCUSDT" for row in data["recent_signals"])
     assert data["kpis"]["monthly_revenue"] is None
     assert data["availability"]["monthly_revenue"] is False
+    assert data["health"]["telegram"]["status"] == "ready"
+    assert data["health"]["telegram"]["active_destination_count"] == 1
 
 
 def test_tenant_header_is_not_authorization(monkeypatch, tmp_path):
