@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 
 import httpx
+import pytest
 from cryptography.fernet import Fernet
 
 from app.provider_credentials import SECRET_KIND_TELEGRAM_BOT_TOKEN, store_secret
@@ -22,6 +23,15 @@ class _Client:
         message_id = self.next_message_id
         self.next_message_id += 1
         return httpx.Response(200, json={"ok": True, "result": {"message_id": message_id}})
+
+
+class _FailingClient:
+    def __init__(self):
+        self.calls = 0
+
+    def post(self, url: str, json: dict):
+        self.calls += 1
+        raise httpx.ReadTimeout("timeout")
 
 
 def _db(monkeypatch):
@@ -89,13 +99,30 @@ def test_lifecycle_replies_chain_on_last_message_and_update_receipts(monkeypatch
         destination_key="VIP",
         event_type="PARTIAL_CLOSE",
         payload=payload,
+        idempotency_key="evt-1",
         actor_user_id=1001,
         client=client,
     )
     assert first["reply_to_message_id"] == 500
     assert first["message_id"] == 901
+    assert first["idempotent_replay"] is False
     assert token in client.calls[0][0]
     assert client.calls[0][1]["reply_parameters"]["message_id"] == 500
+
+    replay = reply_signal_event(
+        con,
+        tenant_id=tenant_id,
+        signal_id=1,
+        destination_key="VIP",
+        event_type="PARTIAL_CLOSE",
+        payload=payload,
+        idempotency_key="evt-1",
+        actor_user_id=1001,
+        client=client,
+    )
+    assert replay["idempotent_replay"] is True
+    assert replay["message_id"] == 901
+    assert len(client.calls) == 1
 
     second = reply_signal_event(
         con,
@@ -104,6 +131,7 @@ def test_lifecycle_replies_chain_on_last_message_and_update_receipts(monkeypatch
         destination_key="VIP",
         event_type="TRAILING",
         payload={"tp": 2450, "sl": 2430},
+        idempotency_key="evt-2",
         actor_user_id=1001,
         client=client,
     )
@@ -112,6 +140,67 @@ def test_lifecycle_replies_chain_on_last_message_and_update_receipts(monkeypatch
     row = con.execute("SELECT root_message_id,last_message_id,status FROM signal_publications").fetchone()
     assert tuple(row) == (500, 902, "PUBLISHED")
     assert con.execute("SELECT COUNT(*) FROM signal_events").fetchone()[0] == 2
+    assert con.execute("SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE status='SENT'").fetchone()[0] == 2
+
+
+def test_idempotency_key_cannot_be_reused_for_different_payload(monkeypatch) -> None:
+    con, tenant_id, _ = _db(monkeypatch)
+    client = _Client()
+    reply_signal_event(
+        con,
+        tenant_id=tenant_id,
+        signal_id=1,
+        destination_key="VIP",
+        event_type="TRAILING",
+        payload={"tp": 2450, "sl": 2430},
+        idempotency_key="same-key",
+        client=client,
+    )
+    with pytest.raises(RuntimeError, match="idempotency key reused"):
+        reply_signal_event(
+            con,
+            tenant_id=tenant_id,
+            signal_id=1,
+            destination_key="VIP",
+            event_type="TRAILING",
+            payload={"tp": 2450, "sl": 2440},
+            idempotency_key="same-key",
+            client=client,
+        )
+    assert len(client.calls) == 1
+
+
+def test_uncertain_delivery_is_not_retried_automatically(monkeypatch) -> None:
+    con, tenant_id, _ = _db(monkeypatch)
+    failing = _FailingClient()
+    with pytest.raises(RuntimeError, match="Telegram lifecycle reply failed"):
+        reply_signal_event(
+            con,
+            tenant_id=tenant_id,
+            signal_id=1,
+            destination_key="VIP",
+            event_type="TRAILING",
+            payload={"tp": 2450, "sl": 2430},
+            idempotency_key="uncertain-1",
+            client=failing,
+        )
+    assert failing.calls == 1
+    row = con.execute("SELECT status,error_code FROM provider_lifecycle_deliveries").fetchone()
+    assert tuple(row) == ("UNKNOWN", "telegram_delivery_uncertain")
+
+    client = _Client()
+    with pytest.raises(RuntimeError, match="requires reconciliation"):
+        reply_signal_event(
+            con,
+            tenant_id=tenant_id,
+            signal_id=1,
+            destination_key="VIP",
+            event_type="TRAILING",
+            payload={"tp": 2450, "sl": 2430},
+            idempotency_key="uncertain-1",
+            client=client,
+        )
+    assert client.calls == []
 
 
 def test_terminal_event_closes_publication(monkeypatch) -> None:
@@ -124,6 +213,7 @@ def test_terminal_event_closes_publication(monkeypatch) -> None:
         destination_key="VIP",
         event_type="CLOSED",
         payload={"tp": 2450, "sl": 2420, "position_status": "CLOSED"},
+        idempotency_key="close-1",
         client=client,
     )
     assert result["publication_status"] == "CLOSED"
