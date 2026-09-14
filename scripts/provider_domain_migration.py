@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
 from app.provider_credentials import init_provider_secret_schema
 from app.provider_lifecycle import init_lifecycle_delivery_schema
 from app.provider_reconciliation import init_reconciliation_schema
+from app.provider_subscribers import init_subscriber_schema
 from app.signal_domain import backfill_legacy_publications, init_signal_domain_schema
 from app.telegram_tenant_domain import init_telegram_tenant_schema
 from app.tenancy import init_tenant_schema
@@ -28,6 +29,9 @@ PROVIDER_TABLES = (
     "provider_lifecycle_deliveries",
     "provider_delivery_reconciliations",
     "provider_audit_log",
+    "provider_customers",
+    "provider_retail_plans",
+    "provider_customer_subscriptions",
 )
 
 
@@ -63,6 +67,7 @@ def migrate(db_path: Path, *, dry_run: bool = False) -> dict[str, object]:
         init_telegram_tenant_schema(con)
         init_lifecycle_delivery_schema(con)
         init_reconciliation_schema(con)
+        init_subscriber_schema(con)
 
         missing = [table for table in PROVIDER_TABLES if not _table_exists(con, table)]
         if missing:
