@@ -89,7 +89,7 @@ def load_secret(
         raise RuntimeError("stored credential cannot be decrypted") from exc
 
 
-def test_telegram_bot_token(
+def probe_telegram_bot_token(
     token: str,
     *,
     timeout_seconds: float = 8.0,
