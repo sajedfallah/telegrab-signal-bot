@@ -57,57 +57,81 @@ body.landing-active > .app-shell {
   -webkit-user-drag: none;
 }
 
+/* Live CTA is aligned to the approved poster button instead of drawing a second oversized pill. */
 .nexus-landing-enter {
   position: absolute;
   z-index: 2;
-  top: 76.8%;
-  left: 11%;
-  right: 11%;
-  height: 10.2%;
-  min-height: 54px;
+  top: 77.45%;
+  left: 50%;
+  right: auto;
+  width: 42%;
+  height: 5.35%;
+  min-height: 42px;
+  max-height: 54px;
   padding: 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: 14px;
   appearance: none;
   -webkit-appearance: none;
   background: transparent;
   color: transparent;
   cursor: pointer;
   outline: none;
+  transform: translateX(-50%);
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+}
+
+.nexus-landing:not(.landing-fallback) .nexus-landing-enter::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at center,rgba(34,211,238,.22) 0%,rgba(37,99,235,.11) 48%,transparent 74%);
+  filter: blur(7px);
+  opacity: .62;
+  pointer-events: none;
+  animation: nexus-enter-halo 2.8s ease-in-out infinite;
 }
 
 .nexus-landing:not(.landing-fallback) .nexus-landing-enter::after {
   content: '';
   position: absolute;
-  inset: 2px;
-  border: 1px solid rgba(34, 211, 238, .54);
-  border-radius: inherit;
-  background: linear-gradient(105deg, transparent 28%, rgba(34, 211, 238, .16) 49%, transparent 70%);
-  background-size: 220% 100%;
-  box-shadow: inset 0 0 14px rgba(34, 211, 238, .12), 0 0 16px rgba(37, 99, 235, .22);
+  inset: 0;
+  border: 1.5px solid rgba(84,235,255,.72);
+  border-radius: 14px;
+  background: linear-gradient(105deg,transparent 18%,rgba(255,255,255,.05) 35%,rgba(108,242,255,.26) 49%,rgba(255,255,255,.05) 61%,transparent 82%);
+  background-size: 240% 100%;
+  box-shadow: inset 0 0 10px rgba(77,239,224,.13),0 0 13px rgba(34,211,238,.28),0 0 24px rgba(37,99,235,.15);
   pointer-events: none;
-  animation: nexus-enter-light 3.6s ease-in-out infinite;
+  animation: nexus-enter-light 3.1s ease-in-out infinite;
 }
 
 @keyframes nexus-enter-light {
-  0%, 100% { background-position: 100% 0; border-color: rgba(34, 211, 238, .42); }
-  50% { background-position: 0 0; border-color: rgba(34, 211, 238, .68); }
+  0%, 100% { background-position: 115% 0; border-color: rgba(84,235,255,.58); }
+  50% { background-position: -15% 0; border-color: rgba(126,242,255,.90); }
+}
+
+@keyframes nexus-enter-halo {
+  0%, 100% { opacity: .42; transform: scale(.985); }
+  50% { opacity: .74; transform: scale(1.025); }
 }
 
 .nexus-landing-enter:active {
-  background: rgba(34, 211, 238, .10);
-  box-shadow: inset 0 0 0 2px rgba(34, 211, 238, .40);
+  background: rgba(34,211,238,.07);
+  box-shadow: inset 0 0 0 1.5px rgba(126,242,255,.62);
 }
 
 @media (hover: hover) {
-  .nexus-landing-enter:hover { box-shadow: inset 0 0 0 2px rgba(34, 211, 238, .65), 0 0 28px rgba(37, 99, 235, .24); background: rgba(34, 211, 238, .06); }
+  .nexus-landing-enter:hover {
+    background: rgba(34,211,238,.045);
+    box-shadow: inset 0 0 0 1.5px rgba(126,242,255,.70),0 0 24px rgba(37,99,235,.20);
+  }
 }
 
 .nexus-landing-enter:focus-visible {
-  outline: 2px solid rgba(77, 239, 224, 0.9);
-  outline-offset: -4px;
+  outline: 2px solid rgba(126, 242, 255, .94);
+  outline-offset: 3px;
 }
 
 .nexus-landing-enter:disabled {
@@ -129,7 +153,7 @@ body.landing-active > .app-shell {
 .nexus-fallback-cta{display:none}
 .nexus-landing.landing-fallback .nexus-landing-poster{display:none}
 .nexus-landing.landing-fallback .nexus-landing-enter{
-  top:50%;left:8%;right:8%;height:auto;min-height:180px;transform:translateY(-50%);
+  top:50%;left:8%;right:8%;width:auto;height:auto;min-height:180px;max-height:none;transform:translateY(-50%);
   display:flex;align-items:center;justify-content:center;padding:22px;border:1px solid rgba(57,215,196,.28);
   border-radius:28px;background:linear-gradient(155deg,rgba(21,27,36,.96),rgba(12,16,22,.98));
   color:#f4f7fb;box-shadow:0 22px 60px rgba(0,0,0,.45),0 0 34px rgba(57,215,196,.08)
@@ -150,8 +174,8 @@ body.landing-active > .app-shell {
 
 @media (max-aspect-ratio: 1 / 2) {
   .nexus-landing-enter {
-    left: 7%;
-    right: 7%;
+    width: 45%;
+    top: 77.35%;
   }
 }
 
@@ -161,8 +185,8 @@ body.landing-active > .app-shell {
   }
 
   .nexus-landing-enter {
-    left: 30%;
-    right: 30%;
+    width: 28%;
+    top: 77.2%;
   }
 }
 
@@ -171,5 +195,6 @@ body.landing-active > .app-shell {
     transition: none !important;
   }
   .app-shell.nexus-app-entering { animation: none; }
+  .nexus-landing-enter::before,
   .nexus-landing-enter::after { animation: none !important; }
 }
