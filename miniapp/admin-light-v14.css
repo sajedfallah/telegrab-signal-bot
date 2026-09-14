@@ -127,7 +127,7 @@ body{min-height:100dvh}
   border:1px solid #c8d7e7!important;
   box-shadow:var(--soft-shadow)!important;
 }
-.outline:hover,.ghost:hover,.section-head button:hover,.icon:hover,.entry-source button:hover{
+.outline:hover,.ghost,.section-head button:hover,.icon:hover,.entry-source button:hover{
   background:#f2f7fd!important;
   border-color:#9cbbe0!important;
 }
@@ -199,8 +199,62 @@ button:focus-visible,input:focus-visible,select:focus-visible{
   outline-offset:2px;
 }
 
+/* V14.2 — stronger separation and exact neon step override */
+.steps{
+  margin:10px 6px 20px!important;
+}
+.steps span{
+  width:48px!important;
+  height:48px!important;
+  border-radius:50%!important;
+  background:linear-gradient(145deg,#ecfeff 0%,#e4f9ff 52%,#eef4ff 100%)!important;
+  border:1.5px solid rgba(34,211,238,.62)!important;
+  color:#0e7490!important;
+  box-shadow:0 0 0 4px rgba(34,211,238,.07),0 8px 20px rgba(14,116,144,.12)!important;
+}
+.steps span.on{
+  background:linear-gradient(135deg,#67e8f9 0%,#22d3ee 44%,#2563eb 100%)!important;
+  border-color:#22d3ee!important;
+  color:#fff!important;
+  box-shadow:0 0 0 4px rgba(34,211,238,.13),0 0 24px rgba(34,211,238,.34),0 12px 28px rgba(37,99,235,.18)!important;
+}
+.steps span small{color:inherit!important}
+.steps i{
+  height:2px!important;
+  background:linear-gradient(90deg,rgba(34,211,238,.16),rgba(59,130,246,.48),rgba(34,211,238,.16))!important;
+}
+
+#signalForm.panel,
+#manualSetupFields.setup-fields,
+#autoSetupFields.setup-fields,
+.auto-setup-panel,
+.metrics article,
+#signalList .card,
+#positionList .card,
+#logList .card,
+.admin-live,
+.admin-action-sheet,
+.preview-grid>div,
+.targets article,
+.auto-setup-grid>div{
+  background:rgba(255,255,255,.99)!important;
+  border:1.5px solid #c8d6e6!important;
+  box-shadow:0 14px 38px rgba(15,35,60,.11),0 3px 8px rgba(15,35,60,.05),inset 0 1px 0 rgba(255,255,255,.92)!important;
+}
+#signalForm.panel{border-radius:22px!important}
+#manualSetupFields.setup-fields,#autoSetupFields.setup-fields{border-radius:18px!important}
+#positionList .card,#signalList .card,#logList .card{border-radius:18px!important}
+#positionList .card:hover,#signalList .card:hover,#logList .card:hover{
+  border-color:#9bbdf2!important;
+  box-shadow:0 16px 42px rgba(23,107,255,.13),0 4px 10px rgba(15,35,60,.06)!important;
+}
+.form input,.form select,.auto-grid input,.auto-grid select{
+  border:1.5px solid #c7d5e5!important;
+  box-shadow:0 3px 9px rgba(15,35,60,.045),inset 0 1px 2px rgba(15,35,60,.025)!important;
+}
+
 @media(max-width:480px){
-  .panel,.setup-fields{box-shadow:0 7px 22px rgba(15,35,60,.06)!important}
+  .panel,.setup-fields{box-shadow:0 12px 30px rgba(15,35,60,.10),0 2px 7px rgba(15,35,60,.04)!important}
   .segments button,.direction button{min-height:42px}
 }
 
