@@ -1,0 +1,17 @@
+{
+  "mode": "UI_DEMO_ONLY",
+  "live": false,
+  "warning": "These values exist only to render the approved visual components. They are not MT5, Telegram, billing, provider, or production truth.",
+  "dashboard": {
+    "active_subscribers": 342,
+    "monthly_revenue": 6240,
+    "total_signals": 1245,
+    "win_rate_percent": 78
+  },
+  "copy_trade": {
+    "active_copiers": 280,
+    "available_credits": 46,
+    "retail_revenue": 48750,
+    "estimated_gross_margin": 31950
+  }
+}

@@ -1,0 +1,3 @@
+# Chart Implementation
+
+Provider Panel v1 uses actual HTML canvas rendering for the Revenue Overview, Signal Distribution donut, Copier Growth and P&L visualizations. They are not embedded screenshots. The implementation is dependency-free for the static preview and redraws on responsive resize. During backend integration, chart data arrays are replaced by API series; the chart cards and visual hierarchy remain part of the approved contract.

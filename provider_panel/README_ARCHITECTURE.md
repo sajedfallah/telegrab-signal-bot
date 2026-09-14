@@ -1,0 +1,3 @@
+# Provider Panel Architecture
+
+The Provider Panel is intentionally implemented as a new isolated surface rather than modifying `miniapp/`. This follows the product boundary: the existing Mini App serves NEXUS end users; the Provider Panel serves B2B signal providers. Future FastAPI mounting should expose the Provider Panel only behind provider authentication and tenant context. Super Admin will be a separate surface again, sharing design tokens/components where appropriate but not provider authorization.

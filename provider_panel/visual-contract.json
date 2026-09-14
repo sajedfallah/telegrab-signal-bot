@@ -1,0 +1,16 @@
+{
+  "version": "provider-panel-ui-v1",
+  "status": "approved",
+  "principle": "approved design is an implementation contract, not inspiration",
+  "pages": {
+    "dashboard": ["kpi-grid", "revenue-line-area-chart", "signal-distribution-donut", "recent-signals-table", "quick-actions", "integration-health-strip"],
+    "signal-center": ["status-tabs", "filters", "signals-table", "new-signal-action"],
+    "copy-trade": ["copy-kpis", "copier-growth-chart", "credit-capacity", "buy-credits-action"],
+    "subscribers": ["subscriber-table", "add-customer-action"],
+    "reports": ["report-kpis", "pnl-chart"],
+    "branding": ["logo-assets", "brand-colors", "live-preview"],
+    "settings": ["telegram-health", "mt5-health", "subscription-health", "copy-trade-health"]
+  },
+  "data_policy": "fixture data is presentation-only until tenant-scoped backend APIs are connected",
+  "preserve_existing_miniapp": true
+}

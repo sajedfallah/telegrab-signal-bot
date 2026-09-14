@@ -1,0 +1,3 @@
+# Provider Panel UI V1
+
+طراحی تاییدشده اکنون به کد واقعی HTML/CSS/JavaScript تبدیل شده است و المان‌های آماری/نموداری صرفاً تصویر نیستند. Dashboard دارای KPI، Revenue Chart، Donut Chart، جدول سیگنال‌ها، Quick Actions و Health Strip است. صفحات Signal Center، Copy Trade، Subscribers، Reports، Branding و Settings نیز پیاده شده‌اند. نسخه فعلی Preview مستقل است؛ داده‌ها Fixture هستند و هنوز به Backend/MT5/Telegram واقعی متصل نشده‌اند. اتصال Live فقط بعد از Validation لایه Tenant/RBAC انجام می‌شود.

@@ -56,11 +56,13 @@ def _now_iso() -> str:
 def init_tenant_schema(con: sqlite3.Connection) -> int:
     """Create the additive Phase-1 tenant/RBAC schema and return NEXUS tenant id.
 
-    This migration is deliberately additive and idempotent. It does not alter legacy
-    ownership yet, so existing NEXUS runtime behavior remains compatible while the
-    domains are migrated one-by-one.
+    Statements are deliberately executed one-by-one rather than through
+    ``executescript``. Python's sqlite3 ``executescript`` may implicitly commit a
+    pending transaction, which would make migration dry-runs and failure rollbacks
+    unsafe. Keeping every DDL statement on the caller's transaction preserves the
+    Phase-1 all-or-nothing contract.
     """
-    con.executescript(
+    statements = (
         """
         CREATE TABLE IF NOT EXISTS tenants (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -73,8 +75,9 @@ def init_tenant_schema(con: sqlite3.Connection) -> int:
             locale TEXT NOT NULL DEFAULT 'en',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        );
-
+        )
+        """,
+        """
         CREATE TABLE IF NOT EXISTS tenant_memberships (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             tenant_id INTEGER NOT NULL,
@@ -88,14 +91,20 @@ def init_tenant_schema(con: sqlite3.Connection) -> int:
             UNIQUE(tenant_id,user_id),
             FOREIGN KEY(tenant_id) REFERENCES tenants(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(telegram_id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_tenant_memberships_user
-            ON tenant_memberships(user_id,status);
-        CREATE INDEX IF NOT EXISTS idx_tenant_memberships_tenant_role
-            ON tenant_memberships(tenant_id,role,status);
+        )
+        """,
         """
+        CREATE INDEX IF NOT EXISTS idx_tenant_memberships_user
+            ON tenant_memberships(user_id,status)
+        """,
+        """
+        CREATE INDEX IF NOT EXISTS idx_tenant_memberships_tenant_role
+            ON tenant_memberships(tenant_id,role,status)
+        """,
     )
+    for statement in statements:
+        con.execute(statement)
+
     now = _now_iso()
     con.execute(
         """
@@ -133,11 +142,7 @@ def grant_membership(
 
 
 def bootstrap_nexus_admins(con: sqlite3.Connection, admin_ids: Iterable[int]) -> int:
-    """Attach existing Telegram admins to NEXUS as OWNER without creating users.
-
-    Only IDs already present in users are attached, preserving FK integrity and
-    avoiding synthetic customer records.
-    """
+    """Attach existing Telegram admins to NEXUS as OWNER without creating users."""
     tenant_id = init_tenant_schema(con)
     for user_id in {int(v) for v in admin_ids}:
         exists = con.execute("SELECT 1 FROM users WHERE telegram_id=?", (user_id,)).fetchone()
@@ -152,11 +157,7 @@ def resolve_tenant_context(
     user_id: int,
     tenant_id: int,
 ) -> TenantContext:
-    """Resolve tenant authorization from server-side membership state.
-
-    Callers must not treat a client-supplied tenant_id as authorization. The ID is
-    only a resource selector; membership is always verified here.
-    """
+    """Resolve tenant authorization from server-side membership state."""
     row = con.execute(
         """
         SELECT tm.tenant_id,tm.user_id,tm.role
@@ -183,11 +184,7 @@ def assert_tenant_resource(
     resource_id: int,
     tenant_id: int,
 ) -> None:
-    """Guard a tenant-owned row after that table has received tenant_id.
-
-    Table names cannot be bound parameters, therefore this helper intentionally
-    accepts only a fixed allow-list. Extend it as domains become tenant-aware.
-    """
+    """Guard a tenant-owned row after that table has received tenant_id."""
     allowed = {
         "signals",
         "payments",

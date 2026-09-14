@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NEXUS Provider Panel</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">N</div><div><strong>NEXUS</strong><span>Provider Panel</span></div></div>
+    <nav id="nav">
+      <button class="nav-item active" data-page="dashboard">◈ <span>Dashboard</span></button>
+      <button class="nav-item" data-page="signals">↗ <span>Signal Center</span></button>
+      <button class="nav-item" data-page="copy">⧉ <span>Copy Trade</span></button>
+      <button class="nav-item" data-page="subscribers">♙ <span>Subscribers</span></button>
+      <button class="nav-item" data-page="reports">▥ <span>Reports</span></button>
+      <button class="nav-item" data-page="branding">◇ <span>Branding</span></button>
+      <button class="nav-item" data-page="settings">⚙ <span>Settings</span></button>
+    </nav>
+    <div class="profile"><div class="avatar">JT</div><div><b>John Trader</b><small>Provider Owner</small></div></div>
+  </aside>
+  <main>
+    <header class="topbar"><div><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Here’s your signal business overview.</p></div><div class="top-actions"><button class="date-pill">Sep 1 – Sep 14, 2026</button><button class="icon-btn">♢</button></div></header>
+
+    <section class="page active" id="dashboard">
+      <div class="kpi-grid">
+        <article class="kpi"><span>Active Subscribers</span><div><strong>342</strong><i>♙</i></div><small>+12% this month</small></article>
+        <article class="kpi"><span>Monthly Revenue</span><div><strong>$6,240</strong><i>$</i></div><small>+18% this month</small></article>
+        <article class="kpi"><span>Total Signals</span><div><strong>1,245</strong><i>↗</i></div><small>+25% this month</small></article>
+        <article class="kpi"><span>Win Rate</span><div><strong>78%</strong><i>◎</i></div><small>+5% this month</small></article>
+      </div>
+      <div class="dashboard-grid">
+        <article class="card chart-card"><div class="card-head"><div><h2>Revenue Overview</h2><p>Monthly provider revenue</p></div><strong class="positive">+18%</strong></div><canvas id="revenueChart"></canvas></article>
+        <article class="card donut-card"><div class="card-head"><div><h2>Signal Distribution</h2><p>Published signal mix</p></div></div><div class="donut-wrap"><canvas id="signalDonut"></canvas><div class="donut-center"><strong>1,245</strong><span>Signals</span></div></div><div class="legend"><span><i class="dot d1"></i>Gold 35%</span><span><i class="dot d2"></i>Forex 28%</span><span><i class="dot d3"></i>Crypto 22%</span><span><i class="dot d4"></i>Indices 10%</span><span><i class="dot d5"></i>Other 5%</span></div></article>
+        <article class="card recent"><div class="card-head"><div><h2>Recent Signals</h2><p>Latest lifecycle activity</p></div><button class="link-btn" data-go="signals">View all</button></div><div class="table-wrap"><table><thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Result</th><th>Time</th></tr></thead><tbody><tr><td><b>XAUUSD</b></td><td><em class="buy">BUY</em></td><td>2034.50</td><td>2045.00</td><td>2028.00</td><td class="positive">TP +$210</td><td>2h</td></tr><tr><td><b>EURUSD</b></td><td><em class="sell">SELL</em></td><td>1.0850</td><td>1.0780</td><td>1.0900</td><td class="positive">TP +$160</td><td>5h</td></tr><tr><td><b>BTCUSDT</b></td><td><em class="buy">BUY</em></td><td>43,250</td><td>44,500</td><td>42,000</td><td class="negative">SL -$120</td><td>8h</td></tr></tbody></table></div></article>
+        <article class="card quick"><div class="card-head"><div><h2>Quick Actions</h2><p>Common provider tasks</p></div></div><button data-go="signals">↗ New Signal</button><button data-go="subscribers">♙ Manage Subscribers</button><button data-go="reports">▥ View Analytics</button><button data-go="branding">◇ Edit Branding</button></article>
+      </div>
+      <div class="health-strip"><div><span class="health-dot"></span><b>Telegram</b><small>Connected</small></div><div><span class="health-dot"></span><b>MT5</b><small>Connected</small></div><div><span class="health-dot"></span><b>Copy Trade</b><small>Healthy</small></div><div><span class="health-dot"></span><b>Subscription</b><small>Active</small></div></div>
+    </section>
+
+    <section class="page" id="signals"><div class="section-head"><div><h2>Signal Center</h2><p>Create, publish and track signal lifecycle.</p></div><button class="primary">+ New Signal</button></div><div class="filter-row"><button class="chip active">All Signals</button><button class="chip">Active</button><button class="chip">Pending</button><button class="chip">Closed</button><select><option>All Symbols</option><option>XAUUSD</option><option>BTCUSDT</option></select><select><option>All Status</option><option>Active</option><option>TP Hit</option><option>SL Hit</option></select></div><article class="card"><div class="table-wrap"><table id="signalTable"><thead><tr><th>Symbol</th><th>Type</th><th>Entry</th><th>TP</th><th>SL</th><th>Status</th><th>Result</th><th>Time</th></tr></thead><tbody></tbody></table></div></article></section>
+
+    <section class="page" id="copy"><div class="section-head"><div><h2>Copy Trade</h2><p>Manage reseller capacity and active copier licenses.</p></div><button class="primary">Buy Credits</button></div><div class="kpi-grid"><article class="kpi"><span>Active Copiers</span><div><strong>280</strong><i>♙</i></div><small>+24%</small></article><article class="kpi"><span>Available Credits</span><div><strong>46</strong><i>◎</i></div><small>License-months</small></article><article class="kpi"><span>Retail Revenue</span><div><strong>$48,750</strong><i>$</i></div><small>+18%</small></article><article class="kpi"><span>Gross Margin</span><div><strong>$31,950</strong><i>↗</i></div><small>Estimated</small></article></div><div class="dashboard-grid two"><article class="card chart-card"><div class="card-head"><div><h2>Copier Growth</h2><p>Active Copy Trade users</p></div><strong class="positive">+18.5%</strong></div><canvas id="copyChart"></canvas></article><article class="card"><div class="card-head"><div><h2>Capacity</h2><p>Prepaid license-months</p></div></div><div class="capacity"><strong>46</strong><span>credits available</span><div class="progress"><i style="width:46%"></i></div><small>Low balance alert at 10 credits</small></div></article></div></section>
+
+    <section class="page" id="subscribers"><div class="section-head"><div><h2>Subscribers</h2><p>Manage customers, plans and access.</p></div><button class="primary">+ Add Customer</button></div><article class="card"><div class="table-wrap"><table><thead><tr><th>User</th><th>Plan</th><th>Join Date</th><th>Expiry</th><th>Status</th><th>Copy Trade</th></tr></thead><tbody id="subscriberTable"></tbody></table></div></article></section>
+
+    <section class="page" id="reports"><div class="section-head"><div><h2>Reports & Analytics</h2><p>Track performance and business growth.</p></div><button class="date-pill">30 Days</button></div><div class="kpi-grid"><article class="kpi"><span>Total Revenue</span><div><strong>$6,240</strong><i>$</i></div><small>+18%</small></article><article class="kpi"><span>Total Signals</span><div><strong>124</strong><i>↗</i></div><small>+25%</small></article><article class="kpi"><span>Win Rate</span><div><strong>78%</strong><i>◎</i></div><small>+5%</small></article><article class="kpi"><span>Avg. R:R</span><div><strong>2.1</strong><i>◈</i></div><small>+12%</small></article></div><article class="card chart-card report-chart"><div class="card-head"><div><h2>P&L Overview</h2><p>Daily profit/loss and cumulative performance</p></div></div><canvas id="pnlChart"></canvas></article></section>
+
+    <section class="page" id="branding"><div class="section-head"><div><h2>Settings & Branding</h2><p>Customize your tenant identity without changing the platform core.</p></div><button class="primary">Save Changes</button></div><div class="branding-grid"><article class="card"><h2>Logo & Assets</h2><div class="upload-grid"><div class="upload"><div class="provider-logo">A</div><b>Main Logo</b><span>PNG, JPG · max 2MB</span></div><div class="upload"><div class="favicon">A</div><b>Favicon</b><span>PNG, JPG · max 2MB</span></div></div><h2>Brand Colors</h2><div class="colors"><label><i style="background:#2f72ff"></i>Primary<br><b>#2F72FF</b></label><label><i style="background:#14c9b7"></i>Secondary<br><b>#14C9B7</b></label><label><i style="background:#ffad32"></i>Accent<br><b>#FFAD32</b></label><label><i style="background:#07172a"></i>Background<br><b>#07172A</b></label></div></article><article class="card preview"><h2>Live Preview</h2><div class="preview-banner"><div class="provider-logo">A</div><strong>ALPHA SIGNALS</strong><p>Trade Smarter. Together.</p><button>View Plans</button></div></article></div></section>
+
+    <section class="page" id="settings"><div class="section-head"><div><h2>Settings</h2><p>Connections and workspace configuration.</p></div></div><div class="settings-grid"><article class="card setting"><div><h3>Telegram Connection</h3><p>Publishing bot and signal destinations</p></div><span class="status">Connected</span></article><article class="card setting"><div><h3>MT5 Connection</h3><p>Master trading account heartbeat</p></div><span class="status">Connected</span></article><article class="card setting"><div><h3>Signal Center Subscription</h3><p>Provider SaaS subscription</p></div><span class="status">Active</span></article><article class="card setting"><div><h3>Copy Trade Infrastructure</h3><p>License server and reseller feature</p></div><span class="status">Healthy</span></article></div></section>
+  </main>
+</div>
+<script src="./app.js"></script>
+<script src="./branding.js"></script>
+</body>
+</html>

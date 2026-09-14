@@ -1,0 +1,3 @@
+# Demo Data Notice
+
+The Provider Panel UI currently renders deterministic example values solely so visual fidelity can be reviewed before backend integration. These values must not be interpreted as NEXUS production metrics or live trading data. Production builds must source every trading, Telegram, MT5, billing, subscriber, license and credit value from authenticated tenant-scoped backend contracts.

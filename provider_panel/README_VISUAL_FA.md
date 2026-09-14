@@ -1,0 +1,3 @@
+# قانون Visual Fidelity
+
+طرح UI تاییدشده برای Provider Panel از این مرحله Contract اجرایی است. وجود KPI Card، Revenue Chart، Donut Chart، Recent Signals Table، Quick Actions، Health Indicators، Copy Trade Chart، Reports/P&L و Branding Preview بخشی از Acceptance Criteria است. در زمان اتصال Backend، این اجزا حذف یا به Card ساده تبدیل نمی‌شوند؛ فقط داده نمونه با داده واقعی Tenant جایگزین می‌شود. هر تغییر ساده‌ساز نیاز به تایید جدید دارد.
