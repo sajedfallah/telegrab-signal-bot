@@ -144,17 +144,24 @@ def create_destination(
     display_name: str | None = None,
 ) -> int:
     init_telegram_tenant_schema(con)
-    owner = con.execute("SELECT tenant_id FROM telegram_connections WHERE id=?", (connection_id,)).fetchone()
-    if owner is None or int(owner[0]) != int(tenant_id):
+    connection = con.execute(
+        "SELECT tenant_id,status FROM telegram_connections WHERE id=?", (connection_id,)
+    ).fetchone()
+    if connection is None or int(connection[0]) != int(tenant_id):
         raise LookupError("Telegram connection not found")
+    if str(connection[1]).upper() != "ACTIVE":
+        raise RuntimeError("Telegram connection must be ACTIVE before adding destinations")
     normalized_kind = str(kind).upper()
     if normalized_kind not in DESTINATION_KINDS:
         raise ValueError("unsupported Telegram destination kind")
+    key = destination_key.strip().upper()
+    if not key:
+        raise ValueError("destination key is required")
     now = _now()
     cur = con.execute(
         "INSERT INTO telegram_destinations(tenant_id,connection_id,destination_key,kind,chat_id,thread_id,display_name,status,created_at,updated_at) "
         "VALUES(?,?,?,?,?,?,?,'ACTIVE',?,?)",
-        (tenant_id, connection_id, destination_key.strip().upper(), normalized_kind, str(chat_id), thread_id, display_name, now, now),
+        (tenant_id, connection_id, key, normalized_kind, str(chat_id), thread_id, display_name, now, now),
     )
     return int(cur.lastrowid)
 
@@ -175,6 +182,18 @@ def list_destinations(con: sqlite3.Connection, *, tenant_id: int) -> list[dict[s
         "FROM telegram_destinations WHERE tenant_id=? ORDER BY id", (tenant_id,)
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def get_destination(con: sqlite3.Connection, *, tenant_id: int, destination_id: int) -> dict[str, Any]:
+    init_telegram_tenant_schema(con)
+    row = con.execute(
+        "SELECT id,connection_id,destination_key,kind,chat_id,thread_id,display_name,status,created_at,updated_at "
+        "FROM telegram_destinations WHERE id=? AND tenant_id=?",
+        (destination_id, tenant_id),
+    ).fetchone()
+    if row is None:
+        raise LookupError("Telegram destination not found")
+    return dict(row)
 
 
 def resolve_destination(con: sqlite3.Connection, *, tenant_id: int, destination_key: str) -> dict[str, Any] | None:
