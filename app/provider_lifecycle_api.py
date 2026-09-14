@@ -17,6 +17,7 @@ router = APIRouter(prefix="/provider/api", tags=["Provider Signal Lifecycle"])
 class SignalLifecycleRequest(BaseModel):
     destination_key: str = Field(min_length=1, max_length=80)
     event_type: str = Field(min_length=1, max_length=40)
+    idempotency_key: str = Field(min_length=1, max_length=160)
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -41,6 +42,7 @@ def publish_signal_event(
                 destination_key=request.destination_key,
                 event_type=event_type,
                 payload=request.payload,
+                idempotency_key=request.idempotency_key,
                 actor_user_id=ctx.user_id,
             )
     except LookupError as exc:
@@ -49,7 +51,14 @@ def publish_signal_event(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
         message = str(exc)
-        if "closed" in message.lower() or "route" in message.lower() or "publish-ready" in message.lower():
+        lowered = message.lower()
+        if (
+            "closed" in lowered
+            or "route" in lowered
+            or "publish-ready" in lowered
+            or "idempotency" in lowered
+            or "reconciliation" in lowered
+        ):
             raise HTTPException(status_code=409, detail=message) from exc
         raise HTTPException(status_code=502, detail="Telegram lifecycle reply failed") from exc
     return {"tenant_id": ctx.tenant_id, "event": receipt}
