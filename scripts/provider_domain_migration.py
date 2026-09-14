@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.provider_branding import init_branding_schema
 from app.provider_credentials import init_provider_secret_schema
 from app.provider_lifecycle import init_lifecycle_delivery_schema
 from app.provider_reconciliation import init_reconciliation_schema
@@ -34,6 +35,7 @@ PROVIDER_TABLES = (
     "provider_retail_plans",
     "provider_customer_subscriptions",
     "provider_payment_ledger",
+    "provider_branding",
 )
 
 
@@ -71,6 +73,7 @@ def migrate(db_path: Path, *, dry_run: bool = False) -> dict[str, object]:
         init_reconciliation_schema(con)
         init_subscriber_schema(con)
         init_revenue_schema(con)
+        init_branding_schema(con)
 
         missing = [table for table in PROVIDER_TABLES if not _table_exists(con, table)]
         if missing:
