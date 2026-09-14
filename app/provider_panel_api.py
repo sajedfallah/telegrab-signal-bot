@@ -10,13 +10,12 @@ from . import db
 from .provider_credentials import (
     SECRET_KIND_TELEGRAM_BOT_TOKEN,
     load_secret,
+    probe_telegram_bot_token,
     store_secret,
-    test_telegram_bot_token,
 )
 from .provider_permissions import ProviderPermission, require_permission
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
 from .telegram_tenant_domain import (
-    bind_connection_secret,
     create_connection as telegram_create_connection,
     get_connection_private,
     list_connections as telegram_list_connections,
@@ -240,8 +239,8 @@ def create_telegram_connection(
     return {"tenant_id": ctx.tenant_id, "connection_id": connection_id, "status": "PENDING", "credential_stored": True}
 
 
-@router.post("/telegram/connections/{connection_id}/test")
-def test_telegram_connection(
+@router.post("/telegram/connections/{connection_id}/test", name="probe_telegram_connection")
+def probe_telegram_connection(
     connection_id: int,
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
@@ -260,7 +259,7 @@ def test_telegram_connection(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Provider credential encryption is not configured") from exc
 
-    result = test_telegram_bot_token(token)
+    result = probe_telegram_bot_token(token)
     with db.conn() as con:
         mark_connection_test(
             con,
