@@ -93,6 +93,32 @@ def sync_reconciliation_queue(con: sqlite3.Connection, *, tenant_id: int) -> int
     return con.total_changes - before
 
 
+def reconciliation_health(con: sqlite3.Connection, *, tenant_id: int) -> dict[str, Any]:
+    """Return tenant-scoped recovery health after materializing ambiguous deliveries."""
+    init_reconciliation_schema(con)
+    sync_reconciliation_queue(con, tenant_id=tenant_id)
+    unknown = int(con.execute(
+        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='UNKNOWN'",
+        (tenant_id,),
+    ).fetchone()[0])
+    claimed = int(con.execute(
+        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='CLAIMED'",
+        (tenant_id,),
+    ).fetchone()[0])
+    open_items = int(con.execute(
+        "SELECT COUNT(*) FROM provider_delivery_reconciliations WHERE tenant_id=? AND status='OPEN'",
+        (tenant_id,),
+    ).fetchone()[0])
+    status = "attention" if unknown or claimed or open_items else "healthy"
+    return {
+        "status": status,
+        "unknown_delivery_count": unknown,
+        "claimed_delivery_count": claimed,
+        "open_reconciliation_count": open_items,
+        "requires_attention": status == "attention",
+    }
+
+
 def list_reconciliation_queue(con: sqlite3.Connection, *, tenant_id: int) -> list[dict[str, Any]]:
     sync_reconciliation_queue(con, tenant_id=tenant_id)
     rows = con.execute(
