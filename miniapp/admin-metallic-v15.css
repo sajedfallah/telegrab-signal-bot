@@ -1,0 +1,273 @@
+/* NEXUS Admin V15 — Metallic Glass Motion Layer
+   Additive skin for admin.html only. Loaded after V14 so the customer Mini App
+   and all admin data/behavior remain untouched. */
+
+:root{
+  color-scheme:dark;
+  --nx-bg-0:#07101d;
+  --nx-bg-1:#0b1524;
+  --nx-bg-2:#111d2d;
+  --nx-surface:rgba(15,27,44,.76);
+  --nx-surface-strong:rgba(18,31,49,.91);
+  --nx-surface-soft:rgba(28,43,63,.66);
+  --nx-text:#f4f8ff;
+  --nx-text-2:#c8d4e5;
+  --nx-muted:#8fa2bb;
+  --nx-cyan:#79ddff;
+  --nx-blue:#5e8fff;
+  --nx-violet:#b59cff;
+  --nx-silver:#eef5ff;
+  --nx-green:#5ee0ad;
+  --nx-red:#ff8094;
+  --nx-warning:#ffd27b;
+  --nx-metal:linear-gradient(125deg,
+      rgba(255,255,255,.72) 0%,
+      rgba(180,202,226,.32) 18%,
+      rgba(121,221,255,.76) 42%,
+      rgba(94,143,255,.58) 63%,
+      rgba(181,156,255,.64) 82%,
+      rgba(255,255,255,.50) 100%);
+  --nx-metal-soft:linear-gradient(125deg,
+      rgba(255,255,255,.34),
+      rgba(121,221,255,.38) 45%,
+      rgba(181,156,255,.34));
+  --nx-shadow-soft:
+      0 8px 32px rgba(0,0,0,.24),
+      0 2px 10px rgba(0,0,0,.16),
+      0 0 22px rgba(94,143,255,.06),
+      inset 0 1px 0 rgba(255,255,255,.08);
+  --nx-shadow-hover:
+      0 15px 44px rgba(0,0,0,.34),
+      0 4px 14px rgba(0,0,0,.22),
+      0 0 34px rgba(121,221,255,.14),
+      0 0 58px rgba(181,156,255,.08),
+      inset 0 1px 0 rgba(255,255,255,.12);
+  --nx-radius-sm:12px;
+  --nx-radius-md:16px;
+  --nx-radius-lg:20px;
+  --nx-ease:cubic-bezier(.22,1,.36,1);
+  --nx-fast:180ms;
+  --nx-mid:320ms;
+  --nx-slow:560ms;
+}
+
+html,body{
+  background:
+    radial-gradient(circle at 12% -5%,rgba(94,143,255,.18),transparent 30%),
+    radial-gradient(circle at 92% 8%,rgba(181,156,255,.13),transparent 27%),
+    radial-gradient(circle at 52% 105%,rgba(121,221,255,.08),transparent 34%),
+    linear-gradient(180deg,var(--nx-bg-0) 0%,var(--nx-bg-1) 48%,#08121f 100%)!important;
+  color:var(--nx-text)!important;
+}
+
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  z-index:0;
+  opacity:.13;
+  background-image:
+    radial-gradient(rgba(255,255,255,.20) .55px,transparent .7px),
+    radial-gradient(rgba(121,221,255,.13) .5px,transparent .65px);
+  background-size:18px 18px,23px 23px;
+  background-position:0 0,7px 9px;
+  mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),rgba(0,0,0,.24));
+}
+
+.app{position:relative;z-index:1;background:transparent!important;color:var(--nx-text)!important}
+
+/* Reusable utilities */
+.nx-soft-shadow{box-shadow:var(--nx-shadow-soft)!important}
+.nx-glass{backdrop-filter:blur(12px) saturate(135%);-webkit-backdrop-filter:blur(12px) saturate(135%)}
+.nx-metal-border{border:1px solid transparent!important;background:
+  linear-gradient(var(--nx-surface-strong),var(--nx-surface-strong)) padding-box,
+  var(--nx-metal) border-box!important}
+.nx-interactive{transition:transform var(--nx-mid) var(--nx-ease),box-shadow var(--nx-mid) var(--nx-ease),filter var(--nx-mid) var(--nx-ease),border-color var(--nx-mid) var(--nx-ease)}
+.nx-interactive:hover{transform:translateY(-2px) scale(1.02);box-shadow:var(--nx-shadow-hover)!important;filter:brightness(1.035)}
+.nx-enter{opacity:0;transform:translateY(16px);animation:nxFadeUp var(--nx-slow) var(--nx-ease) forwards;animation-delay:var(--nx-delay,0ms)}
+.nx-live{animation:nxLivePulse 2.8s ease-in-out infinite}
+.nx-shimmer{position:relative;overflow:hidden}
+.nx-shimmer::after{content:"";position:absolute;inset:-35% -55%;pointer-events:none;background:linear-gradient(105deg,transparent 34%,rgba(255,255,255,.13) 47%,rgba(121,221,255,.10) 52%,transparent 66%);transform:translateX(-55%);animation:nxShimmer 2.8s ease-in-out infinite}
+
+/* Auto-apply the design system to every current Admin surface. */
+html body .app :is(
+  .panel,.card,.setup-fields,.metrics article,.auto-setup-panel,
+  .admin-live,.trade-actions,.preview-grid>div,.risk,.targets article,
+  .levels span,.auto-setup-grid>div,.empty,.operational-note,
+  .admin-action-sheet,.sheet,.safety,.entry-source,
+  table,.table,[role="table"]
+){
+  color:var(--nx-text)!important;
+  border:1px solid transparent!important;
+  background:
+    linear-gradient(145deg,rgba(17,30,48,.92),rgba(11,22,37,.86)) padding-box,
+    var(--nx-metal-soft) border-box!important;
+  box-shadow:var(--nx-shadow-soft)!important;
+  backdrop-filter:blur(12px) saturate(135%);
+  -webkit-backdrop-filter:blur(12px) saturate(135%);
+  transition:
+    transform var(--nx-mid) var(--nx-ease),
+    box-shadow var(--nx-mid) var(--nx-ease),
+    filter var(--nx-mid) var(--nx-ease),
+    background var(--nx-mid) var(--nx-ease)!important;
+}
+
+html body .app :is(
+  .panel,.card,.setup-fields,.metrics article,.auto-setup-panel,
+  .admin-live,.preview-grid>div,.targets article,.auto-setup-grid>div,
+  .admin-action-sheet,.sheet
+):hover{
+  transform:translateY(-2px) scale(1.02);
+  box-shadow:var(--nx-shadow-hover)!important;
+  background:
+    linear-gradient(145deg,rgba(21,36,57,.96),rgba(13,25,42,.93)) padding-box,
+    var(--nx-metal) border-box!important;
+  filter:brightness(1.03);
+}
+
+/* Typography and hierarchy */
+html body .app :is(.brand,.hero h1,.section-head h2,.card strong,.panel h2,.sheet h2){color:var(--nx-text)!important}
+html body .app :is(.brand-copy small,.hero small,.mini-title,.operational-note,.empty,.card small,label,.entry-source small){color:var(--nx-muted)!important}
+html body .app .metrics article b{color:var(--nx-cyan)!important;text-shadow:0 0 18px rgba(121,221,255,.18)}
+
+/* Header and navigation receive the same metallic language. */
+html body .top,
+html body .bottom{
+  background:rgba(8,17,30,.84)!important;
+  border-color:rgba(177,205,235,.20)!important;
+  box-shadow:0 8px 32px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.06)!important;
+  backdrop-filter:blur(18px) saturate(145%);
+  -webkit-backdrop-filter:blur(18px) saturate(145%);
+}
+html body .bottom button{color:var(--nx-muted)!important;transition:color var(--nx-fast) ease,transform var(--nx-fast) var(--nx-ease),text-shadow var(--nx-fast) ease}
+html body .bottom button:hover{transform:translateY(-1px);color:var(--nx-text-2)!important}
+html body .bottom button.selected,
+html body .bottom button.selected b{color:var(--nx-cyan)!important;text-shadow:0 0 16px rgba(121,221,255,.35)}
+
+/* Forms / controls */
+html body .app :is(input,select,textarea){
+  color:var(--nx-text)!important;
+  background:rgba(5,14,25,.62)!important;
+  border:1px solid rgba(175,201,229,.24)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 4px 12px rgba(0,0,0,.14)!important;
+  transition:border-color var(--nx-fast) ease,box-shadow var(--nx-fast) ease,background var(--nx-fast) ease!important;
+}
+html body .app :is(input,select,textarea):focus{
+  outline:none!important;
+  background:rgba(9,20,35,.82)!important;
+  border-color:rgba(121,221,255,.72)!important;
+  box-shadow:0 0 0 3px rgba(121,221,255,.10),0 0 22px rgba(94,143,255,.12),inset 0 1px 0 rgba(255,255,255,.05)!important;
+}
+html body .app input::placeholder{color:#697d97!important}
+
+/* Segmented buttons and actions */
+html body .segments,
+html body .direction{
+  background:rgba(5,14,25,.52)!important;
+  border:1px solid rgba(175,201,229,.18)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+html body .segments button,
+html body .direction button{color:var(--nx-text-2)!important;transition:transform var(--nx-fast) var(--nx-ease),background var(--nx-fast) ease,box-shadow var(--nx-fast) ease!important}
+html body .segments button:hover,
+html body .direction button:hover{transform:translateY(-1px);background:rgba(121,221,255,.07)!important}
+html body .segments button.selected,
+html body .setup-mode button.selected,
+html body .volume-mode button.selected,
+html body .auto-volume-mode button.selected,
+html body .destination button.selected,
+html body .auto-destination button.selected{
+  color:#06101b!important;
+  background:linear-gradient(135deg,#d7f4ff 0%,#79ddff 38%,#6f9bff 68%,#b59cff 100%)!important;
+  box-shadow:0 8px 22px rgba(94,143,255,.22),0 0 18px rgba(121,221,255,.15),inset 0 1px 0 rgba(255,255,255,.56)!important;
+}
+
+html body .primary,
+html body .submit-preview,
+html body #newSignal,
+html body #publish{
+  color:#06101b!important;
+  border:1px solid rgba(255,255,255,.28)!important;
+  background:linear-gradient(120deg,#e3f8ff 0%,#79ddff 28%,#5e8fff 62%,#b59cff 100%)!important;
+  background-size:180% 180%!important;
+  box-shadow:0 12px 30px rgba(17,98,190,.26),0 0 20px rgba(121,221,255,.10),inset 0 1px 0 rgba(255,255,255,.65)!important;
+  transition:transform var(--nx-fast) var(--nx-ease),box-shadow var(--nx-mid) var(--nx-ease),background-position .7s var(--nx-ease)!important;
+}
+html body :is(.primary,.submit-preview,#newSignal,#publish):hover{
+  transform:translateY(-2px) scale(1.02);
+  background-position:100% 50%!important;
+  box-shadow:0 16px 38px rgba(17,98,190,.34),0 0 30px rgba(121,221,255,.18),inset 0 1px 0 rgba(255,255,255,.72)!important;
+}
+
+html body :is(.outline,.ghost,.section-head button,.icon,.entry-source button,#recalculatePreview,#cancelPreview){
+  color:var(--nx-text-2)!important;
+  border:1px solid transparent!important;
+  background:linear-gradient(rgba(13,25,42,.88),rgba(13,25,42,.88)) padding-box,var(--nx-metal-soft) border-box!important;
+  box-shadow:0 6px 20px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.06)!important;
+}
+
+/* Live/status surfaces */
+html body .chip{background:rgba(13,25,42,.84)!important;border:1px solid rgba(173,199,226,.24)!important;color:var(--nx-text-2)!important;box-shadow:0 6px 18px rgba(0,0,0,.16)!important}
+html body .chip.online{color:var(--nx-green)!important;border-color:rgba(94,224,173,.38)!important;box-shadow:0 0 20px rgba(94,224,173,.08)!important}
+html body .chip.offline{color:var(--nx-warning)!important;border-color:rgba(255,210,123,.34)!important}
+html body .admin-live.live,
+html body .chip.online{animation:nxLivePulse 2.8s ease-in-out infinite}
+html body .admin-signal-error{color:#ff9bab!important}
+
+/* Tables */
+html body .app table{border-collapse:separate;border-spacing:0;overflow:hidden;border-radius:var(--nx-radius-md)}
+html body .app :is(th,td){border-bottom:1px solid rgba(174,200,228,.12)!important;color:var(--nx-text-2)!important;background:transparent!important}
+html body .app th{color:var(--nx-silver)!important;background:rgba(255,255,255,.025)!important}
+html body .app tbody tr{transition:background var(--nx-fast) ease,transform var(--nx-fast) var(--nx-ease)}
+html body .app tbody tr:hover{background:rgba(121,221,255,.045)!important}
+
+/* Staggered entrance for all major surfaces without requiring JS. */
+html body .view.active :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.section-head,.operational-note,.admin-live,.empty){
+  opacity:0;
+  transform:translateY(14px);
+  animation:nxFadeUp var(--nx-slow) var(--nx-ease) forwards;
+}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(1){animation-delay:40ms}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(2){animation-delay:90ms}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(3){animation-delay:140ms}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(4){animation-delay:190ms}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(5){animation-delay:240ms}
+html body .view.active :is(.metrics article,.card,.setup-fields,.auto-setup-panel,.admin-live):nth-child(n+6){animation-delay:290ms}
+
+/* Focus/loading shimmer utility. Add .nx-shimmer to any async/loading card. */
+html body .app .nx-shimmer,
+html body .app [aria-busy="true"]{position:relative;overflow:hidden}
+html body .app .nx-shimmer::after,
+html body .app [aria-busy="true"]::after{
+  content:"";
+  position:absolute;
+  inset:-50% -70%;
+  pointer-events:none;
+  background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.12) 48%,rgba(121,221,255,.13) 52%,transparent 64%);
+  transform:translateX(-55%);
+  animation:nxShimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes nxFadeUp{
+  from{opacity:0;transform:translateY(14px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes nxLivePulse{
+  0%,100%{filter:brightness(1);box-shadow:var(--nx-shadow-soft)}
+  50%{filter:brightness(1.05);box-shadow:0 10px 34px rgba(0,0,0,.28),0 0 28px rgba(121,221,255,.15),0 0 48px rgba(181,156,255,.08),inset 0 1px 0 rgba(255,255,255,.10)}
+}
+@keyframes nxShimmer{
+  0%,16%{transform:translateX(-60%);opacity:0}
+  36%{opacity:1}
+  72%,100%{transform:translateX(60%);opacity:0}
+}
+
+@media(max-width:480px){
+  html body .app :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live,.sheet){box-shadow:0 8px 26px rgba(0,0,0,.24),0 0 18px rgba(94,143,255,.05),inset 0 1px 0 rgba(255,255,255,.06)!important}
+  html body .app :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live):hover{transform:translateY(-1px) scale(1.01)}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}
