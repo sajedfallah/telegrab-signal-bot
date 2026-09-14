@@ -61,7 +61,7 @@ def init_signal_domain_schema(con: sqlite3.Connection) -> None:
 
 
 def backfill_legacy_publications(con: sqlite3.Connection) -> int:
-    """Copy legacy FREE/VIP message ids into normalized publications; legacy columns remain untouched."""
+    """Copy legacy FREE/VIP message ids into normalized publications without assuming optional legacy columns exist."""
     init_signal_domain_schema(con)
     if not _exists(con, "signals"):
         return 0
@@ -69,11 +69,18 @@ def backfill_legacy_publications(con: sqlite3.Connection) -> int:
     required = {"id", "tenant_id", "free_message_id", "vip_message_id"}
     if not required.issubset(cols):
         return 0
-    count = 0
-    for row in con.execute(
-        "SELECT id,tenant_id,free_message_id,vip_message_id,free_last_message_id,vip_last_message_id,created_at "
+
+    free_last_expr = "free_last_message_id" if "free_last_message_id" in cols else "free_message_id AS free_last_message_id"
+    vip_last_expr = "vip_last_message_id" if "vip_last_message_id" in cols else "vip_message_id AS vip_last_message_id"
+    created_expr = "created_at" if "created_at" in cols else "NULL AS created_at"
+    sql = (
+        "SELECT id,tenant_id,free_message_id,vip_message_id,"
+        f"{free_last_expr},{vip_last_expr},{created_expr} "
         "FROM signals WHERE tenant_id IS NOT NULL"
-    ).fetchall():
+    )
+
+    count = 0
+    for row in con.execute(sql).fetchall():
         for key, root_col, last_col in (
             ("FREE", "free_message_id", "free_last_message_id"),
             ("VIP", "vip_message_id", "vip_last_message_id"),
@@ -82,10 +89,11 @@ def backfill_legacy_publications(con: sqlite3.Connection) -> int:
             if root is None:
                 continue
             before = con.total_changes
+            published_at = row["created_at"] or _now()
             con.execute(
                 "INSERT OR IGNORE INTO signal_publications(tenant_id,signal_id,destination_key,root_message_id,last_message_id,published_at,updated_at) "
                 "VALUES(?,?,?,?,?,?,?)",
-                (int(row["tenant_id"]), int(row["id"]), key, int(root), int(row[last_col] or root), row["created_at"], _now()),
+                (int(row["tenant_id"]), int(row["id"]), key, int(root), int(row[last_col] or root), published_at, _now()),
             )
             if con.total_changes > before:
                 count += 1
