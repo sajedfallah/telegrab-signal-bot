@@ -14,6 +14,7 @@ from .provider_credentials import (
     store_secret,
 )
 from .provider_permissions import ProviderPermission, require_permission
+from .provider_publish import publish_signal_text
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
 from .telegram_tenant_domain import (
     create_connection as telegram_create_connection,
@@ -42,6 +43,11 @@ class TelegramDestinationCreate(BaseModel):
     kind: str = Field(default="CHANNEL", min_length=1, max_length=20)
     thread_id: int | None = Field(default=None, gt=0)
     display_name: str | None = Field(default=None, max_length=120)
+
+
+class SignalPublishRequest(BaseModel):
+    destination_key: str = Field(min_length=1, max_length=80)
+    text: str = Field(min_length=1, max_length=4096)
 
 
 def _columns(con, table: str) -> set[str]:
@@ -152,7 +158,7 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.5"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.6"}
 
 
 @router.get("/bootstrap")
@@ -198,6 +204,38 @@ def signal_detail(
     return {"tenant_id": ctx.tenant_id, "signal": item, "mode": "read_only"}
 
 
+@router.post("/signals/{signal_id}/publish")
+def publish_signal(
+    signal_id: int,
+    payload: SignalPublishRequest,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    _require(ctx, ProviderPermission.PUBLISH_SIGNAL)
+    try:
+        with db.conn() as con:
+            receipt = publish_signal_text(
+                con,
+                tenant_id=ctx.tenant_id,
+                signal_id=signal_id,
+                destination_key=payload.destination_key,
+                text=payload.text,
+            )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail="signal already published to destination") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        message = str(exc)
+        if "credential" in message.lower() or "publish-ready" in message.lower():
+            raise HTTPException(status_code=409, detail="Telegram connection is not publish-ready") from exc
+        raise HTTPException(status_code=502, detail="Telegram publish failed") from exc
+    return {"tenant_id": ctx.tenant_id, "publication": receipt}
+
+
 @router.get("/telegram")
 def telegram_routing(
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
@@ -214,7 +252,7 @@ def telegram_routing(
         "destinations": destinations,
         "health": state,
         "mutations_enabled": True,
-        "publish_enabled": False,
+        "publish_enabled": state["status"] == "ready",
     }
 
 
@@ -303,4 +341,4 @@ def create_telegram_destination(
         if "UNIQUE constraint failed" in str(exc):
             raise HTTPException(status_code=409, detail="Telegram destination key already exists") from exc
         raise
-    return {"tenant_id": ctx.tenant_id, "destination": destination, "publish_enabled": False}
+    return {"tenant_id": ctx.tenant_id, "destination": destination, "publish_enabled": True}
