@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .autotrade.api import app
 from .miniapp_api import router as miniapp_router
+from .provider_lifecycle_api import router as provider_lifecycle_router
 from .provider_panel_api import router as provider_panel_router
 
 
@@ -17,6 +18,7 @@ app.include_router(miniapp_router)
 # Provider Panel is a separate B2B surface. Its API requires tenant membership
 # server-side; a client supplied tenant id is only a selector, never authorization.
 app.include_router(provider_panel_router)
+app.include_router(provider_lifecycle_router)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
