@@ -104,14 +104,22 @@ def test_shell_loads_notification_center_polish_layer_and_current_cache_key():
     assert './assets/brand/nexus-mark.svg?v=20260910-1215' in html
 
 
-def test_bottom_nav_remains_server_lifecycle_authoritative():
+def test_bottom_nav_remains_server_lifecycle_authoritative_with_charts_invariant():
     guest = miniapp_experience._navigation("GUEST", "GUEST")
     vip = miniapp_experience._navigation("VIP", "ACTIVE")
     autotrade = miniapp_experience._navigation("AUTOTRADE", "ACTIVE")
 
-    assert guest[2]["route"] == "subscriptions"
-    assert guest[2]["label_fa"] == "پلن‌ها"
-    assert vip[2]["route"] == "subscriptions"
-    assert vip[2]["label_fa"] == "ارتقا"
-    assert autotrade[2]["route"] == "trades"
-    assert autotrade[2]["label_fa"] == "معاملات"
+    for nav in (guest, vip, autotrade):
+        assert len(nav) == 5
+        assert nav[0]["route"] == "home"
+        assert nav[1]["route"] == "signals"
+        assert nav[2]["route"] == "charts"
+        assert nav[2]["label_fa"] == "چارت"
+        assert nav[4]["route"] == "account"
+
+    assert guest[3]["route"] == "subscriptions"
+    assert guest[3]["label_fa"] == "پلن‌ها"
+    assert vip[3]["route"] == "subscriptions"
+    assert vip[3]["label_fa"] == "ارتقا"
+    assert autotrade[3]["route"] == "trades"
+    assert autotrade[3]["label_fa"] == "معاملات"
