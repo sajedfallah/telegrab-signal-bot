@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException
 
 from . import db
-from .miniapp_api import _validate_init_data
+from .telegram_webapp_auth import validate_init_data
 from .tenancy import TenantContext, resolve_tenant_context
 
 
@@ -22,11 +23,21 @@ def _table_exists(con, table: str) -> bool:
     ).fetchone() is not None
 
 
+def _provider_bot_token() -> str:
+    # V1 can reuse BOT_TOKEN, while a dedicated provider bot can be introduced
+    # without coupling this module back to the global NEXUS Settings object.
+    return os.getenv("PROVIDER_PANEL_BOT_TOKEN", "").strip() or os.getenv("BOT_TOKEN", "").strip()
+
+
+def _authenticate_provider(raw: str) -> dict[str, Any]:
+    return validate_init_data(raw, bot_token=_provider_bot_token())
+
+
 def _tenant_context(
     x_telegram_init_data: str | None,
     x_tenant_id: int | None,
 ) -> TenantContext:
-    user = _validate_init_data(x_telegram_init_data or "")
+    user = _authenticate_provider(x_telegram_init_data or "")
     user_id = int(user["id"])
     if not x_tenant_id or int(x_tenant_id) <= 0:
         raise HTTPException(status_code=400, detail="X-Tenant-Id is required")
