@@ -14,6 +14,7 @@ from app.provider_panel_api import (
     create_telegram_connection,
     probe_telegram_connection,
 )
+from app.provider_subscribers import create_customer, create_retail_plan, create_subscription
 from app.signal_domain import init_signal_domain_schema
 from app.telegram_tenant_domain import create_connection, create_destination
 from app.tenancy import TenantContext, TenantRole, grant_membership, init_tenant_schema
@@ -65,6 +66,28 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
         "VALUES(?,20,2,'VIP','ot-claimed','TRAILING','hash','CLAIMED',600,'x','x')",
         (other_id,),
     )
+
+    nexus_customer = create_customer(con, tenant_id=nexus_id, external_user_id="nx-customer", display_name="Nexus Customer")
+    nexus_plan = create_retail_plan(con, tenant_id=nexus_id, code="VIP", name="VIP", price_amount=19, price_currency="USD", duration_days=30)
+    create_subscription(
+        con,
+        tenant_id=nexus_id,
+        customer_id=nexus_customer,
+        plan_id=nexus_plan,
+        starts_at="2026-09-01T00:00:00+00:00",
+        expires_at="2099-10-01T00:00:00+00:00",
+    )
+    other_customer = create_customer(con, tenant_id=other_id, external_user_id="other-customer", display_name="Other Customer")
+    other_plan = create_retail_plan(con, tenant_id=other_id, code="VIP", name="VIP", price_amount=29, price_currency="USD", duration_days=30)
+    create_subscription(
+        con,
+        tenant_id=other_id,
+        customer_id=other_customer,
+        plan_id=other_plan,
+        starts_at="2026-09-01T00:00:00+00:00",
+        expires_at="2099-10-01T00:00:00+00:00",
+    )
+
     connection = create_connection(con, tenant_id=nexus_id, label="primary", status="ACTIVE")
     create_destination(con, tenant_id=nexus_id, connection_id=connection, destination_key="VIP", chat_id="-100111", kind="VIP")
     other_connection = create_connection(con, tenant_id=other_id, label="primary", status="ACTIVE")
@@ -86,6 +109,11 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
     assert data["kpis"]["total_signals"] == 1
     assert data["recent_signals"][0]["symbol"] == "XAUUSD"
     assert all(row["symbol"] != "BTCUSDT" for row in data["recent_signals"])
+    assert data["kpis"]["active_subscribers"] == 1
+    assert data["availability"]["active_subscribers"] is True
+    assert data["availability"]["subscribers"] is True
+    assert data["health"]["subscription"]["status"] == "ready"
+    assert data["health"]["subscription"]["active_subscribers"] == 1
     assert data["kpis"]["monthly_revenue"] is None
     assert data["availability"]["monthly_revenue"] is False
     assert data["health"]["telegram"]["status"] == "ready"
@@ -119,6 +147,10 @@ def test_dashboard_recovery_is_unavailable_before_provider_domain_migration(monk
     data = _dashboard(TenantContext(tenant_id, 1001, TenantRole.OWNER))
     assert data["health"]["recovery"]["status"] == "unavailable"
     assert data["availability"]["recovery"] is False
+    assert data["kpis"]["active_subscribers"] is None
+    assert data["availability"]["active_subscribers"] is False
+    assert data["availability"]["subscribers"] is False
+    assert data["health"]["subscription"]["status"] == "unavailable"
 
 
 def test_tenant_header_is_not_authorization(monkeypatch, tmp_path):
