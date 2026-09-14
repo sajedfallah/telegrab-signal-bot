@@ -116,6 +116,42 @@ def _telegram_state(con, tenant_id: int) -> dict[str, Any]:
     }
 
 
+def _recovery_state(con, tenant_id: int) -> dict[str, Any]:
+    """Read recovery health without creating or mutating schema from a dashboard GET."""
+    if not _table_exists(con, "provider_lifecycle_deliveries"):
+        return {
+            "status": "unavailable",
+            "reason": "provider lifecycle delivery schema is not migrated",
+            "unknown_delivery_count": 0,
+            "claimed_delivery_count": 0,
+            "open_reconciliation_count": 0,
+            "requires_attention": False,
+        }
+    unknown_count = int(con.execute(
+        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='UNKNOWN'",
+        (tenant_id,),
+    ).fetchone()[0])
+    claimed_count = int(con.execute(
+        "SELECT COUNT(*) FROM provider_lifecycle_deliveries WHERE tenant_id=? AND status='CLAIMED'",
+        (tenant_id,),
+    ).fetchone()[0])
+    open_count = 0
+    if _table_exists(con, "provider_delivery_reconciliations"):
+        open_count = int(con.execute(
+            "SELECT COUNT(*) FROM provider_delivery_reconciliations WHERE tenant_id=? AND status='OPEN'",
+            (tenant_id,),
+        ).fetchone()[0])
+    requires_attention = bool(unknown_count or claimed_count or open_count)
+    return {
+        "status": "attention" if requires_attention else "healthy",
+        "reason": "delivery recovery requires operator review" if requires_attention else None,
+        "unknown_delivery_count": unknown_count,
+        "claimed_delivery_count": claimed_count,
+        "open_reconciliation_count": open_count,
+        "requires_attention": requires_attention,
+    }
+
+
 def _dashboard(ctx: TenantContext) -> dict[str, Any]:
     with db.conn() as con:
         signal_count = 0
@@ -134,7 +170,12 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
                 (ctx.tenant_id,),
             ).fetchall()
             if closed:
-                wins = sum(1 for row in closed if str(row["status"] or "").upper().startswith("TP") or (row["result_value"] is not None and float(row["result_value"]) > 0))
+                wins = sum(
+                    1
+                    for row in closed
+                    if str(row["status"] or "").upper().startswith("TP")
+                    or (row["result_value"] is not None and float(row["result_value"]) > 0)
+                )
                 win_rate = round((wins / len(closed)) * 100, 1)
             groups = con.execute(
                 "SELECT COALESCE(NULLIF(market_type,''),'Other') AS market_type,COUNT(*) AS count FROM signals "
@@ -142,23 +183,40 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
             ).fetchall()
             distribution = [{"label": str(row["market_type"]), "count": int(row["count"])} for row in groups]
         telegram_state = _telegram_state(con, ctx.tenant_id)
+        recovery_state = _recovery_state(con, ctx.tenant_id)
         return {
-            "source": "live_database", "tenant_id": ctx.tenant_id,
-            "kpis": {"active_subscribers": None, "monthly_revenue": None, "total_signals": signal_count, "win_rate": win_rate},
-            "revenue_series": [], "signal_distribution": distribution, "recent_signals": recent_signals,
+            "source": "live_database",
+            "tenant_id": ctx.tenant_id,
+            "kpis": {
+                "active_subscribers": None,
+                "monthly_revenue": None,
+                "total_signals": signal_count,
+                "win_rate": win_rate,
+            },
+            "revenue_series": [],
+            "signal_distribution": distribution,
+            "recent_signals": recent_signals,
             "health": {
                 "telegram": telegram_state,
+                "recovery": recovery_state,
                 "mt5": {"status": "unavailable", "reason": "tenant TradingConnection domain pending"},
                 "copy_trade": {"status": "unavailable", "reason": "tenant Copy Trade domain pending"},
                 "subscription": {"status": "unavailable", "reason": "provider subscription domain pending"},
             },
-            "availability": {"active_subscribers": False, "monthly_revenue": False, "revenue_series": False, "signals": True, "telegram": True},
+            "availability": {
+                "active_subscribers": False,
+                "monthly_revenue": False,
+                "revenue_series": False,
+                "signals": True,
+                "telegram": True,
+                "recovery": recovery_state["status"] != "unavailable",
+            },
         }
 
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.6"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.7"}
 
 
 @router.get("/bootstrap")
@@ -167,7 +225,11 @@ def bootstrap(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict[str, Any]:
     ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
-    return {"tenant": _tenant(ctx), "membership": {"user_id": ctx.user_id, "role": ctx.role.value}, "dashboard": _dashboard(ctx)}
+    return {
+        "tenant": _tenant(ctx),
+        "membership": {"user_id": ctx.user_id, "role": ctx.role.value},
+        "dashboard": _dashboard(ctx),
+    }
 
 
 @router.get("/dashboard")
@@ -266,15 +328,31 @@ def create_telegram_connection(
     _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
     try:
         with db.conn() as con:
-            secret_ref = store_secret(con, tenant_id=ctx.tenant_id, kind=SECRET_KIND_TELEGRAM_BOT_TOKEN, plaintext=payload.bot_token)
-            connection_id = telegram_create_connection(con, tenant_id=ctx.tenant_id, label=payload.label, secret_ref=secret_ref, status="PENDING")
+            secret_ref = store_secret(
+                con,
+                tenant_id=ctx.tenant_id,
+                kind=SECRET_KIND_TELEGRAM_BOT_TOKEN,
+                plaintext=payload.bot_token,
+            )
+            connection_id = telegram_create_connection(
+                con,
+                tenant_id=ctx.tenant_id,
+                label=payload.label,
+                secret_ref=secret_ref,
+                status="PENDING",
+            )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Provider credential encryption is not configured") from exc
     except Exception as exc:
         if "UNIQUE constraint failed" in str(exc):
             raise HTTPException(status_code=409, detail="Telegram connection label already exists") from exc
         raise
-    return {"tenant_id": ctx.tenant_id, "connection_id": connection_id, "status": "PENDING", "credential_stored": True}
+    return {
+        "tenant_id": ctx.tenant_id,
+        "connection_id": connection_id,
+        "status": "PENDING",
+        "credential_stored": True,
+    }
 
 
 @router.post("/telegram/connections/{connection_id}/test", name="probe_telegram_connection")
@@ -334,7 +412,10 @@ def create_telegram_destination(
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Telegram connection not found") from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=409, detail="Telegram connection must be tested successfully before adding destinations") from exc
+        raise HTTPException(
+            status_code=409,
+            detail="Telegram connection must be tested successfully before adding destinations",
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
