@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -10,6 +11,7 @@ from .. import db
 _ACCEPTED = {"EXECUTED", "PENDING", "ACTIVATED"}
 _TERMINAL_CHART = {"FAILED", "EXPIRED"}
 _READY_CHART = {"UPLOADED", "COMPLETED"}
+_INFLIGHT_CHART = {"PENDING", "CLAIMED", "CAPTURING"}
 
 
 def _route(app, path: str, method: str) -> APIRoute:
@@ -61,6 +63,49 @@ def _publication_asset_exists(signal_id: int) -> bool:
         return False
 
 
+def _parse_utc(value: str | None) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _chart_job_overdue(job: Any, now: datetime | None = None) -> bool:
+    if not job:
+        return False
+    status = str(job["status"] or "").strip().upper()
+    if status not in _INFLIGHT_CHART:
+        return False
+    expires_at = _parse_utc(job["expires_at"])
+    if expires_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return expires_at <= current.astimezone(timezone.utc)
+
+
+def _expire_overdue_chart_job(job: Any) -> bool:
+    if not _chart_job_overdue(job):
+        return False
+    now = db.now_iso()
+    with db.conn() as con:
+        cur = con.execute(
+            """UPDATE signal_chart_capture_jobs
+               SET status='EXPIRED',failed_at=COALESCE(failed_at,?),
+                   error_text='job expired without completed chart capture',updated_at=?
+               WHERE id=? AND status IN ('PENDING','CLAIMED','CAPTURING') AND expires_at<=?""",
+            (now, now, int(job["id"]), now),
+        )
+    return cur.rowcount > 0
+
+
 def _candidate_rows(account: str) -> list[Any]:
     with db.conn() as con:
         return con.execute(
@@ -91,10 +136,11 @@ def install_publication_recovery(app) -> None:
     channel through the publisher's existing channel claims/idempotency.
 
     WEB_ADMIN keeps the real-chart-first policy. If chart capture reaches a
-    terminal FAILED/EXPIRED state, or a READY job has lost its durable asset,
-    publication falls back to the existing generated card only after a
-    broker-confirmed execution receipt. MT5_ADMIN signals do not depend on a
-    chart-capture job and are retried directly after the same broker receipt.
+    terminal FAILED/EXPIRED state, a READY job loses its durable asset, or the
+    chart worker disappears until the job TTL elapses, publication falls back
+    to the existing generated card only after a broker-confirmed execution
+    receipt. MT5_ADMIN signals do not depend on a chart-capture job and are
+    retried directly after the same broker receipt.
     """
     if getattr(app.state, "nexus_publication_recovery_v1", False):
         return
@@ -122,6 +168,7 @@ def install_publication_recovery(app) -> None:
         queued: list[int] = []
         fallback: list[int] = []
         chart_repaired: list[int] = []
+        chart_expired: list[int] = []
 
         for row in _candidate_rows(account):
             signal_id = int(row["id"])
@@ -169,6 +216,23 @@ def install_publication_recovery(app) -> None:
                     continue
 
             job_status = str(job["status"] or "").upper()
+
+            # Chart expiry used to be enforced only by the ChartAgent claim
+            # endpoint. If the ChartAgent itself was offline, PENDING/CLAIMED
+            # jobs could remain non-terminal forever. The already-authenticated
+            # Admin EA heartbeat now enforces the same overall job TTL.
+            if _expire_overdue_chart_job(job):
+                job_status = "EXPIRED"
+                chart_expired.append(signal_id)
+                db.add_signal_event(
+                    signal_id,
+                    "CHART_JOB_EXPIRED_RECOVERY",
+                    actor_type="BACKEND",
+                    account_number=account,
+                    correlation_id=str(row["code"]),
+                    reason="chart capture TTL elapsed without completed capture",
+                    payload={"job_id": int(job["id"]), "publication_stage": stage},
+                )
 
             if job_status in _READY_CHART:
                 if _publication_asset_exists(signal_id):
@@ -220,7 +284,11 @@ def install_publication_recovery(app) -> None:
                     actor_type="BACKEND",
                     account_number=account,
                     correlation_id=str(row["code"]),
-                    reason=str(job["error_text"] or "chart capture terminal failure"),
+                    reason=(
+                        "chart capture TTL elapsed without completed capture"
+                        if signal_id in chart_expired
+                        else str(job["error_text"] or "chart capture terminal failure")
+                    ),
                     payload={"chart_status": job_status, "publication_stage": stage, "fallback": True},
                 )
 
@@ -228,6 +296,7 @@ def install_publication_recovery(app) -> None:
             result["publication_recovery_signal_ids"] = sorted(set(queued))
             result["publication_fallback_signal_ids"] = sorted(set(fallback))
             result["publication_chart_repaired_signal_ids"] = sorted(set(chart_repaired))
+            result["publication_chart_expired_signal_ids"] = sorted(set(chart_expired))
         return result
 
     _replace_route(app, "/api/v1/autotrade/live-state", "POST", live_state)
