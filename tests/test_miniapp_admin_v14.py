@@ -105,14 +105,17 @@ def test_admin_and_account_assets_are_cache_busted():
     root = Path(__file__).resolve().parents[1] / "miniapp"
     admin = (root / "admin.html").read_text(encoding="utf-8")
     user = (root / "index.html").read_text(encoding="utf-8")
-    for asset in ("admin-light-v14.css", "admin-signal-v13.js", "symbol-visuals.js"):
+    assert "admin-light-v14.css?v=20260914-v14-2-boldcards" in admin
+    for asset in ("admin-signal-v13.js", "symbol-visuals.js"):
         assert f"{asset}?v=20260914-v14-final" in admin
-    for asset in ("account-v2.js", "purchase-flow-v4.js", "landing-v5.css", "signals-v2.js"):
+    for asset in ("account-v2.js", "purchase-flow-v4.js", "signals-v2.js"):
         assert f"{asset}?v=20260914-v14-final" in user
+    assert "landing-v5.css?v=20260914-poster-cta-only" in user
 
 
-def test_landing_enter_motion_is_visible_without_hover_and_respects_reduced_motion():
+def test_landing_uses_approved_poster_button_without_duplicate_overlay():
     css = (Path(__file__).resolve().parents[1] / "miniapp" / "landing-v5.css").read_text(encoding="utf-8")
     assert ".nexus-landing:not(.landing-fallback) .nexus-landing-enter::after" in css
-    assert "animation: nexus-enter-light" in css
-    assert ".nexus-landing-enter::after { animation: none !important; }" in css
+    assert "content: none !important;" in css
+    assert "background: transparent !important;" in css
+    assert "@media (prefers-reduced-motion: reduce)" in css

@@ -45,6 +45,29 @@ bool NexusTrailClaimManageSecond(const string sig,const datetime now)
    );
   }
 
+string NexusTrailSignalForTicket(const ulong ticket,const string broker_comment)
+  {
+   string sig=broker_comment;
+   StringTrimLeft(sig); StringTrimRight(sig);
+   if(sig!="" && NexusTrailGet(sig,"mode",0)>=1) return sig;
+
+   // A broker may erase POSITION_COMMENT after a partial close. Recover the
+   // signal from the account-scoped ticket already persisted by TradeManager.
+   string prefix="NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+".";
+   string suffix=".ticket";
+   for(int i=0;i<GlobalVariablesTotal();i++)
+     {
+      string key=GlobalVariableName(i);
+      if(StringFind(key,prefix)!=0) continue;
+      int at=StringLen(key)-StringLen(suffix);
+      if(at<=StringLen(prefix) || StringSubstr(key,at)!=suffix) continue;
+      if((ulong)MathRound(GlobalVariableGet(key))!=ticket) continue;
+      sig=StringSubstr(key,StringLen(prefix),at-StringLen(prefix));
+      if(NexusTrailGet(sig,"mode",0)>=1) return sig;
+     }
+   return "";
+  }
+
 // Hardened profile-based trailing engine.
 // NEXUS positions use the immutable signal snapshot.
 // Manual positions are managed only with explicit EA opt-in and use
@@ -160,14 +183,38 @@ private:
      }
    double TargetClosePct(const string sig,const int n,const int count)
      {
-      // Preserve the legacy 2-target profile (30% / 30% / runner 40%).
-      // With 3 targets the first two are partials and TP3 is the final exit.
-      // With 4+ targets, distribute 100% evenly across the target ladder;
-      // the last target closes the remaining volume.
+      // Percentages refer to the original position, not its current remainder.
+      // Reserve the configured runner for the final target when there are
+      // three targets; a shorter ladder closes all remainder at its last TP.
       if(n>=count)return 100.0;
-      if(count==2)return n==1?NexusTrailGet(sig,"tp1_close_pct",30):30.0;
-      if(count==3)return 30.0;
+      double runner=MathMax(0.0,MathMin(100.0,NexusTrailGet(sig,"runner_pct",40)));
+      double first=MathMax(0.0,MathMin(100.0-runner,NexusTrailGet(sig,"tp1_close_pct",30)));
+      if(count==2)return first;
+      if(count==3)
+        {
+         if(n==1)return first;
+         return MathMax(0.0,MathMin(100.0-runner-first,NexusTrailGet(sig,"tp2_close_pct",30)));
+        }
+      // Preserve the existing equal ladder for 4+ targets.
       return 100.0/MathMax(1,count);
+     }
+
+   double ExecutablePartialVolume(const string symbol,const double before,const double requested,const double reserve)
+     {
+      double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN);
+      double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
+      if(minv<=0 || before<=0)return -1;
+      if(requested<=0)return 0;
+      if(step<=0)step=minv;
+      double eps=MathMax(step*0.1,1e-8);
+      double max_partial=before-MathMax(minv,reserve);
+      if(max_partial+eps<minv)return 0;
+      double volume=NormalizeDouble(MathRound(requested/step)*step,8);
+      if(volume<minv)volume=minv;
+      if(volume>max_partial)volume=MathFloor(max_partial/step+1e-9)*step;
+      volume=NormalizeDouble(volume,8);
+      if(volume<minv || before-volume+eps<minv)return 0;
+      return volume;
      }
    bool PartialRetryReady(const string sig,const int n)
      {
@@ -193,6 +240,20 @@ private:
       NexusTrailSet(sig,p+"_next_retry",0);
      }
 
+   void CompleteTarget(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,
+                       const double entry,const int n,const bool is_final)
+     {
+      string field="tp"+IntegerToString(n);
+      NexusTrailSet(sig,field+"_done",1);
+      PartialRetryReset(sig,n);
+      NexusTrailSet(sig,field+"_pending_before",0);
+      NexusTrailSet(sig,field+"_pending_volume",0);
+      if(n==1) BE(ticket,sig,pt,entry);
+      else if(PositionSelectByTicket(ticket)) MoveSL(ticket,pt,Target(sig,n-1));
+      if(is_final) NexusTrailSet(sig,"final_tp_done",1);
+      GlobalVariablesFlush();
+     }
+
 
    void Partials(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const double px,const double entry,const double risk)
      {
@@ -210,6 +271,11 @@ private:
          double tp1=entry+d*risk, tp2=entry+d*2*risk;
          if((pt==POSITION_TYPE_BUY && tp1<finaltp)||(pt==POSITION_TYPE_SELL && tp1>finaltp)) { NexusTrailSet(sig,"tp1",tp1); NexusTrailSet(sig,"has_tp1",1); }
          if((pt==POSITION_TYPE_BUY && tp2<finaltp)||(pt==POSITION_TYPE_SELL && tp2>finaltp)) { NexusTrailSet(sig,"tp2",tp2); NexusTrailSet(sig,"has_tp2",1); }
+         // The broker's final TP is the final milestone, not an early
+         // synthetic target that closes the entire manual position.
+         int final_index=TargetCount(sig)+1;
+         NexusTrailSet(sig,"tp"+IntegerToString(final_index),finaltp);
+         NexusTrailSet(sig,"has_tp"+IntegerToString(final_index),1);
          count=TargetCount(sig);
          if(count<=0)return;
         }
@@ -218,36 +284,83 @@ private:
         {
          string field="tp"+IntegerToString(n);
          if(NexusTrailGet(sig,field+"_done",0)>0.5) continue;
+         if(NexusTrailGet(sig,field+"_skipped",0)>0.5) continue;
+         bool is_final_target=(n==count);
+         double pending_before=NexusTrailGet(sig,field+"_pending_before",0);
+         if(pending_before>0)
+           {
+            if(!PositionSelectByTicket(ticket))return;
+            double current=PositionGetDouble(POSITION_VOLUME);
+            double step=SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_VOLUME_STEP);
+            double threshold=MathMax(step*0.5,1e-8);
+            if(current<pending_before-threshold)
+              {
+               // The previous attempt reduced broker volume before the EA
+               // restarted or lost its acknowledgement. Never close twice.
+               Print("NEXUS TP PARTIAL RECONCILED | signal=",sig," tp=",(string)n,
+                     " before=",DoubleToString(pending_before,8),
+                     " after=",DoubleToString(current,8));
+               CompleteTarget(ticket,sig,pt,entry,n,is_final_target);
+               if(is_final_target)return;
+               continue;
+              }
+            if(!PartialRetryReady(sig,n)) continue;
+            NexusTrailSet(sig,field+"_pending_before",0);
+            NexusTrailSet(sig,field+"_pending_volume",0);
+           }
          if(!PartialRetryReady(sig,n)) continue;
          double target=Target(sig,n);
          if(target<=0) continue;
          bool hit=pt==POSITION_TYPE_BUY?px>=target:px<=target;
          if(!hit) continue;
 
-         bool is_final_target=(n==count);
          double close_pct=TargetClosePct(sig,n,count);
          double before=PositionGetDouble(POSITION_VOLUME);
          double close_volume=is_final_target?before:initv*close_pct/100.0;
-         if(close_volume<=0) continue;
+         if(!is_final_target)
+           {
+            string symbol=PositionGetString(POSITION_SYMBOL);
+            double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
+            double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN);
+            if(step<=0)step=minv;
+            double runner_pct=count<=3?NexusTrailGet(sig,"runner_pct",40):100.0/MathMax(1,count);
+            runner_pct=MathMax(0.0,MathMin(100.0,runner_pct));
+            double reserve=(step>0?MathCeil(initv*runner_pct/100.0/step-1e-9)*step:0);
+            close_volume=ExecutablePartialVolume(symbol,before,close_volume,reserve);
+            if(close_volume<0)
+              {
+               PartialRetrySchedule(sig,n,"broker volume metadata unavailable");
+               continue;
+              }
+            if(close_volume<=0)
+              {
+               // This broker cannot split the remaining lot while preserving
+               // its minimum runner. Do not retry an impossible operation or
+               // claim TP execution; leave the volume for the next target.
+               NexusTrailSet(sig,field+"_skipped",1);
+               Print("NEXUS TP PARTIAL SKIPPED | signal=",sig," tp=",(string)n,
+                     " before=",DoubleToString(before,8)," initial=",DoubleToString(initv,8),
+                     " reason=broker minimum volume/step");
+               continue;
+              }
+           }
 
          Print("NEXUS TP HIT | signal=",sig," tp=",(string)n,
                " target=",DoubleToString(target,8)," before_volume=",DoubleToString(before,8),
                " requested_close_pct=",DoubleToString(close_pct,2)," requested_close=",DoubleToString(close_volume,8));
 
+         NexusTrailSet(sig,field+"_pending_before",before);
+         NexusTrailSet(sig,field+"_pending_volume",close_volume);
+         GlobalVariablesFlush();
          if(!m_tm.PartialCloseVolume(ticket,close_volume))
            {
             PartialRetrySchedule(sig,n,m_tm.LastError());
             continue;
            }
 
-         NexusTrailSet(sig,field+"_done",1);
-         PartialRetryReset(sig,n);
-
          // Target completion is a state transition. The target anchor is
          // applied only after execution is confirmed, never before.
-         if(n==1) BE(ticket,sig,pt,entry);
-         else if(PositionSelectByTicket(ticket)) MoveSL(ticket,pt,Target(sig,n-1));
-         if(is_final_target) NexusTrailSet(sig,"final_tp_done",1);
+         CompleteTarget(ticket,sig,pt,entry,n,is_final_target);
          Print("NEXUS TP COMPLETED | signal=",sig," tp=",(string)n,
                " final=",is_final_target?"YES":"NO");
 
@@ -300,7 +413,7 @@ public:
          ulong ticket=PositionGetTicket(i); if(ticket==0||!PositionSelectByTicket(ticket))continue;
          long magic=(long)PositionGetInteger(POSITION_MAGIC); bool nexus=magic==m_magic; bool manual=!nexus&&manage_manual; if(!nexus&&!manual)continue;
          string sig=PositionGetString(POSITION_COMMENT); long id=(long)PositionGetInteger(POSITION_IDENTIFIER);
-         if(manual){sig="MANUAL."+(string)id;InitManual(ticket,id,sig,manual_profile);} else if(sig=="")continue;
+         if(manual){sig="MANUAL."+(string)id;InitManual(ticket,id,sig,manual_profile);} else {sig=NexusTrailSignalForTicket(ticket,sig);if(sig=="")continue;}
          int mode=(int)NexusTrailGet(sig,"mode",0); if(mode<1||mode>7)continue;
          m_tf=SignalTF(sig);
          string symbol=PositionGetString(POSITION_SYMBOL); ENUM_POSITION_TYPE pt=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE); double entry=PositionGetDouble(POSITION_PRICE_OPEN);

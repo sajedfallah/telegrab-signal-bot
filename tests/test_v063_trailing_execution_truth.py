@@ -56,3 +56,43 @@ def test_all_seven_modes_remain_explicit():
 
 def test_ea_release_is_v063():
     assert '#define NEXUS_EA_VERSION "0.6.5"' in EA
+
+
+def test_partial_profiles_use_configured_first_second_and_runner_shares():
+    calc = TRAIL.split("double TargetClosePct", 1)[1].split("bool PartialRetryReady", 1)[0]
+    assert 'NexusTrailGet(sig,"tp1_close_pct",30)' in calc
+    assert 'NexusTrailGet(sig,"tp2_close_pct",30)' in calc
+    assert 'NexusTrailGet(sig,"runner_pct",40)' in calc
+    assert 'if(n>=count)return 100.0;' in calc
+
+
+def test_impossible_minimum_lot_split_is_skipped_without_claiming_execution():
+    plan = TRAIL.split("double ExecutablePartialVolume", 1)[1].split("bool PartialRetryReady", 1)[0]
+    assert "max_partial=before-MathMax(minv,reserve)" in plan
+    assert "if(max_partial+eps<minv)return 0;" in plan
+    partials = TRAIL.split("void Partials", 1)[1].split("int Mode", 1)[0]
+    assert 'NexusTrailSet(sig,field+"_skipped",1);' in partials
+    assert "MathCeil(initv*runner_pct/100.0/step-1e-9)*step" in partials
+    assert partials.index('NexusTrailSet(sig,field+"_skipped",1);') < partials.index("PartialCloseVolume(ticket,close_volume)")
+    assert partials.index("PartialCloseVolume(ticket,close_volume)") < partials.rindex("CompleteTarget(ticket,sig,pt,entry,n,is_final_target);")
+    assert 'NexusTrailSet(sig,field+"_done",1);' in TRAIL.split("void CompleteTarget", 1)[1].split("void Partials", 1)[0]
+
+
+def test_restart_reconciles_pending_partial_with_broker_volume_before_retry():
+    partials = TRAIL.split("void Partials", 1)[1].split("int Mode", 1)[0]
+    assert 'NexusTrailGet(sig,field+"_pending_before",0)' in partials
+    assert 'if(current<pending_before-threshold)' in partials
+    assert partials.index('GlobalVariablesFlush();') < partials.index('PartialCloseVolume(ticket,close_volume)')
+    assert partials.index('if(current<pending_before-threshold)') < partials.index('if(!PartialRetryReady(sig,n)) continue;')
+
+
+def test_partial_recovers_identity_after_broker_clears_comment():
+    assert "string NexusTrailSignalForTicket" in TRAIL
+    assert 'string suffix=".ticket"' in TRAIL
+    assert "sig=NexusTrailSignalForTicket(ticket,sig)" in TRAIL
+
+
+def test_manual_partial_ladder_keeps_broker_final_tp_as_final_milestone():
+    partials = TRAIL.split("void Partials", 1)[1].split("int Mode", 1)[0]
+    assert 'int final_index=TargetCount(sig)+1;' in partials
+    assert 'NexusTrailSet(sig,"tp"+IntegerToString(final_index),finaltp);' in partials
