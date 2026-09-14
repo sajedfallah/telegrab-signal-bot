@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException, Query
 
 from . import db
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
+from .telegram_tenant_domain import list_connections as telegram_list_connections, list_destinations as telegram_list_destinations
 from .telegram_webapp_auth import validate_init_data
 from .tenancy import TenantContext, resolve_tenant_context
 
@@ -51,6 +52,27 @@ def _tenant(ctx: TenantContext) -> dict[str, Any]:
     return dict(row)
 
 
+def _telegram_state(con, tenant_id: int) -> dict[str, Any]:
+    connections = telegram_list_connections(con, tenant_id=tenant_id)
+    destinations = telegram_list_destinations(con, tenant_id=tenant_id)
+    active_connections = sum(1 for item in connections if item["status"] == "ACTIVE")
+    active_destinations = sum(1 for item in destinations if item["status"] == "ACTIVE")
+    if active_connections and active_destinations:
+        status, reason = "ready", None
+    elif connections:
+        status, reason = "not_ready", "no active Telegram connection/destination pair"
+    else:
+        status, reason = "unconfigured", "tenant Telegram connection is not configured"
+    return {
+        "status": status,
+        "reason": reason,
+        "connection_count": len(connections),
+        "active_connection_count": active_connections,
+        "destination_count": len(destinations),
+        "active_destination_count": active_destinations,
+    }
+
+
 def _dashboard(ctx: TenantContext) -> dict[str, Any]:
     with db.conn() as con:
         signal_count = 0
@@ -76,23 +98,24 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
                 "WHERE tenant_id=? GROUP BY COALESCE(NULLIF(market_type,''),'Other') ORDER BY count DESC", (ctx.tenant_id,)
             ).fetchall()
             distribution = [{"label": str(row["market_type"]), "count": int(row["count"])} for row in groups]
+        telegram_state = _telegram_state(con, ctx.tenant_id)
         return {
             "source": "live_database", "tenant_id": ctx.tenant_id,
             "kpis": {"active_subscribers": None, "monthly_revenue": None, "total_signals": signal_count, "win_rate": win_rate},
             "revenue_series": [], "signal_distribution": distribution, "recent_signals": recent_signals,
             "health": {
-                "telegram": {"status": "unavailable", "reason": "tenant TelegramConnection domain pending"},
+                "telegram": telegram_state,
                 "mt5": {"status": "unavailable", "reason": "tenant TradingConnection domain pending"},
                 "copy_trade": {"status": "unavailable", "reason": "tenant Copy Trade domain pending"},
                 "subscription": {"status": "unavailable", "reason": "provider subscription domain pending"},
             },
-            "availability": {"active_subscribers": False, "monthly_revenue": False, "revenue_series": False, "signals": True},
+            "availability": {"active_subscribers": False, "monthly_revenue": False, "revenue_series": False, "signals": True, "telegram": True},
         }
 
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.2"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.3"}
 
 
 @router.get("/bootstrap")
@@ -134,6 +157,26 @@ def signal_detail(
     with db.conn() as con:
         item = domain_get_signal(con, tenant_id=ctx.tenant_id, signal_id=signal_id)
     if item is None:
-        # Deliberately identical for missing and other-tenant IDs to avoid existence leaks.
         raise HTTPException(status_code=404, detail="signal not found")
     return {"tenant_id": ctx.tenant_id, "signal": item, "mode": "read_only"}
+
+
+@router.get("/telegram")
+def telegram_routing(
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    with db.conn() as con:
+        connections = telegram_list_connections(con, tenant_id=ctx.tenant_id)
+        destinations = telegram_list_destinations(con, tenant_id=ctx.tenant_id)
+        state = _telegram_state(con, ctx.tenant_id)
+    return {
+        "tenant_id": ctx.tenant_id,
+        "connections": connections,
+        "destinations": destinations,
+        "health": state,
+        "mode": "read_only",
+        "mutations_enabled": False,
+        "publish_enabled": False,
+    }
