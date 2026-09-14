@@ -1,0 +1,185 @@
+/* NEXUS Signal Center V21 — active-empty radar
+   Based on the supplied Uiverse radar concept, scoped strictly to the
+   ACTIVE signal filter when there are no visible active signals.
+   VIP entitlement empty state and CLOSED history remain unchanged. */
+
+.app-shell{
+  --signal-radar-bg:#09090b;
+  --signal-radar-accent:139,92,246;
+  --signal-radar-center:#a78bfa;
+  --signal-radar-border:rgba(167,139,250,.24);
+}
+
+/* Only the real ACTIVE/no-signal state. The VIP locked state contains
+   [data-unlock-vip] and is deliberately excluded. */
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip])){
+  position:relative;
+  isolation:isolate;
+  display:flex!important;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  min-height:310px;
+  width:100%;
+  padding:32px 20px 27px!important;
+  overflow:hidden;
+  border:1px solid var(--signal-radar-border)!important;
+  border-radius:20px!important;
+  background-color:var(--signal-radar-bg)!important;
+  background-image:
+    linear-gradient(rgba(var(--signal-radar-accent),.10) .1em,transparent .1em),
+    linear-gradient(90deg,rgba(var(--signal-radar-accent),.10) .1em,transparent .1em)!important;
+  background-size:3em 3em!important;
+  box-shadow:
+    0 14px 30px -14px rgba(0,0,0,.76),
+    inset 0 1px 0 rgba(255,255,255,.035)!important;
+  text-align:center;
+}
+
+/* Concentric radar rings. */
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))::before{
+  content:"";
+  position:absolute;
+  z-index:1;
+  top:44%;
+  left:50%;
+  width:min(150vw,720px);
+  height:min(150vw,720px);
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:repeating-radial-gradient(
+    circle,
+    transparent 0,
+    transparent 2.9em,
+    rgba(var(--signal-radar-accent),.20) 3em
+  );
+  pointer-events:none;
+}
+
+/* Sweeping radar beam. */
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))::after{
+  content:"";
+  position:absolute;
+  z-index:2;
+  top:44%;
+  left:50%;
+  width:min(39em,122vw);
+  aspect-ratio:1;
+  transform:translate(-50%,-50%) rotate(0deg);
+  border-radius:50%;
+  background:conic-gradient(
+    from 0deg,
+    transparent 0 75%,
+    rgba(var(--signal-radar-accent),.04) 82%,
+    rgba(var(--signal-radar-accent),.52) 100%
+  );
+  animation:nexus-signal-radar-spin 4s linear infinite;
+  pointer-events:none;
+}
+
+/* Reuse the existing signal icon node as the glowing radar center dot,
+   avoiding extra JS/HTML and keeping the change presentation-only. */
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> .nexus-inline-icon:first-child{
+  position:absolute!important;
+  z-index:3;
+  top:44%;
+  left:50%;
+  width:12px!important;
+  height:12px!important;
+  margin:0!important;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  color:transparent!important;
+  background:var(--signal-radar-center);
+  animation:nexus-signal-radar-pulse 2s ease-in-out infinite;
+  overflow:visible;
+}
+
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> .nexus-inline-icon:first-child *{
+  opacity:0!important;
+}
+
+/* Keep copy readable over the moving radar. */
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> b,
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> span:not(.nexus-inline-icon){
+  position:relative;
+  z-index:4;
+}
+
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> b{
+  margin-top:178px;
+  color:#f5f3ff;
+  font-size:15px;
+  font-weight:900;
+  text-shadow:0 2px 12px rgba(0,0,0,.55);
+}
+
+.app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
++ #signalFeed
+> .nexus-empty-state:not(:has([data-unlock-vip]))
+> span:not(.nexus-inline-icon){
+  max-width:32ch;
+  color:#aeb8c8;
+  font-size:10px;
+  line-height:1.8;
+}
+
+@keyframes nexus-signal-radar-spin{
+  from{transform:translate(-50%,-50%) rotate(0deg)}
+  to{transform:translate(-50%,-50%) rotate(360deg)}
+}
+
+@keyframes nexus-signal-radar-pulse{
+  0%,100%{box-shadow:0 0 .8em .2em rgba(var(--signal-radar-accent),.60)}
+  50%{box-shadow:0 0 2em .5em rgba(var(--signal-radar-accent),1)}
+}
+
+@media(max-width:390px){
+  .app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
+  + #signalFeed
+  > .nexus-empty-state:not(:has([data-unlock-vip])){
+    min-height:280px;
+    padding-inline:16px!important;
+  }
+
+  .app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
+  + #signalFeed
+  > .nexus-empty-state:not(:has([data-unlock-vip]))
+  > b{
+    margin-top:155px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
+  + #signalFeed
+  > .nexus-empty-state:not(:has([data-unlock-vip]))::after,
+  .app-shell .signal-v2-filters:has([data-signal-state="ACTIVE"].active)
+  + #signalFeed
+  > .nexus-empty-state:not(:has([data-unlock-vip]))
+  > .nexus-inline-icon:first-child{
+    animation:none!important;
+  }
+}
