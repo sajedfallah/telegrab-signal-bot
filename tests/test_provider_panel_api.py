@@ -6,6 +6,7 @@ import pytest
 from cryptography.fernet import Fernet
 from fastapi import HTTPException
 
+from app.provider_lifecycle import init_lifecycle_delivery_schema
 from app.provider_panel_api import (
     TelegramConnectionCreate,
     _dashboard,
@@ -13,6 +14,7 @@ from app.provider_panel_api import (
     create_telegram_connection,
     probe_telegram_connection,
 )
+from app.signal_domain import init_signal_domain_schema
 from app.telegram_tenant_domain import create_connection, create_destination
 from app.tenancy import TenantContext, TenantRole, grant_membership, init_tenant_schema
 
@@ -21,6 +23,7 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
     path = tmp_path / "provider.db"
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
+    con.execute("PRAGMA foreign_keys=ON")
     con.execute("CREATE TABLE users(telegram_id INTEGER PRIMARY KEY)")
     con.executemany("INSERT INTO users VALUES(?)", [(1001,), (2002,)])
     nexus_id = init_tenant_schema(con)
@@ -40,6 +43,28 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
             (2, other_id, 'OT1', 'Crypto', 'BTCUSDT', 'SELL', 1, 2, 0, 'SL_HIT', -50, 'USD', 'x', 'x'),
         ],
     )
+    init_signal_domain_schema(con)
+    con.execute(
+        "INSERT INTO signal_publications(id,tenant_id,signal_id,destination_key,telegram_chat_id,root_message_id,last_message_id,status,published_at,updated_at) "
+        "VALUES(10,?,1,'VIP','-100111',500,500,'PUBLISHED','x','x')",
+        (nexus_id,),
+    )
+    con.execute(
+        "INSERT INTO signal_publications(id,tenant_id,signal_id,destination_key,telegram_chat_id,root_message_id,last_message_id,status,published_at,updated_at) "
+        "VALUES(20,?,2,'VIP','-100222',600,600,'PUBLISHED','x','x')",
+        (other_id,),
+    )
+    init_lifecycle_delivery_schema(con)
+    con.execute(
+        "INSERT INTO provider_lifecycle_deliveries(tenant_id,publication_id,signal_id,destination_key,idempotency_key,event_type,payload_hash,status,reply_to_message_id,created_at,updated_at) "
+        "VALUES(?,10,1,'VIP','nx-unknown','TRAILING','hash','UNKNOWN',500,'x','x')",
+        (nexus_id,),
+    )
+    con.execute(
+        "INSERT INTO provider_lifecycle_deliveries(tenant_id,publication_id,signal_id,destination_key,idempotency_key,event_type,payload_hash,status,reply_to_message_id,created_at,updated_at) "
+        "VALUES(?,20,2,'VIP','ot-claimed','TRAILING','hash','CLAIMED',600,'x','x')",
+        (other_id,),
+    )
     connection = create_connection(con, tenant_id=nexus_id, label="primary", status="ACTIVE")
     create_destination(con, tenant_id=nexus_id, connection_id=connection, destination_key="VIP", chat_id="-100111", kind="VIP")
     other_connection = create_connection(con, tenant_id=other_id, label="primary", status="ACTIVE")
@@ -51,6 +76,7 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
         def __enter__(self):
             self.con = sqlite3.connect(path)
             self.con.row_factory = sqlite3.Row
+            self.con.execute("PRAGMA foreign_keys=ON")
             return self.con
         def __exit__(self, *_):
             self.con.close()
@@ -64,6 +90,35 @@ def test_dashboard_is_strictly_tenant_scoped(monkeypatch, tmp_path):
     assert data["availability"]["monthly_revenue"] is False
     assert data["health"]["telegram"]["status"] == "ready"
     assert data["health"]["telegram"]["active_destination_count"] == 1
+    assert data["health"]["recovery"]["status"] == "attention"
+    assert data["health"]["recovery"]["unknown_delivery_count"] == 1
+    assert data["health"]["recovery"]["claimed_delivery_count"] == 0
+    assert data["health"]["recovery"]["requires_attention"] is True
+    assert data["availability"]["recovery"] is True
+
+
+def test_dashboard_recovery_is_unavailable_before_provider_domain_migration(monkeypatch, tmp_path):
+    path = tmp_path / "provider.db"
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE users(telegram_id INTEGER PRIMARY KEY)")
+    con.execute("INSERT INTO users VALUES(1001)")
+    tenant_id = init_tenant_schema(con)
+    con.commit()
+    con.close()
+
+    class Conn:
+        def __enter__(self):
+            self.con = sqlite3.connect(path)
+            self.con.row_factory = sqlite3.Row
+            return self.con
+        def __exit__(self, *_):
+            self.con.close()
+
+    monkeypatch.setattr("app.provider_panel_api.db.conn", lambda: Conn())
+    data = _dashboard(TenantContext(tenant_id, 1001, TenantRole.OWNER))
+    assert data["health"]["recovery"]["status"] == "unavailable"
+    assert data["availability"]["recovery"] is False
 
 
 def test_tenant_header_is_not_authorization(monkeypatch, tmp_path):
