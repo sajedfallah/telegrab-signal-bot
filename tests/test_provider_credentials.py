@@ -9,8 +9,8 @@ from cryptography.fernet import Fernet
 from app.provider_credentials import (
     SECRET_KIND_TELEGRAM_BOT_TOKEN,
     load_secret,
+    probe_telegram_bot_token,
     store_secret,
-    test_telegram_bot_token,
 )
 from app.tenancy import init_tenant_schema
 
@@ -53,7 +53,7 @@ class _Client:
 def test_telegram_token_test_returns_identity_without_token() -> None:
     token = "123456:secret"
     client = _Client(httpx.Response(200, json={"ok": True, "result": {"id": 77, "username": "provider_bot", "first_name": "Provider"}}))
-    result = test_telegram_bot_token(token, client=client)
+    result = probe_telegram_bot_token(token, client=client)
     assert result == {"ok": True, "bot_id": 77, "username": "provider_bot", "first_name": "Provider"}
     assert token not in repr(result)
     assert token in client.requested_url
@@ -62,6 +62,6 @@ def test_telegram_token_test_returns_identity_without_token() -> None:
 def test_telegram_token_rejection_is_sanitized() -> None:
     token = "123456:secret"
     client = _Client(httpx.Response(401, json={"ok": False, "description": f"bad {token}"}))
-    result = test_telegram_bot_token(token, client=client)
+    result = probe_telegram_bot_token(token, client=client)
     assert result == {"ok": False, "error": "telegram_rejected_credential"}
     assert token not in repr(result)
