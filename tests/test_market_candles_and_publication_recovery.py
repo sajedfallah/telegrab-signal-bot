@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
 
-from app.autotrade.publication_recovery_runtime import _publication_complete
+from app.autotrade.publication_recovery_runtime import _chart_job_overdue, _publication_complete
 from app.market_candles import CandlePoint, CandleSeries, MarketFeedRequest, _tf
 
 
@@ -59,6 +60,15 @@ def test_publication_completion_is_destination_aware_and_partial_both_is_incompl
     assert not _publication_complete({"destination": "BOTH", "free_message_id": None, "vip_message_id": None})
 
 
+def test_chart_job_overdue_is_independent_from_chart_agent_polling():
+    now = datetime(2026, 9, 14, 16, 30, tzinfo=timezone.utc)
+    assert _chart_job_overdue({"status": "PENDING", "expires_at": (now - timedelta(seconds=1)).isoformat()}, now)
+    assert _chart_job_overdue({"status": "CLAIMED", "expires_at": (now - timedelta(seconds=1)).isoformat()}, now)
+    assert _chart_job_overdue({"status": "CAPTURING", "expires_at": (now - timedelta(seconds=1)).isoformat()}, now)
+    assert not _chart_job_overdue({"status": "PENDING", "expires_at": (now + timedelta(seconds=1)).isoformat()}, now)
+    assert not _chart_job_overdue({"status": "UPLOADED", "expires_at": (now - timedelta(seconds=1)).isoformat()}, now)
+
+
 def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     assert "_accepted_receipt(signal_id)" in src
@@ -67,6 +77,9 @@ def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps()
     assert "FAILED" in src and "EXPIRED" in src
     assert 'issuer_type == "MT5_ADMIN"' in src
     assert "CHART_JOB_RECOVERED" in src
+    assert "CHART_JOB_EXPIRED_RECOVERY" in src
+    assert "publication_chart_expired_signal_ids" in src
+    assert "job expired without completed chart capture" in src
     assert "publication asset is missing" in src
     assert "COALESCE(free_message_id,0)=0 OR COALESCE(vip_message_id,0)=0" in src
 
