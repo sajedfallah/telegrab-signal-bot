@@ -4,14 +4,34 @@ import os
 from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from . import db
+from .provider_credentials import (
+    SECRET_KIND_TELEGRAM_BOT_TOKEN,
+    load_secret,
+    store_secret,
+    test_telegram_bot_token,
+)
+from .provider_permissions import ProviderPermission, require_permission
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
-from .telegram_tenant_domain import list_connections as telegram_list_connections, list_destinations as telegram_list_destinations
+from .telegram_tenant_domain import (
+    bind_connection_secret,
+    create_connection as telegram_create_connection,
+    get_connection_private,
+    list_connections as telegram_list_connections,
+    list_destinations as telegram_list_destinations,
+    mark_connection_test,
+)
 from .telegram_webapp_auth import validate_init_data
 from .tenancy import TenantContext, resolve_tenant_context
 
 router = APIRouter(prefix="/provider/api", tags=["Provider Panel"])
+
+
+class TelegramConnectionCreate(BaseModel):
+    label: str = Field(min_length=1, max_length=80)
+    bot_token: str = Field(min_length=10, max_length=256)
 
 
 def _columns(con, table: str) -> set[str]:
@@ -40,6 +60,13 @@ def _tenant_context(x_telegram_init_data: str | None, x_tenant_id: int | None) -
             return resolve_tenant_context(con, user_id=user_id, tenant_id=int(x_tenant_id))
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail="tenant access denied") from exc
+
+
+def _require(ctx: TenantContext, permission: ProviderPermission) -> None:
+    try:
+        require_permission(ctx, permission)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail="tenant role is not authorized") from exc
 
 
 def _tenant(ctx: TenantContext) -> dict[str, Any]:
@@ -115,7 +142,7 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.3"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.4"}
 
 
 @router.get("/bootstrap")
@@ -176,7 +203,71 @@ def telegram_routing(
         "connections": connections,
         "destinations": destinations,
         "health": state,
-        "mode": "read_only",
-        "mutations_enabled": False,
+        "mutations_enabled": True,
         "publish_enabled": False,
     }
+
+
+@router.post("/telegram/connections", status_code=201)
+def create_telegram_connection(
+    payload: TelegramConnectionCreate,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
+    try:
+        with db.conn() as con:
+            secret_ref = store_secret(
+                con,
+                tenant_id=ctx.tenant_id,
+                kind=SECRET_KIND_TELEGRAM_BOT_TOKEN,
+                plaintext=payload.bot_token,
+            )
+            connection_id = telegram_create_connection(
+                con,
+                tenant_id=ctx.tenant_id,
+                label=payload.label,
+                secret_ref=secret_ref,
+                status="PENDING",
+            )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Provider credential encryption is not configured") from exc
+    except Exception as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            raise HTTPException(status_code=409, detail="Telegram connection label already exists") from exc
+        raise
+    return {"tenant_id": ctx.tenant_id, "connection_id": connection_id, "status": "PENDING", "credential_stored": True}
+
+
+@router.post("/telegram/connections/{connection_id}/test")
+def test_telegram_connection(
+    connection_id: int,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
+    try:
+        with db.conn() as con:
+            connection = get_connection_private(con, tenant_id=ctx.tenant_id, connection_id=connection_id)
+            secret_ref = connection.get("secret_ref")
+            if not secret_ref:
+                raise HTTPException(status_code=409, detail="Telegram credential is not configured")
+            token = load_secret(con, tenant_id=ctx.tenant_id, secret_ref=str(secret_ref))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Telegram connection not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Provider credential encryption is not configured") from exc
+
+    result = test_telegram_bot_token(token)
+    with db.conn() as con:
+        mark_connection_test(
+            con,
+            tenant_id=ctx.tenant_id,
+            connection_id=connection_id,
+            ok=bool(result.get("ok")),
+            bot_username=result.get("username") if result.get("ok") else None,
+            error=result.get("error") if not result.get("ok") else None,
+        )
+    return {"tenant_id": ctx.tenant_id, "connection_id": connection_id, **result}
