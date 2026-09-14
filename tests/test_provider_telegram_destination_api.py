@@ -69,7 +69,7 @@ def test_owner_can_create_destination_for_active_tenant_connection(monkeypatch, 
     )
     assert result["destination"]["destination_key"] == "VIP"
     assert result["destination"]["chat_id"] == "-100111"
-    assert result["publish_enabled"] is False
+    assert result["publish_enabled"] is True
 
 
 def test_publisher_cannot_manage_destinations(monkeypatch, tmp_path):
