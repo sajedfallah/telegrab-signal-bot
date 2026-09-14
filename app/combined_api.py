@@ -16,6 +16,7 @@ from .miniapp_checkout import router as miniapp_checkout_router
 from .miniapp_account import router as miniapp_account_router
 from .miniapp_product_intelligence import router as miniapp_product_intelligence_router
 from .miniapp_purchase_flow import router as miniapp_purchase_flow_router
+from .market_candles import router as market_candles_router
 
 
 # The existing AutoTrade API stays the root FastAPI application/source of truth.
@@ -32,6 +33,7 @@ app.include_router(miniapp_checkout_router)
 app.include_router(miniapp_account_router)
 app.include_router(miniapp_product_intelligence_router)
 app.include_router(miniapp_purchase_flow_router)
+app.include_router(market_candles_router)
 
 # WEB_ADMIN signals created by the Admin Mini App must execute on the
 # authenticated Admin MT5 account before chart capture / Telegram publication.
@@ -39,6 +41,12 @@ app.include_router(miniapp_purchase_flow_router)
 # the existing DB schema remain unchanged.
 from .autotrade.miniapp_execution_runtime import install_miniapp_execution_gate
 install_miniapp_execution_gate(app)
+
+# Channel publication is retried from the already-existing Admin live-state
+# heartbeat. Broker-confirmed executions can no longer remain permanently silent
+# because a chart job reached FAILED/EXPIRED.
+from .autotrade.publication_recovery_runtime import install_publication_recovery
+install_publication_recovery(app)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
