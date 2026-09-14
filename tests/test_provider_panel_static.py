@@ -5,7 +5,7 @@ PANEL = ROOT / "provider_panel"
 
 
 def test_provider_panel_files_exist():
-    for name in ("index.html", "styles.css", "app.js", "README.md"):
+    for name in ("index.html", "styles.css", "app.js", "branding.js", "README.md"):
         assert (PANEL / name).is_file(), name
 
 
@@ -27,6 +27,7 @@ def test_approved_visual_components_are_present():
         "Settings & Branding",
         "Telegram",
         "MT5",
+        '<script src="./branding.js"></script>',
     )
     for marker in required:
         assert marker in html, marker
@@ -53,6 +54,25 @@ def test_live_dashboard_hydration_preserves_preview_contract():
         "reportPaymentHistory",
         "Reporting currency required",
         "Preview data retained",
+    )
+    for marker in required:
+        assert marker in js, marker
+
+
+def test_live_branding_preserves_approved_page_structure():
+    js = (PANEL / "branding.js").read_text(encoding="utf-8")
+    required = (
+        "/provider/api/branding",
+        "X-Telegram-Init-Data",
+        "X-Tenant-Id",
+        "primary_color",
+        "secondary_color",
+        "accent_color",
+        "background_color",
+        "logo_url",
+        "favicon_url",
+        "Save failed",
+        "preview retained",
     )
     for marker in required:
         assert marker in js, marker
