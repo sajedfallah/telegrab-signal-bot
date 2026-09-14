@@ -42,6 +42,7 @@
       button.innerHTML = `<span class="nav-icon-wrap">${icon(item.icon || 'sparkle')}</span><small>${html(item.label_fa || item.label_en || item.route)}</small>`;
       button.addEventListener('click', () => {
         if (item.route === 'trades') renderTrades();
+        else if (item.route === 'charts' && window.NexusLiveCharts?.open) window.NexusLiveCharts.open();
         else render(item.route);
       });
       return button;
