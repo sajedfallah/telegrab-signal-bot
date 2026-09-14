@@ -32,6 +32,22 @@ def test_approved_visual_components_are_present():
         assert marker in html, marker
 
 
+def test_live_dashboard_hydration_preserves_preview_contract():
+    js = (PANEL / "app.js").read_text(encoding="utf-8")
+    required = (
+        "/provider/api/bootstrap",
+        "X-Telegram-Init-Data",
+        "X-Tenant-Id",
+        "dashboard.health",
+        "health.recovery",
+        "recent_signals",
+        "signal_distribution",
+        "Preview data retained",
+    )
+    for marker in required:
+        assert marker in js, marker
+
+
 def test_existing_customer_miniapp_is_not_replaced():
     assert (ROOT / "miniapp" / "index.html").is_file()
     assert PANEL != ROOT / "miniapp"
