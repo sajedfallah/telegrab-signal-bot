@@ -37,6 +37,7 @@ def test_live_dashboard_hydration_preserves_preview_contract():
     required = (
         "/provider/api/bootstrap",
         "/provider/api/subscribers",
+        "/provider/api/revenue",
         "X-Telegram-Init-Data",
         "X-Tenant-Id",
         "dashboard.health",
@@ -45,7 +46,9 @@ def test_live_dashboard_hydration_preserves_preview_contract():
         "signal_distribution",
         "active_subscribers",
         "applySubscribersLive",
+        "applyRevenueLive",
         "subscriberTable",
+        "Live settled revenue",
         "Preview data retained",
     )
     for marker in required:
