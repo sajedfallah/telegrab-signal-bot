@@ -1,0 +1,29 @@
+name: Provider Panel CI
+
+on:
+  pull_request:
+    paths:
+      - 'provider_panel/**'
+      - 'tests/test_provider_panel_static.py'
+      - '.github/workflows/provider-panel-ci.yml'
+  push:
+    branches:
+      - 'feature/provider-panel-ui-v1'
+    paths:
+      - 'provider_panel/**'
+      - 'tests/test_provider_panel_static.py'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install pytest
+      - name: Validate Provider Panel visual contract
+        run: python -m pytest -q tests/test_provider_panel_static.py
+      - name: JavaScript syntax check
+        run: node --check provider_panel/app.js
