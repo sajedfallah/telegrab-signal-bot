@@ -1,0 +1,41 @@
+/* NEXUS Mini App typography baseline — Vazirmatn
+   Font source is loaded from the official Vazirmatn CDN link recommended by
+   https://github.com/rastikerdar/vazirmatn . This file only enforces the family
+   consistently across User and Admin Mini Apps; no font binary is vendored. */
+
+:root {
+  --nexus-font-family: "Vazirmatn", "Segoe UI", Tahoma, Arial, sans-serif;
+}
+
+html,
+body,
+body *,
+button,
+input,
+select,
+textarea,
+option,
+optgroup,
+table,
+th,
+td {
+  font-family: var(--nexus-font-family) !important;
+}
+
+/* Keep numeric data aligned while retaining Vazirmatn glyphs. */
+input,
+select,
+textarea,
+button,
+.tabular-nums,
+[data-tabular],
+.live-chart-price,
+.metrics article b {
+  font-variant-numeric: tabular-nums;
+}
+
+/* SVG/icon geometry is unaffected by the global text family. */
+svg,
+svg * {
+  font-family: inherit;
+}
