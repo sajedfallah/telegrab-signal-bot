@@ -3,9 +3,16 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+from cryptography.fernet import Fernet
 from fastapi import HTTPException
 
-from app.provider_panel_api import _dashboard, _tenant_context
+from app.provider_panel_api import (
+    TelegramConnectionCreate,
+    _dashboard,
+    _tenant_context,
+    create_telegram_connection,
+    test_telegram_connection,
+)
 from app.telegram_tenant_domain import create_connection, create_destination
 from app.tenancy import TenantContext, TenantRole, grant_membership, init_tenant_schema
 
@@ -89,3 +96,61 @@ def test_tenant_header_is_not_authorization(monkeypatch, tmp_path):
     with pytest.raises(HTTPException) as exc:
         _tenant_context("signed", other_id)
     assert exc.value.status_code == 403
+
+
+def test_telegram_connection_token_is_encrypted_and_tested_without_leak(monkeypatch, tmp_path):
+    path = tmp_path / "provider.db"
+    con = sqlite3.connect(path)
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE users(telegram_id INTEGER PRIMARY KEY)")
+    con.execute("INSERT INTO users VALUES(1001)")
+    nexus_id = init_tenant_schema(con)
+    grant_membership(con, tenant_id=nexus_id, user_id=1001, role=TenantRole.OWNER)
+    con.commit()
+    con.close()
+
+    class Conn:
+        def __enter__(self):
+            self.con = sqlite3.connect(path)
+            self.con.row_factory = sqlite3.Row
+            self.con.execute("PRAGMA foreign_keys=ON")
+            return self.con
+        def __exit__(self, exc_type, *_):
+            if exc_type is None:
+                self.con.commit()
+            else:
+                self.con.rollback()
+            self.con.close()
+
+    token = "123456:provider-secret-token"
+    monkeypatch.setenv("PROVIDER_CREDENTIALS_KEY", Fernet.generate_key().decode("ascii"))
+    monkeypatch.setattr("app.provider_panel_api.db.conn", lambda: Conn())
+    monkeypatch.setattr("app.provider_panel_api._authenticate_provider", lambda _: {"id": 1001})
+    monkeypatch.setattr(
+        "app.provider_panel_api.test_telegram_bot_token",
+        lambda supplied: {"ok": True, "bot_id": 77, "username": "provider_bot", "first_name": "Provider"} if supplied == token else {"ok": False, "error": "unexpected"},
+    )
+
+    created = create_telegram_connection(
+        TelegramConnectionCreate(label="primary", bot_token=token), "signed", nexus_id
+    )
+    assert created["credential_stored"] is True
+    assert token not in repr(created)
+
+    con = sqlite3.connect(path)
+    encrypted = bytes(con.execute("SELECT ciphertext FROM provider_secrets").fetchone()[0])
+    assert token.encode() not in encrypted
+    con.close()
+
+    tested = test_telegram_connection(created["connection_id"], "signed", nexus_id)
+    assert tested["ok"] is True
+    assert tested["username"] == "provider_bot"
+    assert token not in repr(tested)
+
+    con = sqlite3.connect(path)
+    status, username = con.execute(
+        "SELECT status,bot_username FROM telegram_connections WHERE id=?", (created["connection_id"],)
+    ).fetchone()
+    con.close()
+    assert status == "ACTIVE"
+    assert username == "provider_bot"
