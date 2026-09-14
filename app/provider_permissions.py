@@ -11,6 +11,7 @@ class ProviderPermission(StrEnum):
     PUBLISH_SIGNAL = "PUBLISH_SIGNAL"
     MANAGE_MEMBERS = "MANAGE_MEMBERS"
     MANAGE_BILLING = "MANAGE_BILLING"
+    MANAGE_BRANDING = "MANAGE_BRANDING"
 
 
 _PERMISSION_ROLES: dict[ProviderPermission, frozenset[TenantRole]] = {
@@ -19,6 +20,7 @@ _PERMISSION_ROLES: dict[ProviderPermission, frozenset[TenantRole]] = {
     ProviderPermission.PUBLISH_SIGNAL: frozenset({TenantRole.OWNER, TenantRole.ADMIN, TenantRole.ANALYST, TenantRole.PUBLISHER}),
     ProviderPermission.MANAGE_MEMBERS: frozenset({TenantRole.OWNER, TenantRole.ADMIN}),
     ProviderPermission.MANAGE_BILLING: frozenset({TenantRole.OWNER}),
+    ProviderPermission.MANAGE_BRANDING: frozenset({TenantRole.OWNER, TenantRole.ADMIN}),
 }
 
 
