@@ -57,6 +57,14 @@
     const symbol = instruments[runtime.symbol];
     return `
       <section class="nexus-live-charts-page" aria-label="NEXUS Live Charts">
+        <div class="live-chart-page-head">
+          <div>
+            <span class="eyebrow">LIVE MARKET</span>
+            <h1>Live Charts</h1>
+            <p>نمودار زنده بازار برای Crypto، Gold و Forex</p>
+          </div>
+          <span class="live-chart-page-badge">BETA</span>
+        </div>
         <div class="live-chart-shell">
           <header class="live-chart-header">
             <div class="live-chart-symbol-wrap">
@@ -102,30 +110,6 @@
           <a class="live-chart-tv-attribution" href="https://www.tradingview.com/" target="_blank" rel="noopener">Charts by TradingView</a>
         </div>
       </section>`;
-  }
-
-  function injectHomeEntry() {
-    let route = '';
-    try { route = String(state?.route || ''); } catch (_) {}
-    if (route !== 'home') return;
-    if (viewEl.querySelector('[data-open-live-charts]')) return;
-
-    const host = document.createElement('section');
-    host.className = 'nexus-live-charts-entry';
-    host.innerHTML = `
-      <button type="button" class="live-chart-entry-card" data-open-live-charts>
-        <span class="live-chart-entry-copy">
-          <b>Live Charts</b>
-          <small>نمودار زنده بازار · BTC · ETH · SOL · XAU</small>
-        </span>
-        <span class="live-chart-entry-action">باز کردن ←</span>
-      </button>`;
-
-    const anchor = viewEl.querySelector('.home-v2-spotlight, .hero');
-    if (anchor?.parentNode) anchor.insertAdjacentElement('afterend', host);
-    else viewEl.prepend(host);
-
-    host.querySelector('[data-open-live-charts]')?.addEventListener('click', () => open());
   }
 
   function setOverlay(title, text, visible = true) {
@@ -451,7 +435,7 @@
     runtime.destroyed = false;
     try { state.route = CHART_ROUTE; } catch (_) {}
     viewEl.innerHTML = chartMarkup();
-    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.route === CHART_ROUTE));
     bindChartControls();
     if (createChart()) loadHistorical();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -476,18 +460,11 @@
         return;
       }
       if (!runtime.destroyed) destroy(false);
-      const result = originalRender(route);
-      queueMicrotask(injectHomeEntry);
-      return result;
+      return originalRender(route);
     };
     window.render = wrappedRender;
     try { render = wrappedRender; } catch (_) {}
   }
-
-  const observer = new MutationObserver(() => {
-    if (runtime.destroyed) injectHomeEntry();
-  });
-  observer.observe(viewEl, { childList: true, subtree: false });
 
   document.addEventListener('visibilitychange', () => {
     if (runtime.destroyed || currentInstrument().provider !== 'binance') return;
@@ -495,8 +472,6 @@
       connectStream();
     }
   });
-
-  injectHomeEntry();
 
   window.NexusLiveCharts = {
     open,
