@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from app.autotrade.publication_recovery_runtime import _publication_complete
 from app.market_candles import CandlePoint, CandleSeries, MarketFeedRequest, _tf
 
 
@@ -49,12 +50,25 @@ def test_combined_api_installs_market_feed_and_publication_recovery_after_execut
     assert src.index("install_miniapp_execution_gate(app)") < src.index("install_publication_recovery(app)")
 
 
-def test_publication_recovery_requires_broker_receipt_before_chart_fallback():
+def test_publication_completion_is_destination_aware_and_partial_both_is_incomplete():
+    assert _publication_complete({"destination": "FREE", "free_message_id": 11, "vip_message_id": None})
+    assert _publication_complete({"destination": "VIP", "free_message_id": None, "vip_message_id": 22})
+    assert _publication_complete({"destination": "BOTH", "free_message_id": 11, "vip_message_id": 22})
+    assert not _publication_complete({"destination": "BOTH", "free_message_id": 11, "vip_message_id": None})
+    assert not _publication_complete({"destination": "BOTH", "free_message_id": None, "vip_message_id": 22})
+    assert not _publication_complete({"destination": "BOTH", "free_message_id": None, "vip_message_id": None})
+
+
+def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     assert "_accepted_receipt(signal_id)" in src
     assert "allow_without_chart=True" in src
     assert "PUBLICATION_FALLBACK_QUEUED" in src
     assert "FAILED" in src and "EXPIRED" in src
+    assert 'issuer_type == "MT5_ADMIN"' in src
+    assert "CHART_JOB_RECOVERED" in src
+    assert "publication asset is missing" in src
+    assert "COALESCE(free_message_id,0)=0 OR COALESCE(vip_message_id,0)=0" in src
 
 
 def test_forex_frontend_uses_mt5_market_candle_endpoint_without_fake_fallback():
