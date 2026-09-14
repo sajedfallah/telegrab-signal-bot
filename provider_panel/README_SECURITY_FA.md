@@ -1,0 +1,3 @@
+# مرز امنیتی پنل Provider
+
+این UI در نسخه Production نباید `tenant_id` ارسالی از مرورگر را به‌عنوان مجوز دسترسی قبول کند. Tenant باید در Backend از کاربر احراز هویت‌شده و `TenantMembership` حل شود و RBAC روی هر عملیات اعمال گردد. تمام Signal، Customer، License، Credit، Telegram Destination، MT5 Connection، Branding و Report باید Tenant-scoped باشند. Preview فعلی هیچ Credential واقعی و هیچ عملیات Production ندارد.
