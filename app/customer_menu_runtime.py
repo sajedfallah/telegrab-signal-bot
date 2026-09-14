@@ -8,6 +8,7 @@ Product decisions implemented here:
 - Only the entitlement-gated VIP Signal Channel remains as the signal entry.
 - AutoTrade status is nested inside the VIP Signal Channel submenu.
 - FAQ is no longer a top-level item; it lives inside Support.
+- Admins keep an explicit Admin Mini App entry without overriding the customer Menu Button.
 
 The existing customer_experience module remains authoritative for VIP access,
 purchases, FAQ content and AutoTrade delivery. This runtime only refines
@@ -17,11 +18,12 @@ navigation and support information architecture.
 from typing import Any
 
 from aiogram import Bot, Router
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 
 from . import customer_experience as cx
 from .config import settings
 from .services import license_service
+from .ui import admin_miniapp_url
 
 router = Router(name="nexus-customer-menu-runtime")
 
@@ -44,7 +46,10 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
             [InlineKeyboardButton(text="🌐 تغییر زبان", callback_data="change_language")],
         ]
         if is_admin:
-            rows.append([InlineKeyboardButton(text="🛠 پنل مدیریت", callback_data="admin")])
+            admin_url = admin_miniapp_url()
+            if admin_url:
+                rows.append([InlineKeyboardButton(text="⚡ پنل ادمین NEXUS", web_app=WebAppInfo(url=admin_url))])
+            rows.append([InlineKeyboardButton(text="🛠 مدیریت ربات", callback_data="admin")])
     else:
         rows = [
             [InlineKeyboardButton(text="🚪 Enter NEXUS", url=cx.NEXUS_FOLDER_URL)],
@@ -60,7 +65,10 @@ def customer_main_menu(lang: str, *, is_admin: bool, has_vip: bool) -> InlineKey
             [InlineKeyboardButton(text="🌐 Change Language", callback_data="change_language")],
         ]
         if is_admin:
-            rows.append([InlineKeyboardButton(text="🛠 Admin Panel", callback_data="admin")])
+            admin_url = admin_miniapp_url()
+            if admin_url:
+                rows.append([InlineKeyboardButton(text="⚡ NEXUS Admin Mini App", web_app=WebAppInfo(url=admin_url))])
+            rows.append([InlineKeyboardButton(text="🛠 Bot Administration", callback_data="admin")])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -248,8 +256,6 @@ def install_customer_menu_runtime(core: Any) -> None:
     if getattr(core.router, "__nexus_customer_menu_runtime_installed__", False):
         return
 
-    # customer_experience's dynamic home renderers resolve this global at call
-    # time, so replacing it here updates every subsequent home refresh.
     cx.customer_main_menu = customer_main_menu
     cx.faq_menu = faq_menu
 
