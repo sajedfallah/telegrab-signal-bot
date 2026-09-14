@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from . import db
 from .provider_panel_api import _require, _tenant_context
 from .provider_permissions import ProviderPermission
-from .provider_reconciliation import list_reconciliation_queue, resolve_delivery
+from .provider_reconciliation import list_reconciliation_queue, reconciliation_health, resolve_delivery
 
 router = APIRouter(prefix="/provider/api", tags=["Provider Delivery Reconciliation"])
 
@@ -18,6 +18,18 @@ class DeliveryResolutionRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
     telegram_message_id: int | None = Field(default=None, gt=0)
     payload: dict[str, Any] | None = None
+
+
+@router.get("/deliveries/reconciliation/health")
+def reconciliation_health_status(
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
+    with db.conn() as con:
+        health = reconciliation_health(con, tenant_id=ctx.tenant_id)
+    return {"tenant_id": ctx.tenant_id, "recovery": health}
 
 
 @router.get("/deliveries/reconciliation")
