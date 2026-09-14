@@ -3,12 +3,12 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Query
 
 from . import db
+from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
 from .telegram_webapp_auth import validate_init_data
 from .tenancy import TenantContext, resolve_tenant_context
-
 
 router = APIRouter(prefix="/provider/api", tags=["Provider Panel"])
 
@@ -18,14 +18,10 @@ def _columns(con, table: str) -> set[str]:
 
 
 def _table_exists(con, table: str) -> bool:
-    return con.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
-    ).fetchone() is not None
+    return con.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
 
 
 def _provider_bot_token() -> str:
-    # V1 can reuse BOT_TOKEN, while a dedicated provider bot can be introduced
-    # without coupling this module back to the global NEXUS Settings object.
     return os.getenv("PROVIDER_PANEL_BOT_TOKEN", "").strip() or os.getenv("BOT_TOKEN", "").strip()
 
 
@@ -33,10 +29,7 @@ def _authenticate_provider(raw: str) -> dict[str, Any]:
     return validate_init_data(raw, bot_token=_provider_bot_token())
 
 
-def _tenant_context(
-    x_telegram_init_data: str | None,
-    x_tenant_id: int | None,
-) -> TenantContext:
+def _tenant_context(x_telegram_init_data: str | None, x_tenant_id: int | None) -> TenantContext:
     user = _authenticate_provider(x_telegram_init_data or "")
     user_id = int(user["id"])
     if not x_tenant_id or int(x_tenant_id) <= 0:
@@ -51,9 +44,7 @@ def _tenant_context(
 def _tenant(ctx: TenantContext) -> dict[str, Any]:
     with db.conn() as con:
         row = con.execute(
-            "SELECT id,slug,business_name,display_name,status,timezone,locale "
-            "FROM tenants WHERE id=?",
-            (ctx.tenant_id,),
+            "SELECT id,slug,business_name,display_name,status,timezone,locale FROM tenants WHERE id=?", (ctx.tenant_id,)
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="tenant not found")
@@ -61,80 +52,47 @@ def _tenant(ctx: TenantContext) -> dict[str, Any]:
 
 
 def _dashboard(ctx: TenantContext) -> dict[str, Any]:
-    """Return only tenant-scoped values backed by current persisted data.
-
-    Metrics whose SaaS domain does not exist yet are explicit null/unavailable values;
-    fixture values are never promoted to production truth.
-    """
     with db.conn() as con:
         signal_count = 0
         recent_signals: list[dict[str, Any]] = []
         win_rate: float | None = None
         distribution: list[dict[str, Any]] = []
-
         if _table_exists(con, "signals") and "tenant_id" in _columns(con, "signals"):
-            signal_count = int(
-                con.execute("SELECT COUNT(*) FROM signals WHERE tenant_id=?", (ctx.tenant_id,)).fetchone()[0]
-            )
+            signal_count = int(con.execute("SELECT COUNT(*) FROM signals WHERE tenant_id=?", (ctx.tenant_id,)).fetchone()[0])
             rows = con.execute(
-                "SELECT id,code,market_type,symbol,direction,entry_price,stop_loss,tp1,status,"
-                "result_value,result_unit,created_at,closed_at "
-                "FROM signals WHERE tenant_id=? ORDER BY id DESC LIMIT 8",
-                (ctx.tenant_id,),
+                "SELECT id,code,market_type,symbol,direction,entry_price,stop_loss,tp1,status,result_value,result_unit,created_at,closed_at "
+                "FROM signals WHERE tenant_id=? ORDER BY id DESC LIMIT 8", (ctx.tenant_id,)
             ).fetchall()
             recent_signals = [dict(row) for row in rows]
-
             closed = con.execute(
-                "SELECT status,result_value,market_type FROM signals WHERE tenant_id=? "
-                "AND status NOT IN ('ACTIVE','PENDING')",
+                "SELECT status,result_value,market_type FROM signals WHERE tenant_id=? AND status NOT IN ('ACTIVE','PENDING')",
                 (ctx.tenant_id,),
             ).fetchall()
             if closed:
-                wins = sum(
-                    1 for row in closed
-                    if str(row["status"] or "").upper().startswith("TP")
-                    or (row["result_value"] is not None and float(row["result_value"]) > 0)
-                )
+                wins = sum(1 for row in closed if str(row["status"] or "").upper().startswith("TP") or (row["result_value"] is not None and float(row["result_value"]) > 0))
                 win_rate = round((wins / len(closed)) * 100, 1)
-
             groups = con.execute(
-                "SELECT COALESCE(NULLIF(market_type,''),'Other') AS market_type,COUNT(*) AS count "
-                "FROM signals WHERE tenant_id=? GROUP BY COALESCE(NULLIF(market_type,''),'Other') "
-                "ORDER BY count DESC",
-                (ctx.tenant_id,),
+                "SELECT COALESCE(NULLIF(market_type,''),'Other') AS market_type,COUNT(*) AS count FROM signals "
+                "WHERE tenant_id=? GROUP BY COALESCE(NULLIF(market_type,''),'Other') ORDER BY count DESC", (ctx.tenant_id,)
             ).fetchall()
             distribution = [{"label": str(row["market_type"]), "count": int(row["count"])} for row in groups]
-
         return {
-            "source": "live_database",
-            "tenant_id": ctx.tenant_id,
-            "kpis": {
-                "active_subscribers": None,
-                "monthly_revenue": None,
-                "total_signals": signal_count,
-                "win_rate": win_rate,
-            },
-            "revenue_series": [],
-            "signal_distribution": distribution,
-            "recent_signals": recent_signals,
+            "source": "live_database", "tenant_id": ctx.tenant_id,
+            "kpis": {"active_subscribers": None, "monthly_revenue": None, "total_signals": signal_count, "win_rate": win_rate},
+            "revenue_series": [], "signal_distribution": distribution, "recent_signals": recent_signals,
             "health": {
                 "telegram": {"status": "unavailable", "reason": "tenant TelegramConnection domain pending"},
                 "mt5": {"status": "unavailable", "reason": "tenant TradingConnection domain pending"},
                 "copy_trade": {"status": "unavailable", "reason": "tenant Copy Trade domain pending"},
                 "subscription": {"status": "unavailable", "reason": "provider subscription domain pending"},
             },
-            "availability": {
-                "active_subscribers": False,
-                "monthly_revenue": False,
-                "revenue_series": False,
-                "signals": True,
-            },
+            "availability": {"active_subscribers": False, "monthly_revenue": False, "revenue_series": False, "signals": True},
         }
 
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.1"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.2"}
 
 
 @router.get("/bootstrap")
@@ -143,11 +101,7 @@ def bootstrap(
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict[str, Any]:
     ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
-    return {
-        "tenant": _tenant(ctx),
-        "membership": {"user_id": ctx.user_id, "role": ctx.role.value},
-        "dashboard": _dashboard(ctx),
-    }
+    return {"tenant": _tenant(ctx), "membership": {"user_id": ctx.user_id, "role": ctx.role.value}, "dashboard": _dashboard(ctx)}
 
 
 @router.get("/dashboard")
@@ -155,5 +109,31 @@ def dashboard(
     x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
     x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
 ) -> dict[str, Any]:
+    return _dashboard(_tenant_context(x_telegram_init_data, x_tenant_id))
+
+
+@router.get("/signals")
+def signals(
+    limit: int = Query(default=50, ge=1, le=200),
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
     ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
-    return _dashboard(ctx)
+    with db.conn() as con:
+        rows = domain_list_signals(con, tenant_id=ctx.tenant_id, limit=limit)
+    return {"tenant_id": ctx.tenant_id, "items": rows, "count": len(rows), "mode": "read_only"}
+
+
+@router.get("/signals/{signal_id}")
+def signal_detail(
+    signal_id: int,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    with db.conn() as con:
+        item = domain_get_signal(con, tenant_id=ctx.tenant_id, signal_id=signal_id)
+    if item is None:
+        # Deliberately identical for missing and other-tenant IDs to avoid existence leaks.
+        raise HTTPException(status_code=404, detail="signal not found")
+    return {"tenant_id": ctx.tenant_id, "signal": item, "mode": "read_only"}
