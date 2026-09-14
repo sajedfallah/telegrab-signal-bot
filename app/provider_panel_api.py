@@ -17,7 +17,9 @@ from .provider_permissions import ProviderPermission, require_permission
 from .signal_domain import get_signal as domain_get_signal, list_signals as domain_list_signals
 from .telegram_tenant_domain import (
     create_connection as telegram_create_connection,
+    create_destination as telegram_create_destination,
     get_connection_private,
+    get_destination as telegram_get_destination,
     list_connections as telegram_list_connections,
     list_destinations as telegram_list_destinations,
     mark_connection_test,
@@ -31,6 +33,15 @@ router = APIRouter(prefix="/provider/api", tags=["Provider Panel"])
 class TelegramConnectionCreate(BaseModel):
     label: str = Field(min_length=1, max_length=80)
     bot_token: str = Field(min_length=10, max_length=256)
+
+
+class TelegramDestinationCreate(BaseModel):
+    connection_id: int = Field(gt=0)
+    destination_key: str = Field(min_length=1, max_length=80)
+    chat_id: str = Field(min_length=1, max_length=128)
+    kind: str = Field(default="CHANNEL", min_length=1, max_length=20)
+    thread_id: int | None = Field(default=None, gt=0)
+    display_name: str | None = Field(default=None, max_length=120)
 
 
 def _columns(con, table: str) -> set[str]:
@@ -141,7 +152,7 @@ def _dashboard(ctx: TenantContext) -> dict[str, Any]:
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "provider-panel-api", "version": "0.4"}
+    return {"ok": True, "service": "provider-panel-api", "version": "0.5"}
 
 
 @router.get("/bootstrap")
@@ -217,19 +228,8 @@ def create_telegram_connection(
     _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
     try:
         with db.conn() as con:
-            secret_ref = store_secret(
-                con,
-                tenant_id=ctx.tenant_id,
-                kind=SECRET_KIND_TELEGRAM_BOT_TOKEN,
-                plaintext=payload.bot_token,
-            )
-            connection_id = telegram_create_connection(
-                con,
-                tenant_id=ctx.tenant_id,
-                label=payload.label,
-                secret_ref=secret_ref,
-                status="PENDING",
-            )
+            secret_ref = store_secret(con, tenant_id=ctx.tenant_id, kind=SECRET_KIND_TELEGRAM_BOT_TOKEN, plaintext=payload.bot_token)
+            connection_id = telegram_create_connection(con, tenant_id=ctx.tenant_id, label=payload.label, secret_ref=secret_ref, status="PENDING")
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Provider credential encryption is not configured") from exc
     except Exception as exc:
@@ -270,3 +270,37 @@ def probe_telegram_connection(
             error=result.get("error") if not result.get("ok") else None,
         )
     return {"tenant_id": ctx.tenant_id, "connection_id": connection_id, **result}
+
+
+@router.post("/telegram/destinations", status_code=201)
+def create_telegram_destination(
+    payload: TelegramDestinationCreate,
+    x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data"),
+    x_tenant_id: int | None = Header(default=None, alias="X-Tenant-Id"),
+) -> dict[str, Any]:
+    ctx = _tenant_context(x_telegram_init_data, x_tenant_id)
+    _require(ctx, ProviderPermission.MANAGE_TELEGRAM)
+    try:
+        with db.conn() as con:
+            destination_id = telegram_create_destination(
+                con,
+                tenant_id=ctx.tenant_id,
+                connection_id=payload.connection_id,
+                destination_key=payload.destination_key,
+                chat_id=payload.chat_id,
+                kind=payload.kind,
+                thread_id=payload.thread_id,
+                display_name=payload.display_name,
+            )
+            destination = telegram_get_destination(con, tenant_id=ctx.tenant_id, destination_id=destination_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Telegram connection not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail="Telegram connection must be tested successfully before adding destinations") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            raise HTTPException(status_code=409, detail="Telegram destination key already exists") from exc
+        raise
+    return {"tenant_id": ctx.tenant_id, "destination": destination, "publish_enabled": False}
