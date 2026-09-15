@@ -15,21 +15,22 @@ log = logging.getLogger("nexus.broker_chart_fallback")
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _OUTPUT_DIR = _PROJECT_ROOT / "artifacts" / "signal_charts"
+_LOGO_PATH = _PROJECT_ROOT / "assets" / "branding" / "NEXUS_logo_2026.jpg"
 _SUPPORTED_TF = {"M1", "M5", "M15", "H1", "D1"}
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
+_STYLE_VERSION = "nexus-clean-signal-v1"
 
-_BG = (7, 11, 18)
-_PANEL = (11, 18, 29)
-_GRID = (36, 48, 64)
-_TEXT = (232, 239, 246)
-_MUTED = (142, 156, 177)
-_UP = (18, 229, 205)
-_DOWN = (255, 92, 108)
-_ENTRY = (59, 179, 255)
-_SL = (255, 92, 108)
-_TP = (224, 183, 74)
+# Approved minimal chart palette.
+_BG = (5, 16, 29)
+_GRID = (18, 37, 55)
+_UP = (19, 219, 205)
+_DOWN = (255, 83, 98)
+_ENTRY = (33, 150, 243)
+_SL = (255, 82, 95)
+_TP = (28, 218, 126)
+_LABEL_BG = (4, 14, 25)
 
 
 def _font(size: int, bold: bool = False):
@@ -137,74 +138,134 @@ def _load_series(signal: Any) -> tuple[list[dict[str, float]], dict[str, Any]]:
     return candles, meta
 
 
-def _draw_dashed(draw: ImageDraw.ImageDraw, xy: tuple[int, int, int, int], fill, width: int = 2, dash: int = 10, gap: int = 7):
+def _draw_dashed(
+    draw: ImageDraw.ImageDraw,
+    xy: tuple[int, int, int, int],
+    fill,
+    width: int = 2,
+    dash: int = 6,
+    gap: int = 5,
+):
     x1, y1, x2, y2 = xy
-    if y1 == y2:
-        x = x1
-        while x < x2:
-            draw.line((x, y1, min(x + dash, x2), y2), fill=fill, width=width)
-            x += dash + gap
+    if y1 != y2:
+        draw.line(xy, fill=fill, width=width)
         return
-    draw.line(xy, fill=fill, width=width)
+    x = x1
+    while x < x2:
+        draw.line((x, y1, min(x + dash, x2), y2), fill=fill, width=width)
+        x += dash + gap
+
+
+def _load_logo() -> Image.Image:
+    try:
+        if _LOGO_PATH.exists():
+            logo = Image.open(_LOGO_PATH).convert("RGBA")
+            alpha = logo.convert("L").point(lambda value: 0 if value < 18 else 255)
+            logo.putalpha(alpha)
+            bbox = alpha.getbbox()
+            if bbox:
+                logo = logo.crop(bbox)
+            return logo
+    except Exception:
+        log.exception("failed loading NEXUS logo")
+
+    # Small deterministic NEXUS mark fallback; no text and no external assets.
+    logo = Image.new("RGBA", (96, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(logo)
+    d.polygon([(10, 50), (10, 14), (29, 14), (58, 48), (58, 14), (75, 14), (75, 50), (56, 50), (28, 18), (28, 50)], fill=(33, 150, 243, 255))
+    d.polygon([(54, 42), (82, 14), (78, 14), (78, 7), (91, 7), (91, 20), (84, 20), (62, 48)], fill=(19, 219, 205, 255))
+    return logo
+
+
+def _paste_small_logo(image: Image.Image) -> None:
+    logo = _load_logo().copy()
+    logo.thumbnail((76, 48), Image.Resampling.LANCZOS)
+    x = image.width - logo.width - 18
+    y = 16
+    image.paste(logo, (x, y), logo)
+
+
+def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]) -> dict[str, int]:
+    if not levels:
+        return {}
+    ordered = sorted(levels, key=lambda item: item[1])
+    min_gap = 26
+    top_bound = 88
+    bottom_bound = 688
+    placed: list[list[Any]] = []
+    for label, desired, color in ordered:
+        value = max(top_bound, desired)
+        if placed:
+            value = max(value, int(placed[-1][1]) + min_gap)
+        placed.append([label, value, color])
+    if placed[-1][1] > bottom_bound:
+        shift = int(placed[-1][1]) - bottom_bound
+        for item in placed:
+            item[1] -= shift
+        for idx in range(len(placed) - 2, -1, -1):
+            placed[idx][1] = min(int(placed[idx][1]), int(placed[idx + 1][1]) - min_gap)
+        if placed[0][1] < top_bound:
+            shift_down = top_bound - int(placed[0][1])
+            for item in placed:
+                item[1] += shift_down
+    return {str(label): int(value) for label, value, _ in placed}
 
 
 def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, Any], targets: list[float]) -> bytes:
+    """Render the approved minimal NEXUS chart.
+
+    Visual contract:
+      * chart + small NEXUS logo only;
+      * ENTRY blue, TP green, SL red;
+      * short fine-dashed levels start at the latest candle and extend only
+        into reserved right-side whitespace;
+      * labels are small and contain no prices;
+      * no header, footer, source text, axes text or decorative side panels.
+    """
     width, height = 1280, 720
     image = Image.new("RGB", (width, height), _BG)
     draw = ImageDraw.Draw(image)
 
-    left, top, right, bottom = 72, 92, 1115, 650
-    chart_w, chart_h = right - left, bottom - top
+    candle_left, candle_right = 18, 925
+    top, bottom = 24, 696
+    chart_w = candle_right - candle_left
+    chart_h = bottom - top
 
-    code = str(_signal_value(signal, "code", "NEXUS") or "NEXUS")
-    direction = str(_signal_value(signal, "direction", "") or "").upper()
+    # Faint full-canvas grid keeps structure without competing with price action.
+    for i in range(1, 8):
+        x = int(width * i / 8)
+        draw.line((x, 0, x, height), fill=_GRID, width=1)
+    for i in range(1, 6):
+        y = int(height * i / 6)
+        draw.line((0, y, width, y), fill=_GRID, width=1)
+
     entry = float(_signal_value(signal, "entry_price", 0) or 0)
     sl = float(_signal_value(signal, "stop_loss", 0) or 0)
-    symbol_label = str(meta.get("broker_symbol") or meta.get("symbol") or "")
-    tf = str(meta.get("timeframe") or "")
-    age = meta.get("age_seconds")
-
-    draw.rectangle((0, 0, width, 66), fill=(5, 13, 23))
-    draw.text((28, 18), "NEXUS  |  MT5 BROKER FEED", font=_font(23, True), fill=_TEXT)
-    draw.text((width - 28, 20), f"{code}  |  {symbol_label}  |  {tf}  |  {direction}", font=_font(18, True), fill=_MUTED, anchor="ra")
-    draw.text((28, height - 34), f"Source: MT5 MarketFeed   Freshness: {age:.1f}s" if isinstance(age, (int, float)) else "Source: MT5 MarketFeed", font=_font(15), fill=_MUTED)
-
-    draw.rounded_rectangle((left - 14, top - 14, right + 120, bottom + 14), radius=18, fill=_PANEL, outline=(35, 61, 86), width=2)
-
     level_values = [value for value in [entry, sl, *targets] if isinstance(value, (int, float)) and value > 0]
     lows = [float(c["low"]) for c in candles]
     highs = [float(c["high"]) for c in candles]
     y_min = min(lows + level_values) if level_values else min(lows)
     y_max = max(highs + level_values) if level_values else max(highs)
     span = max(y_max - y_min, max(abs(y_max), 1.0) * 0.0005)
-    y_min -= span * 0.06
-    y_max += span * 0.06
+    y_min -= span * 0.075
+    y_max += span * 0.075
     span = y_max - y_min
 
     def y_of(price: float) -> int:
         ratio = (y_max - price) / span
         return int(top + ratio * chart_h)
 
-    for i in range(6):
-        y = int(top + chart_h * i / 5)
-        draw.line((left, y, right, y), fill=_GRID, width=1)
-        price = y_max - span * i / 5
-        digits = meta.get("digits")
-        precision = int(digits) if isinstance(digits, int) else (5 if price < 10 else 2)
-        draw.text((right + 18, y - 9), f"{price:.{precision}f}", font=_font(14), fill=_MUTED)
-    for i in range(7):
-        x = int(left + chart_w * i / 6)
-        draw.line((x, top, x, bottom), fill=(25, 36, 50), width=1)
-
     count = len(candles)
     step = chart_w / max(count, 1)
-    body_w = max(3, min(10, int(step * 0.58)))
+    body_w = max(3, min(9, int(step * 0.58)))
+    last_x = candle_left
     for idx, candle in enumerate(candles):
-        x = int(left + (idx + 0.5) * step)
+        x = int(candle_left + (idx + 0.5) * step)
+        last_x = x
         o, h, l, c = map(float, (candle["open"], candle["high"], candle["low"], candle["close"]))
         color = _UP if c >= o else _DOWN
         y_h, y_l, y_o, y_c = y_of(h), y_of(l), y_of(o), y_of(c)
-        draw.line((x, y_h, x, y_l), fill=color, width=2)
+        draw.line((x, y_h, x, y_l), fill=color, width=1)
         top_body, bottom_body = sorted((y_o, y_c))
         if bottom_body - top_body < 2:
             bottom_body = top_body + 2
@@ -219,22 +280,28 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
         if value > 0:
             level_specs.append((f"TP{idx}", float(value), _TP))
 
-    digits = meta.get("digits")
-    precision = int(digits) if isinstance(digits, int) else (5 if max(y_max, 0) < 10 else 2)
+    desired_levels = [(label, y_of(price), color) for label, price, color in level_specs]
+    label_positions = _resolve_label_positions(desired_levels)
+    line_start = min(width - 300, last_x + max(8, body_w // 2 + 5))
+    line_end = 1180
+    label_left = 1190
+    label_right = 1261
+    font = _font(13, True)
+
     for label, price, color in level_specs:
         y = y_of(price)
-        _draw_dashed(draw, (left, y, right, y), color, width=2)
-        text = f"{label}  {price:.{precision}f}"
-        bbox = draw.textbbox((0, 0), text, font=_font(15, True))
-        box_w = bbox[2] - bbox[0] + 16
-        draw.rounded_rectangle((right - box_w, y - 14, right, y + 14), radius=7, fill=(7, 15, 25), outline=color, width=1)
-        draw.text((right - 8, y - 9), text, font=_font(15, True), fill=color, anchor="ra")
+        label_y = label_positions.get(label, y)
+        _draw_dashed(draw, (line_start, y, line_end, y), color, width=2, dash=6, gap=5)
+        if abs(label_y - y) > 2:
+            draw.line((line_end, y, label_left - 4, label_y), fill=color, width=1)
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_w = bbox[2] - bbox[0]
+        box_w = min(label_right - label_left, text_w + 14)
+        x1 = label_right - box_w
+        draw.rounded_rectangle((x1, label_y - 11, label_right, label_y + 11), radius=5, fill=_LABEL_BG, outline=color, width=1)
+        draw.text((label_right - 7, label_y), label, font=font, fill=color, anchor="rm")
 
-    last = candles[-1]
-    last_price = float(last["close"])
-    last_y = y_of(last_price)
-    draw.line((left, last_y, right, last_y), fill=(116, 143, 178), width=1)
-    draw.ellipse((right + 8, last_y - 5, right + 18, last_y + 5), fill=_TEXT)
+    _paste_small_logo(image)
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
@@ -242,12 +309,10 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
 
 
 def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
-    """Render a broker-truth chart from the existing MT5 MarketFeed candle store.
+    """Render the canonical broker-truth publication chart from MT5 MarketFeed.
 
-    This is a reliability fallback for Telegram publication, not a synthetic
-    market-data source. It refuses stale/missing/insufficient candles and never
-    invents OHLC values. The screenshot-only ChartAgent remains the preferred
-    first path; this renderer removes ChartAgent as a single point of failure.
+    This renderer is shared by MT5_ADMIN and WEB_ADMIN publication paths. It
+    never invents OHLC values and refuses stale/missing/insufficient broker data.
     """
     signal_id = int(_signal_value(signal, "id", 0) or 0)
     if signal_id <= 0:
@@ -278,6 +343,7 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
             correlation_id=code,
             payload={
                 "source": "MT5_MARKET_FEED",
+                "style_version": _STYLE_VERSION,
                 "broker_symbol": meta.get("broker_symbol"),
                 "timeframe": meta.get("timeframe"),
                 "bars": len(candles),
@@ -286,7 +352,14 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
                 "bytes": len(raw),
             },
         )
-        return {"ok": True, "file_path": str(path), "bytes": len(raw), "bars": len(candles), **meta}
+        return {
+            "ok": True,
+            "file_path": str(path),
+            "bytes": len(raw),
+            "bars": len(candles),
+            "style_version": _STYLE_VERSION,
+            **meta,
+        }
     except Exception as exc:
         log.exception("broker chart fallback failed signal_id=%s", signal_id)
         try:
@@ -298,7 +371,7 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
                 correlation_id=str(_signal_value(signal, "code", signal_id)),
                 result="FAILED",
                 reason=str(exc)[:1000],
-                payload={"source": "MT5_MARKET_FEED", "meta": meta},
+                payload={"source": "MT5_MARKET_FEED", "style_version": _STYLE_VERSION, "meta": meta},
             )
         except Exception:
             pass
