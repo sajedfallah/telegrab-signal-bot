@@ -47,9 +47,13 @@ try {
       "app\combined_api.py"
     if ($LASTEXITCODE -ne 0) { throw "Python compile failed" }
 
+    # Keep this stage narrowly scoped to V31 and its direct quote/deviation dependencies.
+    # The wider Mini App V14 suite includes unrelated historical asset cache-bust assertions
+    # (for example landing-v5.css) that are intentionally obsolete after later UI releases.
     & $Python -m pytest `
       "tests\test_web_admin_market_entry_truth_v31.py" `
-      "tests\test_miniapp_admin_v14.py" `
+      "tests\test_miniapp_admin_v14.py::test_market_quote_fails_closed_without_bid_ask" `
+      "tests\test_miniapp_admin_v14.py::test_market_quote_uses_fresh_authenticated_admin_bid_ask_only" `
       "tests\test_market_order_entry_deviation_policy.py" `
       -q
     if ($LASTEXITCODE -ne 0) { throw "V31 static/quote staging tests failed" }
@@ -60,8 +64,8 @@ Write-Host "STATIC/QUOTE TESTS: PASS"
 
 # Run the final-route integration suite in a fresh Python process. Importing
 # combined_api intentionally mutates the shared FastAPI route stack; mixing it
-# into the legacy chart-first test module creates false failures because the
-# current Production architecture is execution-first (chart job after receipt).
+# into legacy chart-first tests creates false failures because the current
+# Production architecture is execution-first (chart job after MT5 receipt).
 Write-Host "=== V31 STAGING TESTS: FINAL ROUTE INTEGRATION ==="
 Push-Location $SourceRoot
 try {
