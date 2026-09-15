@@ -5,6 +5,7 @@
 
 @import url("./ui-polish-v16.css?v=20260915-signal-colors-nav-font1");
 @import url("./admin-positions-v24.css?v=20260915-positions1");
+@import url("./ui-system-v29.css?v=20260915-minimal1");
 
 :root {
   --nexus-font-family: "Vazirmatn", "Segoe UI", Tahoma, Arial, sans-serif;
