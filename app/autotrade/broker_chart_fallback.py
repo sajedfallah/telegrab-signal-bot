@@ -20,17 +20,18 @@ _SUPPORTED_TF = {"M1", "M5", "M15", "H1", "D1"}
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-clean-signal-v1"
+_STYLE_VERSION = "nexus-clean-signal-v2"
 
-# Approved minimal chart palette.
+# Approved minimal chart palette. Keep the number of semantic colors small:
+# neutral navy, cyan/teal candles, blue entry, green targets, red stop.
 _BG = (5, 16, 29)
-_GRID = (18, 37, 55)
+_GRID = (16, 33, 49)
 _UP = (19, 219, 205)
 _DOWN = (255, 83, 98)
 _ENTRY = (33, 150, 243)
 _SL = (255, 82, 95)
 _TP = (28, 218, 126)
-_LABEL_BG = (4, 14, 25)
+_PRICE_TEXT = (132, 148, 164)
 
 
 def _font(size: int, bold: bool = False):
@@ -179,7 +180,7 @@ def _load_logo() -> Image.Image:
 
 def _paste_small_logo(image: Image.Image) -> None:
     logo = _load_logo().copy()
-    logo.thumbnail((76, 48), Image.Resampling.LANCZOS)
+    logo.thumbnail((68, 42), Image.Resampling.LANCZOS)
     x = image.width - logo.width - 18
     y = 16
     image.paste(logo, (x, y), logo)
@@ -189,9 +190,9 @@ def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]
     if not levels:
         return {}
     ordered = sorted(levels, key=lambda item: item[1])
-    min_gap = 26
-    top_bound = 88
-    bottom_bound = 688
+    min_gap = 24
+    top_bound = 72
+    bottom_bound = 690
     placed: list[list[Any]] = []
     for label, desired, color in ordered:
         value = max(top_bound, desired)
@@ -219,8 +220,8 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
       * ENTRY blue, TP green, SL red;
       * short fine-dashed levels start at the latest candle and extend only
         into reserved right-side whitespace;
-      * labels are small and contain no prices;
-      * no header, footer, source text, axes text or decorative side panels.
+      * semantic labels stay small; price values use a lighter 11px font;
+      * no label boxes, header, footer, source text, axes text or side panels.
     """
     width, height = 1280, 720
     image = Image.new("RGB", (width, height), _BG)
@@ -231,7 +232,7 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     chart_w = candle_right - candle_left
     chart_h = bottom - top
 
-    # Faint full-canvas grid keeps structure without competing with price action.
+    # Low-contrast grid: enough structure without visual competition.
     for i in range(1, 8):
         x = int(width * i / 8)
         draw.line((x, 0, x, height), fill=_GRID, width=1)
@@ -283,23 +284,22 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     desired_levels = [(label, y_of(price), color) for label, price, color in level_specs]
     label_positions = _resolve_label_positions(desired_levels)
     line_start = min(width - 300, last_x + max(8, body_w // 2 + 5))
-    line_end = 1180
-    label_left = 1190
-    label_right = 1261
-    font = _font(13, True)
+    line_end = 1158
+    label_x = 1172
+    price_x = 1262
+    label_font = _font(12, True)
+    price_font = _font(11, False)
+    digits = meta.get("digits")
+    precision = int(digits) if isinstance(digits, int) else (5 if max(y_max, 0) < 10 else 2)
 
     for label, price, color in level_specs:
         y = y_of(price)
         label_y = label_positions.get(label, y)
         _draw_dashed(draw, (line_start, y, line_end, y), color, width=2, dash=6, gap=5)
         if abs(label_y - y) > 2:
-            draw.line((line_end, y, label_left - 4, label_y), fill=color, width=1)
-        bbox = draw.textbbox((0, 0), label, font=font)
-        text_w = bbox[2] - bbox[0]
-        box_w = min(label_right - label_left, text_w + 14)
-        x1 = label_right - box_w
-        draw.rounded_rectangle((x1, label_y - 11, label_right, label_y + 11), radius=5, fill=_LABEL_BG, outline=color, width=1)
-        draw.text((label_right - 7, label_y), label, font=font, fill=color, anchor="rm")
+            draw.line((line_end, y, label_x - 6, label_y), fill=color, width=1)
+        draw.text((label_x, label_y), label, font=label_font, fill=color, anchor="lm")
+        draw.text((price_x, label_y), f"{price:.{precision}f}", font=price_font, fill=_PRICE_TEXT, anchor="rm")
 
     _paste_small_logo(image)
 
