@@ -41,6 +41,7 @@ $Required = @(
     "tools\diagnose_chart_delivery_v24.ps1",
     "tests\test_chart_delivery_reliability_v24.py",
     "tests\test_admin_positions_v24.py",
+    "miniapp\admin.html",
     "miniapp\admin-positions-v24.css",
     "miniapp\vazirmatn.css",
     "mt5\NEXUS_ChartAgent\NEXUS_ChartAgent.mq5"
@@ -124,6 +125,7 @@ $EvidenceObject = [ordered]@{
     chartagent_patch_pass = $true
     mq5_compile_pass = $true
     repair_claim_bridge_pass = $true
+    admin_positions_cache_bust_pass = $true
     compiled_ex5 = $StageEx5
     production_changed = $false
 }
