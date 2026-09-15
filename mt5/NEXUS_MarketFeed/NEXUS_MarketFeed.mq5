@@ -1,6 +1,6 @@
 #property strict
-#property version   "1.00"
-#property description "NEXUS authoritative MT5 candle feed for Mini App Live Charts"
+#property version   "1.10"
+#property description "NEXUS authoritative MT5 candle and Bid/Ask feed for Mini App Live Charts"
 
 input string InpApiBaseUrl="https://api.nexustrade.ir";
 input string InpAdminToken="";
@@ -87,6 +87,32 @@ string CandleJson(const MqlRates &bar,const int digits)
           ",\"tick_volume\":"+(string)((long)bar.tick_volume)+"}";
   }
 
+bool AppendQuote(string &payload,const string canonical,const string broker_symbol,bool &first_quote)
+  {
+   MqlTick tick;
+   if(!SymbolInfoTick(broker_symbol,tick))
+     {
+      Print("NEXUS MarketFeed: SymbolInfoTick failed symbol=",broker_symbol," err=",GetLastError());
+      return false;
+     }
+   if(tick.bid<=0 || tick.ask<=0 || tick.ask<tick.bid || tick.time_msc<=0)
+     {
+      Print("NEXUS MarketFeed: invalid Bid/Ask tick symbol=",broker_symbol);
+      return false;
+     }
+
+   int digits=(int)SymbolInfoInteger(broker_symbol,SYMBOL_DIGITS);
+   if(!first_quote) payload+=",";
+   first_quote=false;
+   payload+="{\"symbol\":\""+JsonEscape(canonical)+"\",";
+   payload+="\"broker_symbol\":\""+JsonEscape(broker_symbol)+"\",";
+   payload+="\"bid\":"+DoubleToString(tick.bid,digits)+",";
+   payload+="\"ask\":"+DoubleToString(tick.ask,digits)+",";
+   payload+="\"digits\":"+(string)digits+",";
+   payload+="\"time_msc\":"+(string)((long)tick.time_msc)+"}";
+   return true;
+  }
+
 bool AppendSeries(string &payload,const string canonical,const string broker_symbol,
                   const ENUM_TIMEFRAMES tf,const int bars_count,bool &first_series)
   {
@@ -134,9 +160,9 @@ bool BuildPayload(string &payload,const int bars_count)
    payload="{\"account_number\":\""+JsonEscape(account)+"\",";
    payload+="\"broker\":\""+JsonEscape(broker)+"\",";
    payload+="\"server\":\""+JsonEscape(server)+"\",";
-   payload+="\"ea_version\":\"NEXUS-MARKET-FEED-1.0\",\"series\":[";
+   payload+="\"ea_version\":\"NEXUS-MARKET-FEED-1.1\",\"quotes\":[";
 
-   bool first_series=true;
+   bool first_quote=true;
    for(int s=0;s<count;s++)
      {
       string canonical=Upper(Trim(symbols[s]));
@@ -147,6 +173,17 @@ bool BuildPayload(string &payload,const int bars_count)
          Print("NEXUS MarketFeed: broker symbol not found for ",canonical);
          continue;
         }
+      AppendQuote(payload,canonical,broker_symbol,first_quote);
+     }
+
+   payload+="],\"series\":[";
+   bool first_series=true;
+   for(int s=0;s<count;s++)
+     {
+      string canonical=Upper(Trim(symbols[s]));
+      if(canonical=="") continue;
+      string broker_symbol=ResolveBrokerSymbol(canonical);
+      if(broker_symbol=="") continue;
       for(int t=0;t<ArraySize(tfs);t++)
          AppendSeries(payload,canonical,broker_symbol,tfs[t],bars_count,first_series);
      }
