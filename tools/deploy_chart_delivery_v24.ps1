@@ -14,6 +14,30 @@ function Assert-File([string]$Path,[string]$Label) {
     if (-not (Test-Path $Path)) { throw "$Label not found: $Path" }
 }
 
+function Invoke-HttpReady {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [int]$Attempts = 30,
+        [int]$DelaySeconds = 3
+    )
+    $LastError = $null
+    for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
+        try {
+            $Response = Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 20
+            if ($Response.StatusCode -eq 200) {
+                if ($Attempt -gt 1) { Write-Host "READY after attempt" $Attempt ":" $Url }
+                return $Response
+            }
+            $LastError = "HTTP $($Response.StatusCode)"
+        } catch {
+            $LastError = $_.Exception.Message
+            Write-Warning "HTTP readiness attempt $Attempt/$Attempts failed: $Url :: $LastError"
+        }
+        if ($Attempt -lt $Attempts) { Start-Sleep -Seconds $DelaySeconds }
+    }
+    throw "HTTP readiness failed after $Attempts attempts: $Url :: $LastError"
+}
+
 function Find-MetaEditor {
     $Candidates = @(
         "$env:ProgramFiles\MetaTrader 5\metaeditor64.exe",
@@ -36,21 +60,30 @@ function Resolve-ChartAgentDir {
     }
 
     $Roots = Get-ChildItem "$env:APPDATA\MetaQuotes\Terminal" -Directory -ErrorAction SilentlyContinue
-    $Hits = @()
+    $PrimaryHits = @()
+    $FallbackHits = @()
     foreach ($Root in $Roots) {
         $Experts = Join-Path $Root.FullName "MQL5\Experts"
         if (-not (Test-Path $Experts)) { continue }
         $Files = Get-ChildItem $Experts -Filter "NEXUS_ChartAgent.mq5" -File -Recurse -ErrorAction SilentlyContinue
-        foreach ($File in $Files) { $Hits += $File.Directory.FullName }
+        foreach ($File in $Files) {
+            $Dir = $File.Directory.FullName
+            if ($Dir -match '(?i)\\backup(?:-|\\)' -or $Dir -match '(?i)\\_backup(?:\\|$)') { continue }
+            if ($File.Directory.Name -ieq "NEXUS_ChartAgent") {
+                $PrimaryHits += $Dir
+            } else {
+                $FallbackHits += $Dir
+            }
+        }
     }
-    $Hits = @($Hits | Sort-Object -Unique)
+    $Hits = if ($PrimaryHits.Count -gt 0) { @($PrimaryHits | Sort-Object -Unique) } else { @($FallbackHits | Sort-Object -Unique) }
     if ($Hits.Count -eq 0) {
         throw "No terminal NEXUS_ChartAgent.mq5 was found. Re-run with -TerminalChartAgentDir '<MQL5\Experts\...\NEXUS_ChartAgent folder>'."
     }
     if ($Hits.Count -gt 1) {
-        Write-Host "Multiple ChartAgent directories found:" -ForegroundColor Yellow
+        Write-Host "Multiple active ChartAgent directories found:" -ForegroundColor Yellow
         $Hits | ForEach-Object { Write-Host " - $_" }
-        throw "Ambiguous terminal ChartAgent path. Re-run with -TerminalChartAgentDir explicitly."
+        throw "Ambiguous active ChartAgent path. Re-run with -TerminalChartAgentDir explicitly."
     }
     return $Hits[0]
 }
@@ -189,18 +222,17 @@ do {
 } until ($Service.Status -eq 'Running' -or (Get-Date) -ge $Deadline)
 if ($Service.Status -ne 'Running') { throw "NEXUS-AutoTrade-API did not return to Running" }
 Write-Host "SERVICE: RUNNING"
+Write-Host "Waiting for HTTP readiness; service state alone is not treated as API readiness."
 Write-Host "Telegram bot restart: NO"
 Write-Host "MT5 terminal restart : NO"
 Write-Host "Trading EA/T05/T07   : UNTOUCHED"
 Write-Host "MarketFeed           : UNTOUCHED"
 
 Write-Host "`n=== 7. PUBLIC / HEALTH VERIFY ==="
-$OpenApi = Invoke-WebRequest "https://api.nexustrade.ir/openapi.json" -UseBasicParsing -TimeoutSec 20
-if ($OpenApi.StatusCode -ne 200) { throw "OpenAPI health failed" }
+$OpenApi = Invoke-HttpReady -Url "https://api.nexustrade.ir/openapi.json" -Attempts 30 -DelaySeconds 3
 Write-Host "OPENAPI HTTP" $OpenApi.StatusCode "bytes=" $OpenApi.RawContentLength
 
-$PositionsCss = Invoke-WebRequest "https://api.nexustrade.ir/miniapp/admin-positions-v24.css?v=20260915-positions1" -UseBasicParsing -TimeoutSec 15
-if ($PositionsCss.StatusCode -ne 200) { throw "Admin positions CSS public check failed" }
+$PositionsCss = Invoke-HttpReady -Url "https://api.nexustrade.ir/miniapp/admin-positions-v24.css?v=20260915-positions1" -Attempts 10 -DelaySeconds 2
 Write-Host "POSITIONS CSS HTTP" $PositionsCss.StatusCode
 
 $EnvFile = Join-Path $Prod ".env"
@@ -214,7 +246,19 @@ if (Test-Path $EnvFile) {
 }
 if (-not $Token -or -not $Account) { throw "Could not resolve admin token/account internally from Production .env" }
 $Headers = @{ "X-MT5-Account"=$Account; "X-NEXUS-Admin-Token"=$Token }
-$Health = Invoke-RestMethod "https://api.nexustrade.ir/api/v1/autotrade/admin/chart-capture/health?minutes=30" -Headers $Headers -Method GET -TimeoutSec 20
+$Health = $null
+$HealthError = $null
+for ($Attempt = 1; $Attempt -le 10; $Attempt++) {
+    try {
+        $Health = Invoke-RestMethod "https://api.nexustrade.ir/api/v1/autotrade/admin/chart-capture/health?minutes=30" -Headers $Headers -Method GET -TimeoutSec 20
+        break
+    } catch {
+        $HealthError = $_.Exception.Message
+        Write-Warning "Health readiness attempt $Attempt/10 failed: $HealthError"
+        if ($Attempt -lt 10) { Start-Sleep -Seconds 2 }
+    }
+}
+if (-not $Health) { throw "Chart capture health endpoint failed after retries: $HealthError" }
 Write-Host "HEALTH:" ($Health | ConvertTo-Json -Depth 6 -Compress)
 
 Write-Host "`n=== 8. RUNTIME VERSION OBSERVATION ==="
