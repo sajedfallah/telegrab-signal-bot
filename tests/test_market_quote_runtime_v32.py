@@ -111,4 +111,5 @@ def test_v32_runtime_precedes_v31_publish_guard_and_patches_same_market_quote_co
     assert "mini.market_quote = market_quote" in runtime
     assert "MT5_MARKET_FEED_TICK" in runtime
     assert "current_price" not in runtime
-    assert "close" not in runtime.lower()
+    assert "FROM mt5_market_quotes" in runtime
+    assert "mt5_market_candles" not in runtime
