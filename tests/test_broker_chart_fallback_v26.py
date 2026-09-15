@@ -90,3 +90,10 @@ def test_v26_render_module_has_no_trade_execution_side_effects():
     )
     for marker in forbidden:
         assert marker not in src
+
+
+def test_v26_repair_tool_bootstraps_project_root_for_direct_execution():
+    src = _text("tools/repair_signal_chart_v26.py")
+    assert "Path(__file__).resolve().parents[1]" in src
+    assert "sys.path.insert(0, str(_PROJECT_ROOT))" in src
+    assert src.index("sys.path.insert(0, str(_PROJECT_ROOT))") < src.index("from app import db")
