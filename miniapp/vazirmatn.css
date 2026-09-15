@@ -4,6 +4,7 @@
    consistently across User and Admin Mini Apps; no font binary is vendored. */
 
 @import url("./ui-polish-v16.css?v=20260915-signal-colors-nav-font1");
+@import url("./admin-positions-v24.css?v=20260915-positions1");
 
 :root {
   --nexus-font-family: "Vazirmatn", "Segoe UI", Tahoma, Arial, sans-serif;
