@@ -16,11 +16,11 @@ foreach ($Path in @($StageScript,$DeployScript,$UiDeployScript)) {
 }
 
 Write-Host "============================================================"
-Write-Host "NEXUS V24 — STAGING-GATED PROMOTION"
+Write-Host "NEXUS V24 - STAGING-GATED PROMOTION"
 Write-Host "Commit:" $Commit
 Write-Host "============================================================"
 
-Write-Host "`n=== PHASE A — ISOLATED STAGING / TEST / MQ5 COMPILE ==="
+Write-Host "`n=== PHASE A - ISOLATED STAGING / TEST / MQ5 COMPILE ==="
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $StageScript -Commit $Commit -Prod $Prod
 if ($LASTEXITCODE -ne 0) { throw "V24 staging gate failed; Production was not changed." }
 
@@ -30,15 +30,15 @@ $E = Get-Content $Evidence -Raw | ConvertFrom-Json
 if (-not $E.tests_pass -or -not $E.chartagent_patch_pass -or -not $E.mq5_compile_pass -or -not $E.repair_claim_bridge_pass -or -not $E.admin_positions_cache_bust_pass) {
     throw "Staging evidence is incomplete; Production was not changed."
 }
-Write-Host "`nPROMOTION GATE: STAGING PASS — Production deployment is now allowed."
+Write-Host "`nPROMOTION GATE: STAGING PASS - Production deployment is now allowed."
 
-Write-Host "`n=== PHASE B — TARGETED CHART DELIVERY PRODUCTION DEPLOY ==="
+Write-Host "`n=== PHASE B - TARGETED CHART DELIVERY PRODUCTION DEPLOY ==="
 $DeployArgs = @("-NoProfile","-ExecutionPolicy","Bypass","-File",$DeployScript,"-Commit",$Commit,"-Prod",$Prod)
 if ($TerminalChartAgentDir) { $DeployArgs += @("-TerminalChartAgentDir",$TerminalChartAgentDir) }
 & powershell.exe @DeployArgs
 if ($LASTEXITCODE -ne 0) { throw "Chart delivery Production deploy failed. Inspect the backup printed by the deploy script." }
 
-Write-Host "`n=== PHASE C — TARGETED ADMIN POSITIONS UI DEPLOY ==="
+Write-Host "`n=== PHASE C - TARGETED ADMIN POSITIONS UI DEPLOY ==="
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $UiDeployScript -Commit $Commit -Prod $Prod
 if ($LASTEXITCODE -ne 0) { throw "Admin Positions V24 UI deploy failed." }
 
