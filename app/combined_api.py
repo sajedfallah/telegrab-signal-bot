@@ -64,6 +64,13 @@ install_chart_delivery_guard(app)
 from .autotrade.chart_repair_claim_runtime import install_chart_repair_claim_runtime
 install_chart_repair_claim_runtime(app)
 
+# V27 sits outside the existing publisher/repair wrappers. It only replaces a
+# Telegram root after Telegram explicitly reports that the stored message id no
+# longer exists. It also reconciles duplicate publication races that otherwise
+# can overwrite PUBLISHED with PUBLISH_FAILED after another task succeeded.
+from .autotrade.telegram_anchor_guard import install_telegram_anchor_guard
+install_telegram_anchor_guard(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
