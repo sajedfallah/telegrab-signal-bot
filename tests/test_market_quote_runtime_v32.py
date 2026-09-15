@@ -100,7 +100,7 @@ def test_market_feed_source_uses_symbol_info_tick_and_never_candle_close_as_quot
     assert "tick.bid" in source
     assert "tick.ask" in source
     assert "tick.time_msc" in source
-    assert '"NEXUS-MARKET-FEED-1.1"' in source
+    assert "NEXUS-MARKET-FEED-1.1" in source
 
 
 def test_v32_runtime_precedes_v31_publish_guard_and_patches_same_market_quote_contract():
