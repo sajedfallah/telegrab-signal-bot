@@ -12,6 +12,7 @@ _ACCEPTED = {"EXECUTED", "PENDING", "ACTIVATED"}
 _TERMINAL_CHART = {"FAILED", "EXPIRED"}
 _READY_CHART = {"UPLOADED", "COMPLETED"}
 _INFLIGHT_CHART = {"PENDING", "CLAIMED", "CAPTURING"}
+_PUBLICATION_CHART_GRACE_SECONDS = 20
 
 
 def _route(app, path: str, method: str) -> APIRoute:
@@ -76,6 +77,18 @@ def _parse_utc(value: str | None) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _job_age_seconds(job: Any, now: datetime | None = None) -> float | None:
+    if not job:
+        return None
+    requested_at = _parse_utc(job["requested_at"] if "requested_at" in job.keys() else None)
+    if requested_at is None:
+        return None
+    current = now or datetime.now(timezone.utc)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=timezone.utc)
+    return max(0.0, (current.astimezone(timezone.utc) - requested_at).total_seconds())
+
+
 def _chart_job_overdue(job: Any, now: datetime | None = None) -> bool:
     if not job:
         return False
@@ -135,12 +148,14 @@ def install_publication_recovery(app) -> None:
     destination-aware, so a partial BOTH publication retries only the missing
     channel through the publisher's existing channel claims/idempotency.
 
-    WEB_ADMIN keeps the real-chart-first policy. If chart capture reaches a
-    terminal FAILED/EXPIRED state, a READY job loses its durable asset, or the
-    chart worker disappears until the job TTL elapses, publication falls back
-    to the existing generated card only after a broker-confirmed execution
-    receipt. MT5_ADMIN signals do not depend on a chart-capture job and are
-    retried directly after the same broker receipt.
+    WEB_ADMIN keeps the real-chart-first policy, but publication is never allowed
+    to remain silent for the full chart-job TTL. After a short broker-confirmed
+    grace period, NEXUS publishes the existing generated fallback card while the
+    real MT5 chart job remains repairable. If the real PNG arrives later, the V24
+    chart-delivery guard replaces the existing Telegram media in place. Terminal
+    FAILED/EXPIRED jobs and READY jobs that lost their durable asset also use the
+    same fallback path. MT5_ADMIN signals do not depend on a chart-capture job and
+    are retried directly after the same broker receipt.
     """
     if getattr(app.state, "nexus_publication_recovery_v1", False):
         return
@@ -233,6 +248,43 @@ def install_publication_recovery(app) -> None:
                     reason="chart capture TTL elapsed without completed capture",
                     payload={"job_id": int(job["id"]), "publication_stage": stage},
                 )
+
+            # Never keep a broker-confirmed live position silent for the full
+            # five-minute chart TTL. Give the real MT5 capture a short grace
+            # period; if it is still in-flight, publish the generated fallback
+            # immediately and leave the chart job alive for late media repair.
+            if job_status in _INFLIGHT_CHART:
+                chart_age = _job_age_seconds(job)
+                if chart_age is not None and chart_age >= _PUBLICATION_CHART_GRACE_SECONDS:
+                    background_tasks.add_task(
+                        api_mod._publish_mt5_admin_signal_async,
+                        row,
+                        None,
+                        allow_without_chart=True,
+                    )
+                    queued.append(signal_id)
+                    fallback.append(signal_id)
+                    db.add_signal_event(
+                        signal_id,
+                        "PUBLICATION_FALLBACK_QUEUED",
+                        actor_type="BACKEND",
+                        account_number=account,
+                        correlation_id=str(row["code"]),
+                        reason=(
+                            f"real MT5 chart not ready within {_PUBLICATION_CHART_GRACE_SECONDS}s; "
+                            "publishing fallback while capture remains repairable"
+                        ),
+                        payload={
+                            "chart_status": job_status,
+                            "publication_stage": stage,
+                            "fallback": True,
+                            "fallback_mode": "CHART_GRACE_TIMEOUT",
+                            "chart_age_seconds": round(chart_age, 3),
+                            "chart_grace_seconds": _PUBLICATION_CHART_GRACE_SECONDS,
+                            "job_id": int(job["id"]),
+                        },
+                    )
+                    continue
 
             if job_status in _READY_CHART:
                 if _publication_asset_exists(signal_id):
