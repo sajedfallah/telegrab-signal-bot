@@ -71,6 +71,12 @@ install_chart_repair_claim_runtime(app)
 from .autotrade.telegram_anchor_guard import install_telegram_anchor_guard
 install_telegram_anchor_guard(app)
 
+# V28 is the final presentation layer. Both MT5_ADMIN and WEB_ADMIN publication
+# paths are canonicalized through the same broker-truth renderer immediately
+# before Telegram publication/repair. No execution or Telegram routing changes.
+from .autotrade.unified_signal_visual_runtime import install_unified_signal_visual
+install_unified_signal_visual(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
