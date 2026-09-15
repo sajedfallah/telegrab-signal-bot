@@ -11,7 +11,7 @@ from .broker_chart_fallback import ensure_broker_chart_asset
 
 log = logging.getLogger("nexus.unified_signal_visual")
 
-_STYLE_VERSION = "nexus-clean-signal-v2"
+_STYLE_VERSION = "nexus-clean-signal-v3"
 _SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}
 
 
@@ -108,6 +108,9 @@ def install_unified_signal_visual(app) -> None:
                             "source": "MT5_MARKET_FEED",
                             "file_path": broker_result.get("file_path"),
                             "age_seconds": broker_result.get("age_seconds"),
+                            "anchor_applied": broker_result.get("anchor_applied"),
+                            "anchor_bar_time": broker_result.get("anchor_bar_time"),
+                            "anchor_field": broker_result.get("anchor_field"),
                         },
                     )
                 except Exception:
