@@ -7,6 +7,7 @@ from typing import Any, Callable
 from fastapi.routing import APIRoute
 
 from .. import db
+from .broker_chart_fallback import ensure_broker_chart_asset
 
 _ACCEPTED = {"EXECUTED", "PENDING", "ACTIVATED"}
 _TERMINAL_CHART = {"FAILED", "EXPIRED"}
@@ -140,22 +141,25 @@ def _candidate_rows(account: str) -> list[Any]:
         ).fetchall()
 
 
+def _stage_broker_chart(signal: Any) -> dict[str, Any]:
+    """Best-effort broker-truth chart generation from the existing MT5 feed."""
+    try:
+        return ensure_broker_chart_asset(signal)
+    except Exception as exc:
+        return {"ok": False, "reason": f"BROKER_FALLBACK_EXCEPTION:{exc}"}
+
+
 def install_publication_recovery(app) -> None:
     """Make Telegram publication self-healing after broker execution.
 
-    Every Admin EA live-state sync is already a durable heartbeat. Re-use that
-    heartbeat to retry incomplete authority-signal publication. Recovery is
-    destination-aware, so a partial BOTH publication retries only the missing
-    channel through the publisher's existing channel claims/idempotency.
+    WEB_ADMIN uses this priority:
+      1) screenshot-only ChartAgent real MT5 PNG;
+      2) after a short grace, a server-rendered chart from fresh MT5 MarketFeed
+         OHLC (broker truth, never synthetic);
+      3) only if neither source is available, the branded placeholder card.
 
-    WEB_ADMIN keeps the real-chart-first policy, but publication is never allowed
-    to remain silent for the full chart-job TTL. After a short broker-confirmed
-    grace period, NEXUS publishes the existing generated fallback card while the
-    real MT5 chart job remains repairable. If the real PNG arrives later, the V24
-    chart-delivery guard replaces the existing Telegram media in place. Terminal
-    FAILED/EXPIRED jobs and READY jobs that lost their durable asset also use the
-    same fallback path. MT5_ADMIN signals do not depend on a chart-capture job and
-    are retried directly after the same broker receipt.
+    This removes ChartAgent as a single point of failure while keeping the
+    broker-confirmed execution gate and destination-aware Telegram idempotency.
     """
     if getattr(app.state, "nexus_publication_recovery_v1", False):
         return
@@ -184,6 +188,7 @@ def install_publication_recovery(app) -> None:
         fallback: list[int] = []
         chart_repaired: list[int] = []
         chart_expired: list[int] = []
+        broker_chart: list[int] = []
 
         for row in _candidate_rows(account):
             signal_id = int(row["id"])
@@ -193,9 +198,6 @@ def install_publication_recovery(app) -> None:
             issuer_type = str(row["issuer_type"] or "").strip().upper()
             stage = str(row["publication_stage"] or "").upper()
 
-            # Native MT5_ADMIN publication has no chart-capture job dependency.
-            # A lost background task must therefore be retried directly from the
-            # next authenticated Admin live-state heartbeat.
             if issuer_type == "MT5_ADMIN":
                 background_tasks.add_task(api_mod._publish_mt5_admin_signal_async, row, None)
                 queued.append(signal_id)
@@ -211,9 +213,6 @@ def install_publication_recovery(app) -> None:
 
             job = db.get_signal_chart_capture_job(signal_id)
             if not job:
-                # Accepted WEB_ADMIN execution without a chart job is an
-                # inconsistent but recoverable state. Recreate the job instead
-                # of leaving a live broker position permanently silent.
                 try:
                     job = db.create_chart_capture_job(signal_id, "PUBLICATION_RECOVERY")
                     chart_repaired.append(signal_id)
@@ -232,10 +231,6 @@ def install_publication_recovery(app) -> None:
 
             job_status = str(job["status"] or "").upper()
 
-            # Chart expiry used to be enforced only by the ChartAgent claim
-            # endpoint. If the ChartAgent itself was offline, PENDING/CLAIMED
-            # jobs could remain non-terminal forever. The already-authenticated
-            # Admin EA heartbeat now enforces the same overall job TTL.
             if _expire_overdue_chart_job(job):
                 job_status = "EXPIRED"
                 chart_expired.append(signal_id)
@@ -245,17 +240,17 @@ def install_publication_recovery(app) -> None:
                     actor_type="BACKEND",
                     account_number=account,
                     correlation_id=str(row["code"]),
-                    reason="chart capture TTL elapsed without completed capture",
+                    reason="chart capture TTL elapsed without completed chart capture",
                     payload={"job_id": int(job["id"]), "publication_stage": stage},
                 )
 
-            # Never keep a broker-confirmed live position silent for the full
-            # five-minute chart TTL. Give the real MT5 capture a short grace
-            # period; if it is still in-flight, publish the generated fallback
-            # immediately and leave the chart job alive for late media repair.
             if job_status in _INFLIGHT_CHART:
                 chart_age = _job_age_seconds(job)
                 if chart_age is not None and chart_age >= _PUBLICATION_CHART_GRACE_SECONDS:
+                    broker = _stage_broker_chart(row)
+                    broker_ok = bool(broker.get("ok"))
+                    if broker_ok:
+                        broker_chart.append(signal_id)
                     background_tasks.add_task(
                         api_mod._publish_mt5_admin_signal_async,
                         row,
@@ -271,14 +266,16 @@ def install_publication_recovery(app) -> None:
                         account_number=account,
                         correlation_id=str(row["code"]),
                         reason=(
-                            f"real MT5 chart not ready within {_PUBLICATION_CHART_GRACE_SECONDS}s; "
-                            "publishing fallback while capture remains repairable"
+                            "fresh MT5 MarketFeed chart staged after ChartAgent grace timeout"
+                            if broker_ok
+                            else f"real MT5 chart not ready within {_PUBLICATION_CHART_GRACE_SECONDS}s; placeholder fallback used"
                         ),
                         payload={
                             "chart_status": job_status,
                             "publication_stage": stage,
                             "fallback": True,
-                            "fallback_mode": "CHART_GRACE_TIMEOUT",
+                            "fallback_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER",
+                            "broker_chart": broker,
                             "chart_age_seconds": round(chart_age, 3),
                             "chart_grace_seconds": _PUBLICATION_CHART_GRACE_SECONDS,
                             "job_id": int(job["id"]),
@@ -299,9 +296,10 @@ def install_publication_recovery(app) -> None:
                         payload={"chart_status": job_status, "publication_stage": stage, "fallback": False},
                     )
                 else:
-                    # READY without a durable file can otherwise loop forever.
-                    # Broker execution truth wins: publish the generated card and
-                    # keep an explicit audit event explaining the degraded asset.
+                    broker = _stage_broker_chart(row)
+                    broker_ok = bool(broker.get("ok"))
+                    if broker_ok:
+                        broker_chart.append(signal_id)
                     background_tasks.add_task(
                         api_mod._publish_mt5_admin_signal_async,
                         row,
@@ -316,12 +314,26 @@ def install_publication_recovery(app) -> None:
                         actor_type="BACKEND",
                         account_number=account,
                         correlation_id=str(row["code"]),
-                        reason="chart capture is READY but publication asset is missing",
-                        payload={"chart_status": job_status, "publication_stage": stage, "fallback": True},
+                        reason=(
+                            "chart capture asset missing; fresh MT5 MarketFeed chart staged"
+                            if broker_ok
+                            else "chart capture is READY but publication asset is missing"
+                        ),
+                        payload={
+                            "chart_status": job_status,
+                            "publication_stage": stage,
+                            "fallback": True,
+                            "fallback_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER",
+                            "broker_chart": broker,
+                        },
                     )
                 continue
 
             if job_status in _TERMINAL_CHART:
+                broker = _stage_broker_chart(row)
+                broker_ok = bool(broker.get("ok"))
+                if broker_ok:
+                    broker_chart.append(signal_id)
                 background_tasks.add_task(
                     api_mod._publish_mt5_admin_signal_async,
                     row,
@@ -337,11 +349,21 @@ def install_publication_recovery(app) -> None:
                     account_number=account,
                     correlation_id=str(row["code"]),
                     reason=(
-                        "chart capture TTL elapsed without completed capture"
-                        if signal_id in chart_expired
-                        else str(job["error_text"] or "chart capture terminal failure")
+                        "terminal ChartAgent failure; fresh MT5 MarketFeed chart staged"
+                        if broker_ok
+                        else (
+                            "chart capture TTL elapsed without completed capture"
+                            if signal_id in chart_expired
+                            else str(job["error_text"] or "chart capture terminal failure")
+                        )
                     ),
-                    payload={"chart_status": job_status, "publication_stage": stage, "fallback": True},
+                    payload={
+                        "chart_status": job_status,
+                        "publication_stage": stage,
+                        "fallback": True,
+                        "fallback_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER",
+                        "broker_chart": broker,
+                    },
                 )
 
         if isinstance(result, dict):
@@ -349,6 +371,7 @@ def install_publication_recovery(app) -> None:
             result["publication_fallback_signal_ids"] = sorted(set(fallback))
             result["publication_chart_repaired_signal_ids"] = sorted(set(chart_repaired))
             result["publication_chart_expired_signal_ids"] = sorted(set(chart_expired))
+            result["publication_broker_chart_signal_ids"] = sorted(set(broker_chart))
         return result
 
     _replace_route(app, "/api/v1/autotrade/live-state", "POST", live_state)
