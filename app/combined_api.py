@@ -42,11 +42,19 @@ app.include_router(market_candles_router)
 from .autotrade.miniapp_execution_runtime import install_miniapp_execution_gate
 install_miniapp_execution_gate(app)
 
+# V32 feeds the Admin Market Price button from real SymbolInfoTick Bid/Ask sent
+# by the already-authenticated MT5 MarketFeed. It never derives a quote from
+# candle close/current_position values, and falls back to the existing fail-closed
+# heartbeat quote contract when no fresh MarketFeed tick exists.
+from .autotrade.market_quote_runtime import install_market_quote_runtime
+install_market_quote_runtime(app)
+
 # V31 wraps the FINAL Admin signal-create route. The execution runtime above
 # replaces that route, so installing V31 before it would silently remove the
 # entry-truth guard. Fresh authenticated MT5 Bid/Ask is checked immediately;
 # when no fresh quote exists the existing offline queue is preserved without
-# inventing a broker price.
+# inventing a broker price. V32 is installed before this guard so the Market
+# Price button and Publish validation share the same broker Bid/Ask source.
 from .autotrade.web_admin_market_entry_guard import install_web_admin_market_entry_guard
 install_web_admin_market_entry_guard(app)
 
