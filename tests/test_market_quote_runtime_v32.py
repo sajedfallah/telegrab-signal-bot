@@ -12,9 +12,10 @@ ACCOUNT = "80150619"
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _insert_quote(*, bid: float = 4283.5, ask: float = 4283.7, age_seconds: float = 0.0) -> None:
+def _insert_quote(*, bid: float = 4283.5, ask: float = 4283.7, age_seconds: float = 0.0, broker_offset_seconds: float = 0.0) -> None:
     init_market_candle_schema()
-    now = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+    captured = datetime.now(timezone.utc) - timedelta(seconds=age_seconds)
+    quoted = captured + timedelta(seconds=broker_offset_seconds)
     with db.conn() as con:
         con.execute(
             """INSERT INTO mt5_market_quotes
@@ -30,8 +31,8 @@ def _insert_quote(*, bid: float = 4283.5, ask: float = 4283.7, age_seconds: floa
                 bid,
                 ask,
                 2,
-                int(now.timestamp() * 1000),
-                now.isoformat(),
+                int(quoted.timestamp() * 1000),
+                captured.isoformat(),
             ),
         )
 
@@ -86,11 +87,30 @@ def test_fresh_tick_is_returned_without_candle_price_inference(tmp_path, monkeyp
     assert quote["broker_symbol"] == "XAUUSD.ec"
     assert quote["source"] == "MT5_MARKET_FEED_TICK"
     assert quote["fresh"] is True
+    assert quote["broker_time_offset_seconds"] is None
+
+
+def test_fresh_tick_with_three_hour_broker_offset_is_normalized(tmp_path, monkeypatch):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "v32-offset.db")
+    _insert_quote(broker_offset_seconds=3 * 60 * 60)
+    quote = _fresh_market_feed_quote(ACCOUNT, "XAUUSD")
+    assert quote is not None
+    assert quote["bid"] == 4283.5
+    assert quote["ask"] == 4283.7
+    assert quote["broker_time_offset_seconds"] == 3 * 60 * 60
+    assert quote["raw_quote_time_ms"] - quote["quote_time_ms"] == 3 * 60 * 60 * 1000
+    assert quote["age_seconds"] < 5
 
 
 def test_stale_tick_fails_closed(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "v32-stale.db")
     _insert_quote(age_seconds=30)
+    assert _fresh_market_feed_quote(ACCOUNT, "XAUUSD") is None
+
+
+def test_stale_tick_with_broker_offset_still_fails_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "v32-stale-offset.db")
+    _insert_quote(age_seconds=30, broker_offset_seconds=3 * 60 * 60)
     assert _fresh_market_feed_quote(ACCOUNT, "XAUUSD") is None
 
 
