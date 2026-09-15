@@ -48,6 +48,14 @@ install_miniapp_execution_gate(app)
 from .autotrade.publication_recovery_runtime import install_publication_recovery
 install_publication_recovery(app)
 
+# V24 hardens the chart-delivery path without touching trading execution:
+# isolated ChartAgent rate buckets, bounded post-fallback capture repair,
+# late Telegram media replacement, health telemetry and throttled admin alerts.
+# It is installed after publication recovery so its live-state wrapper observes
+# and strengthens the already-installed recovery behavior.
+from .autotrade.chart_delivery_guard import install_chart_delivery_guard
+install_chart_delivery_guard(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
