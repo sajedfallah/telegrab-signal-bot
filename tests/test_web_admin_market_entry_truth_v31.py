@@ -49,21 +49,23 @@ def test_v31_uses_correct_side_of_bid_ask():
     assert buy["ok"] is True
 
 
-def test_v31_guard_reuses_authenticated_fresh_quote_contract_and_fails_closed():
+def test_v31_guard_reuses_authenticated_fresh_quote_contract_and_defers_only_503():
     src = _text("app/autotrade/web_admin_market_entry_guard.py")
     assert '"/miniapp/api/admin/signals"' in src
     assert "market_quote" in src
     assert "quote_age_seconds" in src
-    assert "MT5 price" in src
+    assert "DEFERRED_NO_FRESH_QUOTE" in src
+    assert "int(exc.status_code) != 503" in src
     assert "Refresh Market Price and publish again" in src
     assert "status_code=409" in src
     assert "target_route.dependant.call = guarded_create_signal" in src
+    assert 'result["entry_truth"] = check' in src
 
 
-def test_v31_installed_before_web_admin_execution_bridge():
+def test_v31_wraps_final_route_after_web_admin_execution_bridge():
     src = _text("app/combined_api.py")
     assert "install_web_admin_market_entry_guard(app)" in src
-    assert src.index("install_web_admin_market_entry_guard(app)") < src.index("install_miniapp_execution_gate(app)")
+    assert src.index("install_miniapp_execution_gate(app)") < src.index("install_web_admin_market_entry_guard(app)")
 
 
 def test_v31_has_no_execution_or_market_data_side_effects():
