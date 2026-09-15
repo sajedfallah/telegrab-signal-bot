@@ -13,7 +13,8 @@ $Files = @(
     "app\autotrade\market_quote_runtime.py",
     "app\combined_api.py",
     "mt5\NEXUS_MarketFeed\NEXUS_MarketFeed.mq5",
-    "tools\check_market_quote_v32.py"
+    "tools\check_market_quote_v32.py",
+    "tools\install_marketfeed_v32_runtime.ps1"
 )
 
 foreach ($Rel in $Files) {
@@ -127,4 +128,4 @@ for ($Attempt = 1; $Attempt -le 30; $Attempt++) {
 if (-not $Ready) { throw "API did not become ready" }
 
 Write-Host "V32 BACKEND + MARKETFEED SOURCE DEPLOY: PASS"
-Write-Host "IMPORTANT: MT5 MarketFeed 1.1 source is staged only. Compile/reload the live NEXUS_MarketFeed EA before runtime quote PASS."
+Write-Host "IMPORTANT: MT5 MarketFeed 1.1 source is staged only. Run tools\install_marketfeed_v32_runtime.ps1, then validate with tools\check_market_quote_v32.py."
