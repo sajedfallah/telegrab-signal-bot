@@ -60,7 +60,8 @@ def test_v26_broker_chart_renderer_outputs_valid_png_with_real_level_contract():
 def test_v26_publication_recovery_prefers_fresh_mt5_marketfeed_before_placeholder():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     assert "ensure_broker_chart_asset" in src
-    assert '"fallback_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER"' in src
+    assert '"fallback_mode": "CHART_GRACE_TIMEOUT"' in src
+    assert '"fallback_asset_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER"' in src
     assert "publication_broker_chart_signal_ids" in src
     assert "fresh MT5 MarketFeed chart staged after ChartAgent grace timeout" in src
 
