@@ -91,3 +91,28 @@ def test_scenario_7_diagnostic_tool_is_read_only_and_never_claims_next_job():
     # it must never issue a web request to that endpoint.
     assert 'Invoke-RestMethod -Uri $Url' in src
     assert '$Url = "https://api.nexustrade.ir/api/v1/autotrade/admin/chart-capture/health' in src
+
+
+def test_scenario_8_fallback_published_active_signal_can_claim_only_broker_confirmed_repair_job():
+    combined = _text("app/combined_api.py")
+    claim = _text("app/autotrade/chart_repair_claim_runtime.py")
+    assert "install_chart_repair_claim_runtime(app)" in combined
+    assert combined.index("install_chart_delivery_guard(app)") < combined.index("install_chart_repair_claim_runtime(app)")
+    assert 'status == "ACTIVE"' in claim
+    assert 'signal["free_message_id"] or signal["vip_message_id"]' in claim
+    assert "_accepted_receipt" in claim
+    assert '"repair_mode": repair_mode' in claim
+    assert "/api/v1/autotrade/admin/chart-capture/next" in claim
+    assert "/api/v1/autotrade/admin/chart-capture/jobs/next" in claim
+
+
+def test_scenario_9_production_deploy_is_evidence_gated_and_never_overwrites_api_hotfix():
+    deploy = _text("tools/deploy_chart_delivery_v24.ps1")
+    assert "Mandatory staging evidence" in deploy
+    assert "repair_claim_bridge_pass" in deploy
+    assert "app\\autotrade\\chart_repair_claim_runtime.py" in deploy
+    assert 'PRESERVED: app\\autotrade\\api.py (NOT COPIED)' in deploy
+    assert '$Required -contains "app\\autotrade\\api.py"' in deploy
+    assert "Restart-Service -Name $Service.Name -Force" in deploy
+    assert "Telegram bot restart: NO" in deploy
+    assert "Trading EA/T05/T07   : UNTOUCHED" in deploy
