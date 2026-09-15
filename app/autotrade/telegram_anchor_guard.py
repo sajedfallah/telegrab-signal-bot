@@ -238,66 +238,78 @@ def install_telegram_anchor_guard(app) -> None:
 
         if stale_channels:
             raw, asset_path, asset_state = _asset_bytes(int(canonical["id"]))
-            if raw:
-                replaced: list[str] = []
-                replacement_errors: list[str] = []
-                new_ids: dict[str, int] = {}
+            if not raw:
+                result["anchor_guard_state"] = f"STALE_ANCHOR_WITHOUT_VALID_ASSET:{asset_state}"
+                result["repair_pending"] = True
+                return result
 
-                for channel in sorted(stale_channels):
-                    fresh = db.get_signal(int(canonical["id"])) or canonical
-                    old_id = _message_id(fresh, channel)
-                    if old_id is None:
-                        continue
-                    ok, new_id, error = await _replace_missing_anchor(fresh, channel, old_id, raw)
-                    if ok:
-                        replaced.append(channel)
-                        if new_id is not None:
-                            new_ids[channel] = int(new_id)
-                    elif error:
-                        replacement_errors.append(f"{channel}: {error}")
+            replaced: list[str] = []
+            replacement_errors: list[str] = []
+            new_ids: dict[str, int] = {}
 
-                if replaced:
-                    db.add_signal_event(
-                        int(canonical["id"]),
-                        "CHART_REPAIR_APPLIED",
-                        actor_type="BACKEND",
-                        actor_id=canonical["created_by"],
-                        account_number=str(canonical["issuer_account"] or ""),
-                        correlation_id=str(canonical["code"]),
-                        payload={
-                            "channels": replaced,
-                            "anchor_replaced": True,
-                            "new_message_ids": new_ids,
-                            "asset_state": asset_state,
-                            "asset_path": asset_path,
-                        },
-                    )
+            for channel in sorted(stale_channels):
+                fresh = db.get_signal(int(canonical["id"])) or canonical
+                old_id = _message_id(fresh, channel)
+                if old_id is None:
+                    continue
+                ok, new_id, error = await _replace_missing_anchor(fresh, channel, old_id, raw)
+                if ok:
+                    replaced.append(channel)
+                    if new_id is not None:
+                        new_ids[channel] = int(new_id)
+                elif error:
+                    replacement_errors.append(f"{channel}: {error}")
 
-                latest = db.get_signal(int(canonical["id"])) or canonical
-                complete = _publication_complete(latest) and not replacement_errors
-                if complete:
-                    _mark_published_if_complete(int(canonical["id"]))
-                    db.clear_mt5_signal_publication_asset(int(canonical["id"]))
+            if replaced:
+                db.add_signal_event(
+                    int(canonical["id"]),
+                    "CHART_REPAIR_APPLIED",
+                    actor_type="BACKEND",
+                    actor_id=canonical["created_by"],
+                    account_number=str(canonical["issuer_account"] or ""),
+                    correlation_id=str(canonical["code"]),
+                    payload={
+                        "channels": replaced,
+                        "anchor_replaced": True,
+                        "new_message_ids": new_ids,
+                        "asset_state": asset_state,
+                        "asset_path": asset_path,
+                    },
+                )
 
-                filtered_errors = []
-                for error in result.get("errors") or []:
-                    prefix = str(error).split(":", 1)[0].strip().upper()
-                    if prefix in replaced and prefix in stale_channels:
-                        continue
-                    filtered_errors.append(error)
-                filtered_errors.extend(replacement_errors)
+            latest = db.get_signal(int(canonical["id"])) or canonical
+            complete = (
+                _publication_complete(latest)
+                and not replacement_errors
+                and stale_channels.issubset(set(replaced))
+            )
+            if complete:
+                _mark_published_if_complete(int(canonical["id"]))
+                db.clear_mt5_signal_publication_asset(int(canonical["id"]))
 
-                latest = db.get_signal(int(canonical["id"])) or latest
-                result.update({
-                    "free_message_id": _message_id(latest, "FREE"),
-                    "vip_message_id": _message_id(latest, "VIP"),
-                    "errors": filtered_errors,
-                    "published": bool(_message_id(latest, "FREE") or _message_id(latest, "VIP")),
-                    "complete": complete,
-                    "repaired_channels": sorted(set((result.get("repaired_channels") or []) + replaced)),
-                    "anchor_replaced_channels": replaced,
-                    "repair_pending": not complete,
-                })
+            filtered_errors = []
+            for error in result.get("errors") or []:
+                prefix = str(error).split(":", 1)[0].strip().upper()
+                if prefix in replaced and prefix in stale_channels:
+                    continue
+                filtered_errors.append(error)
+            filtered_errors.extend(replacement_errors)
+
+            latest = db.get_signal(int(canonical["id"])) or latest
+            result.update({
+                "free_message_id": _message_id(latest, "FREE"),
+                "vip_message_id": _message_id(latest, "VIP"),
+                "errors": filtered_errors,
+                "published": bool(_message_id(latest, "FREE") or _message_id(latest, "VIP")),
+                "complete": complete,
+                "repaired_channels": sorted(set((result.get("repaired_channels") or []) + replaced)),
+                "anchor_replaced_channels": replaced,
+                "repair_pending": not complete,
+            })
+            # A stale anchor is authoritative negative evidence. Never let the
+            # generic publication-race reconciler mark it PUBLISHED unless the
+            # replacement itself succeeded.
+            return result
 
         return _reconcile_publication_race(int(canonical["id"]), result)
 
