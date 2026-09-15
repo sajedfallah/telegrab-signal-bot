@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from app.autotrade.publication_recovery_runtime import _chart_job_overdue, _publication_complete
+from app.autotrade.publication_recovery_runtime import (
+    _chart_job_overdue,
+    _job_age_seconds,
+    _publication_complete,
+)
 from app.market_candles import CandlePoint, CandleSeries, MarketFeedRequest, _tf
 
 
@@ -69,6 +73,13 @@ def test_chart_job_overdue_is_independent_from_chart_agent_polling():
     assert not _chart_job_overdue({"status": "UPLOADED", "expires_at": (now - timedelta(seconds=1)).isoformat()}, now)
 
 
+def test_chart_job_age_supports_fast_fallback_before_five_minute_ttl():
+    now = datetime(2026, 9, 15, 6, 32, 40, tzinfo=timezone.utc)
+    requested = (now - timedelta(seconds=21)).isoformat()
+    assert _job_age_seconds({"requested_at": requested}, now) == pytest.approx(21.0)
+    assert _job_age_seconds({"requested_at": ""}, now) is None
+
+
 def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     assert "_accepted_receipt(signal_id)" in src
@@ -82,6 +93,16 @@ def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps()
     assert "job expired without completed chart capture" in src
     assert "publication asset is missing" in src
     assert "COALESCE(free_message_id,0)=0 OR COALESCE(vip_message_id,0)=0" in src
+
+
+def test_broker_confirmed_web_admin_signal_falls_back_after_short_chart_grace_and_stays_repairable():
+    src = _text("app/autotrade/publication_recovery_runtime.py")
+    assert "_PUBLICATION_CHART_GRACE_SECONDS = 20" in src
+    assert "_job_age_seconds(job)" in src
+    assert 'fallback_mode": "CHART_GRACE_TIMEOUT"' in src
+    assert "publishing fallback while capture remains repairable" in src
+    assert "job_status in _INFLIGHT_CHART" in src
+    assert "allow_without_chart=True" in src
 
 
 def test_forex_frontend_uses_mt5_market_candle_endpoint_without_fake_fallback():
