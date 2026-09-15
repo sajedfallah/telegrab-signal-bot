@@ -116,3 +116,10 @@ def test_scenario_9_production_deploy_is_evidence_gated_and_never_overwrites_api
     assert "Restart-Service -Name $Service.Name -Force" in deploy
     assert "Telegram bot restart: NO" in deploy
     assert "Trading EA/T05/T07   : UNTOUCHED" in deploy
+
+
+def test_scenario_10_winps51_promotion_script_is_ascii_only():
+    # Windows PowerShell 5.1 can misdecode UTF-8-without-BOM smart punctuation.
+    # Keep the bootstrap promotion entrypoint ASCII-only to prevent parser errors.
+    src = _text("tools/promote_chart_delivery_v24.ps1")
+    assert all(ord(ch) < 128 for ch in src)
