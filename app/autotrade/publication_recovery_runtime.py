@@ -266,15 +266,20 @@ def install_publication_recovery(app) -> None:
                         account_number=account,
                         correlation_id=str(row["code"]),
                         reason=(
-                            "fresh MT5 MarketFeed chart staged after ChartAgent grace timeout"
+                            "fresh MT5 MarketFeed chart staged after ChartAgent grace timeout; "
+                            "publishing fallback while capture remains repairable"
                             if broker_ok
-                            else f"real MT5 chart not ready within {_PUBLICATION_CHART_GRACE_SECONDS}s; placeholder fallback used"
+                            else (
+                                f"real MT5 chart not ready within {_PUBLICATION_CHART_GRACE_SECONDS}s; "
+                                "publishing fallback while capture remains repairable"
+                            )
                         ),
                         payload={
                             "chart_status": job_status,
                             "publication_stage": stage,
                             "fallback": True,
-                            "fallback_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER",
+                            "fallback_mode": "CHART_GRACE_TIMEOUT",
+                            "fallback_asset_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER",
                             "broker_chart": broker,
                             "chart_age_seconds": round(chart_age, 3),
                             "chart_grace_seconds": _PUBLICATION_CHART_GRACE_SECONDS,
