@@ -33,7 +33,8 @@ def test_scenario_2_poll_and_result_fail_rate_limits_are_isolated():
     src = _text("app/autotrade/chart_delivery_guard.py")
     assert 'bucket = f"{str(account).strip()}:{int(limit)}"' in src
     assert "api_mod._chart_rate_limit = isolated_chart_rate_limit" in src
-    assert "limit=60" not in src  # endpoint callers keep their existing defaults; guard owns isolation only.
+    assert "Poll uses limit=60" in src
+    assert "result/fail use limit=30" in src
 
 
 def test_scenario_3_terminal_capture_gets_bounded_repair_after_fallback():
