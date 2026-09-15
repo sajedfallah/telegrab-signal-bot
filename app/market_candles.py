@@ -57,6 +57,20 @@ def init_market_candle_schema() -> None:
                 ON mt5_market_candles(symbol, timeframe, bar_time DESC);
             CREATE INDEX IF NOT EXISTS idx_mt5_market_candles_capture
                 ON mt5_market_candles(account_number, captured_at DESC);
+
+            CREATE TABLE IF NOT EXISTS mt5_market_quotes (
+                account_number TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                broker_symbol TEXT NOT NULL,
+                bid REAL NOT NULL,
+                ask REAL NOT NULL,
+                digits INTEGER,
+                quote_time_ms INTEGER NOT NULL,
+                captured_at TEXT NOT NULL,
+                PRIMARY KEY(account_number, symbol)
+            );
+            CREATE INDEX IF NOT EXISTS idx_mt5_market_quotes_capture
+                ON mt5_market_quotes(account_number, captured_at DESC);
             """
         )
 
@@ -99,11 +113,35 @@ class CandleSeries(BaseModel):
         return _tf(value)
 
 
+class MarketQuote(BaseModel):
+    symbol: str = Field(min_length=3, max_length=32)
+    broker_symbol: str = Field(min_length=1, max_length=64)
+    bid: float = Field(gt=0)
+    ask: float = Field(gt=0)
+    digits: int | None = Field(default=None, ge=0, le=10)
+    time_msc: int = Field(gt=0)
+
+    @field_validator("bid", "ask")
+    @classmethod
+    def finite_quote(cls, value: float) -> float:
+        value = float(value)
+        if not math.isfinite(value):
+            raise ValueError("quote values must be finite")
+        return value
+
+    @model_validator(mode="after")
+    def valid_spread(self):
+        if self.ask < self.bid:
+            raise ValueError("ask must be greater than or equal to bid")
+        return self
+
+
 class MarketFeedRequest(BaseModel):
     account_number: str = Field(min_length=3, max_length=32)
     broker: str | None = Field(default=None, max_length=128)
     server: str | None = Field(default=None, max_length=128)
     ea_version: str | None = Field(default=None, max_length=32)
+    quotes: list[MarketQuote] = Field(default_factory=list, max_length=_MAX_SERIES)
     series: list[CandleSeries] = Field(min_length=1, max_length=_MAX_SERIES)
 
 
@@ -131,8 +169,27 @@ def ingest_market_candles(
 
     captured_at = db.now_iso()
     accepted = 0
+    accepted_quotes = 0
     touched: list[tuple[str, str]] = []
     with db.conn() as con:
+        for quote in req.quotes:
+            symbol = normalize_symbol(quote.symbol)
+            broker_symbol = str(quote.broker_symbol).strip()
+            con.execute(
+                """INSERT INTO mt5_market_quotes
+                   (account_number,symbol,broker_symbol,bid,ask,digits,quote_time_ms,captured_at)
+                   VALUES(?,?,?,?,?,?,?,?)
+                   ON CONFLICT(account_number,symbol) DO UPDATE SET
+                     broker_symbol=excluded.broker_symbol,
+                     bid=excluded.bid,ask=excluded.ask,digits=excluded.digits,
+                     quote_time_ms=excluded.quote_time_ms,captured_at=excluded.captured_at""",
+                (
+                    account, symbol, broker_symbol, float(quote.bid), float(quote.ask),
+                    quote.digits, int(quote.time_msc), captured_at,
+                ),
+            )
+            accepted_quotes += 1
+
         for series in req.series:
             symbol = normalize_symbol(series.symbol)
             timeframe = _tf(series.timeframe)
@@ -171,6 +228,7 @@ def ingest_market_candles(
         "account_number": account,
         "series": len(req.series),
         "candles": accepted,
+        "quotes": accepted_quotes,
         "captured_at": captured_at,
     }
 
