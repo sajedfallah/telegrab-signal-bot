@@ -17,10 +17,11 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _OUTPUT_DIR = _PROJECT_ROOT / "artifacts" / "signal_charts"
 _LOGO_PATH = _PROJECT_ROOT / "assets" / "branding" / "NEXUS_logo_2026.jpg"
 _SUPPORTED_TF = {"M1", "M5", "M15", "H1", "D1"}
+_TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "D1": 86400}
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-clean-signal-v2"
+_STYLE_VERSION = "nexus-clean-signal-v3"
 
 # Approved minimal chart palette. Keep the number of semantic colors small:
 # neutral navy, cyan/teal candles, blue entry, green targets, red stop.
@@ -31,7 +32,9 @@ _DOWN = (255, 83, 98)
 _ENTRY = (33, 150, 243)
 _SL = (255, 82, 95)
 _TP = (28, 218, 126)
-_PRICE_TEXT = (132, 148, 164)
+# Price values are intentionally secondary to semantic labels, but use the
+# approved warm yellow so they remain instantly scannable.
+_PRICE_TEXT = (255, 209, 102)
 
 
 def _font(size: int, bold: bool = False):
@@ -77,12 +80,41 @@ def _signal_value(signal: Any, key: str, default=None):
         return default
 
 
+def _signal_anchor(signal: Any, timeframe: str) -> tuple[int | None, str | None, str | None]:
+    """Resolve the broker chart candle that contains the signal entry event.
+
+    opened_at is authoritative when present. Pending orders may instead have
+    limit_activated_at. issued_at/created_at keep older rows reconstructable.
+    The returned epoch is floored to the MT5 candle open for the signal TF.
+    """
+    for field in ("opened_at", "limit_activated_at", "issued_at", "created_at"):
+        parsed = _parse_utc(_signal_value(signal, field))
+        if parsed is None:
+            continue
+        seconds = _TF_SECONDS.get(timeframe)
+        if not seconds:
+            return None, None, None
+        epoch = int(parsed.timestamp())
+        bar_time = epoch - (epoch % seconds)
+        return bar_time, parsed.isoformat(), field
+    return None, None, None
+
+
 def _load_series(signal: Any) -> tuple[list[dict[str, float]], dict[str, Any]]:
+    """Load a fresh broker source while reconstructing the entry-time chart.
+
+    Freshness is validated against the latest MarketFeed capture, but when the
+    signal has an execution/issue timestamp the visible candle window ends at
+    that signal's MT5 bar. This prevents later preview/repair renders from using
+    today's latest candle and making the original ENTRY appear detached.
+    """
     account = str(_signal_value(signal, "issuer_account", "") or "").strip()
     symbol = normalize_symbol(str(_signal_value(signal, "symbol", "") or ""))
     timeframe = str(_signal_value(signal, "timeframe", "M5") or "M5").strip().upper()
     if not account or not symbol or timeframe not in _SUPPORTED_TF:
         return [], {"reason": "UNSUPPORTED_IDENTITY", "account": account, "symbol": symbol, "timeframe": timeframe}
+
+    anchor_bar_time, anchor_time, anchor_field = _signal_anchor(signal, timeframe)
 
     try:
         with db.conn() as con:
@@ -96,13 +128,23 @@ def _load_series(signal: Any) -> tuple[list[dict[str, float]], dict[str, Any]]:
             ).fetchone()
             if not source:
                 return [], {"reason": "NO_SERIES", "account": account, "symbol": symbol, "timeframe": timeframe}
-            rows = con.execute(
-                """SELECT bar_time,open,high,low,close,tick_volume,captured_at
-                   FROM mt5_market_candles
-                   WHERE account_number=? AND symbol=? AND timeframe=?
-                   ORDER BY bar_time DESC LIMIT ?""",
-                (account, symbol, timeframe, _MAX_BARS),
-            ).fetchall()
+
+            if anchor_bar_time is not None:
+                rows = con.execute(
+                    """SELECT bar_time,open,high,low,close,tick_volume,captured_at
+                       FROM mt5_market_candles
+                       WHERE account_number=? AND symbol=? AND timeframe=? AND bar_time<=?
+                       ORDER BY bar_time DESC LIMIT ?""",
+                    (account, symbol, timeframe, int(anchor_bar_time), _MAX_BARS),
+                ).fetchall()
+            else:
+                rows = con.execute(
+                    """SELECT bar_time,open,high,low,close,tick_volume,captured_at
+                       FROM mt5_market_candles
+                       WHERE account_number=? AND symbol=? AND timeframe=?
+                       ORDER BY bar_time DESC LIMIT ?""",
+                    (account, symbol, timeframe, _MAX_BARS),
+                ).fetchall()
     except Exception as exc:
         return [], {"reason": f"DB_ERROR:{exc}", "account": account, "symbol": symbol, "timeframe": timeframe}
 
@@ -117,6 +159,10 @@ def _load_series(signal: Any) -> tuple[list[dict[str, float]], dict[str, Any]]:
         "digits": int(source["digits"]) if source["digits"] is not None else None,
         "captured_at": captured_at,
         "age_seconds": age,
+        "anchor_applied": anchor_bar_time is not None,
+        "anchor_bar_time": anchor_bar_time,
+        "anchor_time": anchor_time,
+        "anchor_field": anchor_field,
     }
     if age is None or age > _MAX_FEED_AGE_SECONDS:
         meta["reason"] = "STALE_FEED"
@@ -134,8 +180,15 @@ def _load_series(signal: Any) -> tuple[list[dict[str, float]], dict[str, Any]]:
         for row in reversed(rows)
     ]
     if len(candles) < _MIN_BARS:
-        meta["reason"] = "INSUFFICIENT_BARS"
+        meta["reason"] = "INSUFFICIENT_ANCHORED_BARS" if anchor_bar_time is not None else "INSUFFICIENT_BARS"
         return [], meta
+
+    # If the exact bucket is not retained, fail rather than silently presenting
+    # a later candle as the original entry. This keeps preview/repair truthful.
+    if anchor_bar_time is not None and int(candles[-1]["time"]) != int(anchor_bar_time):
+        meta["reason"] = "ENTRY_ANCHOR_BAR_MISSING"
+        return [], meta
+
     return candles, meta
 
 
@@ -218,9 +271,9 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     Visual contract:
       * chart + small NEXUS logo only;
       * ENTRY blue, TP green, SL red;
-      * short fine-dashed levels start at the latest candle and extend only
+      * short fine-dashed levels start at the entry-time candle and extend only
         into reserved right-side whitespace;
-      * semantic labels stay small; price values use a lighter 11px font;
+      * semantic labels stay small; price values use a light 11px yellow font;
       * no label boxes, header, footer, source text, axes text or side panels.
     """
     width, height = 1280, 720
@@ -348,6 +401,9 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
                 "timeframe": meta.get("timeframe"),
                 "bars": len(candles),
                 "age_seconds": round(float(meta.get("age_seconds") or 0.0), 3),
+                "anchor_applied": bool(meta.get("anchor_applied")),
+                "anchor_bar_time": meta.get("anchor_bar_time"),
+                "anchor_field": meta.get("anchor_field"),
                 "file_path": str(path),
                 "bytes": len(raw),
             },
