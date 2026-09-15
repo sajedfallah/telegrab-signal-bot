@@ -5,8 +5,11 @@ ROOT = Path(__file__).resolve().parents[1]
 MINIAPP = ROOT / "miniapp"
 
 
-def test_positions_v24_is_activated_through_shared_admin_typography_layer():
+def test_positions_v24_is_directly_activated_with_cache_bust_and_shared_import():
+    admin = (MINIAPP / "admin.html").read_text(encoding="utf-8")
     typography = (MINIAPP / "vazirmatn.css").read_text(encoding="utf-8")
+    assert '/miniapp/admin-positions-v24.css?v=20260915-positions1' in admin
+    assert '/miniapp/vazirmatn.css?v=20260915-v24-positions1' in admin
     assert 'admin-positions-v24.css?v=20260915-positions1' in typography
 
 
