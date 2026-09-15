@@ -62,23 +62,26 @@ def test_v28_approved_chart_is_clean_1280x720_png():
         assert image.size == (1280, 720)
 
 
-def test_v28_visual_contract_uses_short_right_side_level_lines_and_small_labels():
+def test_v29_visual_contract_uses_short_right_side_lines_small_labels_and_subtle_prices():
     src = _text("app/autotrade/broker_chart_fallback.py")
-    assert '_STYLE_VERSION = "nexus-clean-signal-v1"' in src
+    assert '_STYLE_VERSION = "nexus-clean-signal-v2"' in src
     assert "_ENTRY = (33, 150, 243)" in src
     assert "_TP = (28, 218, 126)" in src
     assert "_SL = (255, 82, 95)" in src
+    assert "_PRICE_TEXT = (132, 148, 164)" in src
     assert "line_start = min(width - 300, last_x +" in src
-    assert "line_end = 1180" in src
+    assert "line_end = 1158" in src
     assert "dash=6, gap=5" in src
     assert 'level_specs.append(("ENTRY", entry, _ENTRY))' in src
     assert 'level_specs.append(("SL", sl, _SL))' in src
     assert 'level_specs.append((f"TP{idx}", float(value), _TP))' in src
-    assert 'draw.text((label_right - 7, label_y), label' in src
-    assert 'text = f"{label}' not in src
+    assert "label_font = _font(12, True)" in src
+    assert "price_font = _font(11, False)" in src
+    assert 'draw.text((price_x, label_y), f"{price:.{precision}f}"' in src
+    assert "draw.rounded_rectangle" not in src
 
 
-def test_v28_visual_contract_removes_old_decorative_chart_copy():
+def test_v29_visual_contract_removes_old_decorative_chart_copy():
     src = _text("app/autotrade/broker_chart_fallback.py")
     forbidden = (
         "NEXUS  |  MT5 BROKER FEED",
@@ -92,7 +95,7 @@ def test_v28_visual_contract_removes_old_decorative_chart_copy():
         assert marker not in src
 
 
-def test_v28_publication_normalizer_adds_no_footer_or_trade_numbers():
+def test_v29_publication_normalizer_adds_no_extra_footer_or_trade_copy():
     signal, candles, meta, targets = _fixture_chart()
     raw = _render_chart(signal, candles, meta, targets)
     normalized = _clean_publication_image(raw, {"entry": 4278.0, "tp1": 4282.5})
@@ -100,7 +103,8 @@ def test_v28_publication_normalizer_adds_no_footer_or_trade_numbers():
         assert image.size == (1280, 720)
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
     assert "old renderer added a header rail, large logo panel and a numeric footer" in src
-    assert "no added text, numbers or panels" in src
+    assert "without adding any extra text or panels" in src
+    assert '_STYLE_VERSION = "nexus-clean-signal-v2"' in src
 
 
 def test_v28_mt5_and_miniapp_share_one_renderer_before_publication():
