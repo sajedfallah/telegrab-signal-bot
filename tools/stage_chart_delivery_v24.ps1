@@ -35,6 +35,7 @@ Expand-Archive -Path $Archive -DestinationPath $Release -Force
 Write-Host "`n=== 2. REQUIRED SOURCE VERIFY ==="
 $Required = @(
     "app\autotrade\chart_delivery_guard.py",
+    "app\autotrade\chart_repair_claim_runtime.py",
     "app\combined_api.py",
     "tools\apply_chart_agent_reliability_v24.ps1",
     "tools\diagnose_chart_delivery_v24.ps1",
@@ -49,10 +50,10 @@ foreach ($Rel in $Required) {
     Write-Host "FOUND:" $Rel
 }
 
-Write-Host "`n=== 3. PYTHON SYNTAX + 7-SCENARIO PYTEST GATE ==="
+Write-Host "`n=== 3. PYTHON SYNTAX + V24 SCENARIO PYTEST GATE ==="
 Push-Location $Release
 try {
-    & $Python -m py_compile app\autotrade\chart_delivery_guard.py app\combined_api.py
+    & $Python -m py_compile app\autotrade\chart_delivery_guard.py app\autotrade\chart_repair_claim_runtime.py app\combined_api.py
     if ($LASTEXITCODE -ne 0) { throw "Python syntax check failed" }
 
     & $Python -m pytest tests\test_chart_delivery_reliability_v24.py tests\test_admin_positions_v24.py -q
@@ -122,6 +123,7 @@ $EvidenceObject = [ordered]@{
     tests_pass = $true
     chartagent_patch_pass = $true
     mq5_compile_pass = $true
+    repair_claim_bridge_pass = $true
     compiled_ex5 = $StageEx5
     production_changed = $false
 }
