@@ -3,6 +3,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import sys
+from pathlib import Path
+
+# When this file is executed directly (python tools/repair_signal_chart_v26.py),
+# Python puts the tools directory on sys.path, not the repository root. Ensure
+# the production root is importable before importing app.* modules.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from app import db
 from app.autotrade.broker_chart_fallback import ensure_broker_chart_asset
