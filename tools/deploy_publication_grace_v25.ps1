@@ -111,9 +111,45 @@ Write-Host "SERVICE: RUNNING"
 [void](Wait-PublicApi)
 
 Write-Host "`n=== 6. RECENT WEB_ADMIN PUBLICATION STATE ==="
+$DiagPy = Join-Path $StageRoot "recent_web_admin_publication_state.py"
+@'
+from app import db
+import json
+
+query = """
+SELECT
+    s.id,
+    s.code,
+    s.status,
+    s.publication_stage,
+    s.destination,
+    s.free_message_id,
+    s.vip_message_id,
+    j.id AS job_id,
+    j.status AS job_status,
+    j.requested_at,
+    j.error_text
+FROM signals s
+LEFT JOIN signal_chart_capture_jobs j
+  ON j.id = (
+      SELECT MAX(j2.id)
+      FROM signal_chart_capture_jobs j2
+      WHERE j2.signal_id = s.id
+  )
+WHERE s.issuer_type = 'WEB_ADMIN'
+ORDER BY s.id DESC
+LIMIT 8
+"""
+
+with db.conn() as con:
+    rows = con.execute(query).fetchall()
+print(json.dumps([dict(r) for r in rows], ensure_ascii=False, indent=2))
+'@ | Set-Content -Path $DiagPy -Encoding UTF8
+
 Push-Location $Prod
 try {
-    & $Python -c "from app import db; import json; con=db.conn().__enter__(); rows=con.execute(\"SELECT s.id,s.code,s.status,s.publication_stage,s.destination,s.free_message_id,s.vip_message_id,j.id job_id,j.status job_status,j.requested_at,j.error_text FROM signals s LEFT JOIN signal_chart_capture_jobs j ON j.id=(SELECT MAX(j2.id) FROM signal_chart_capture_jobs j2 WHERE j2.signal_id=s.id) WHERE s.issuer_type='WEB_ADMIN' ORDER BY s.id DESC LIMIT 8\").fetchall(); print(json.dumps([dict(r) for r in rows],ensure_ascii=False,indent=2)); con.close()"
+    & $Python $DiagPy
+    if ($LASTEXITCODE -ne 0) { throw "Recent WEB_ADMIN publication diagnostic failed" }
 } finally {
     Pop-Location
 }
