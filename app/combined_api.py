@@ -35,19 +35,20 @@ app.include_router(miniapp_product_intelligence_router)
 app.include_router(miniapp_purchase_flow_router)
 app.include_router(market_candles_router)
 
-# V31 fixes the MARKET-entry truth contract at the source. The Admin Mini App
-# currently creates MARKET orders only, so a submitted entry must still match a
-# fresh authenticated MT5 Bid/Ask when Publish is pressed. Stale/manual prices
-# fail closed before a signal row, execution request or Telegram post is created.
-from .autotrade.web_admin_market_entry_guard import install_web_admin_market_entry_guard
-install_web_admin_market_entry_guard(app)
-
 # WEB_ADMIN signals created by the Admin Mini App must execute on the
 # authenticated Admin MT5 account before chart capture / Telegram publication.
 # This is an additive runtime bridge: customer AutoTrade, MT5_ADMIN issuance and
 # the existing DB schema remain unchanged.
 from .autotrade.miniapp_execution_runtime import install_miniapp_execution_gate
 install_miniapp_execution_gate(app)
+
+# V31 wraps the FINAL Admin signal-create route. The execution runtime above
+# replaces that route, so installing V31 before it would silently remove the
+# entry-truth guard. Fresh authenticated MT5 Bid/Ask is checked immediately;
+# when no fresh quote exists the existing offline queue is preserved without
+# inventing a broker price.
+from .autotrade.web_admin_market_entry_guard import install_web_admin_market_entry_guard
+install_web_admin_market_entry_guard(app)
 
 # Channel publication is retried from the already-existing Admin live-state
 # heartbeat. Broker-confirmed executions can no longer remain permanently silent
