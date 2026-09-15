@@ -50,15 +50,56 @@ $Editor = $EditorCandidates[0].FullName
 $Log = Join-Path $BackupDir "metaeditor-v32.log"
 Write-Host "COMPILER:" $Editor
 
+# MetaEditor may return control before its compile log is finished. The previous
+# helper used a fixed 2-second sleep, which could read the log at 18% and report
+# a false failure. Poll for the terminal compiler summary instead.
+if (Test-Path $Log) { Remove-Item $Log -Force }
 & $Editor "/compile:$Target" "/log:$Log"
-Start-Sleep -Seconds 2
 
-if (-not (Test-Path $Log)) { throw "MetaEditor compile log not found: $Log" }
-$LogText = Get-Content $Log -Raw
+$Deadline = (Get-Date).AddSeconds(120)
+$LogText = ""
+$SummarySeen = $false
+$ErrorCount = $null
+$WarningCount = $null
+
+while ((Get-Date) -lt $Deadline) {
+    if (Test-Path $Log) {
+        try {
+            $LogText = Get-Content $Log -Raw -ErrorAction Stop
+        } catch {
+            $LogText = ""
+        }
+
+        if ($LogText -match '(?im)(\d+)\s+errors?,\s*(\d+)\s+warnings?') {
+            $SummarySeen = $true
+            $ErrorCount = [int]$Matches[1]
+            $WarningCount = [int]$Matches[2]
+            break
+        }
+    }
+    Start-Sleep -Seconds 1
+}
+
+if (-not (Test-Path $Log)) {
+    throw "MetaEditor compile log not found after 120 seconds: $Log"
+}
+
+if (-not $LogText) {
+    $LogText = Get-Content $Log -Raw
+}
 Write-Host $LogText
-if ($LogText -notmatch "0 errors") { throw "MarketFeed compile did not report 0 errors" }
-if (-not (Test-Path $Ex5)) { throw "Compiled EX5 not found: $Ex5" }
+
+if (-not $SummarySeen) {
+    throw "MarketFeed compile timed out before MetaEditor reported a final errors/warnings summary"
+}
+if ($ErrorCount -ne 0) {
+    throw "MarketFeed compile failed with $ErrorCount errors and $WarningCount warnings"
+}
+if (-not (Test-Path $Ex5)) {
+    throw "Compiled EX5 not found: $Ex5"
+}
 
 Write-Host "MARKETFEED V32 COMPILE: PASS"
+Write-Host "COMPILER SUMMARY: $ErrorCount errors, $WarningCount warnings"
 Write-Host "EX5:" $Ex5
 Write-Host "Wait 10 seconds, then run tools\check_market_quote_v32.py. If no fresh tick appears, reload only the NEXUS_MarketFeed EA on its chart and check again."
