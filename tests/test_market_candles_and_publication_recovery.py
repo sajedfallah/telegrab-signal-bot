@@ -100,6 +100,7 @@ def test_broker_confirmed_web_admin_signal_falls_back_after_short_chart_grace_an
     assert "_PUBLICATION_CHART_GRACE_SECONDS = 20" in src
     assert "_job_age_seconds(job)" in src
     assert 'fallback_mode": "CHART_GRACE_TIMEOUT"' in src
+    assert 'fallback_asset_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER"' in src
     assert "publishing fallback while capture remains repairable" in src
     assert "job_status in _INFLIGHT_CHART" in src
     assert "allow_without_chart=True" in src
