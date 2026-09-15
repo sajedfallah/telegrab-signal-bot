@@ -56,6 +56,14 @@ install_publication_recovery(app)
 from .autotrade.chart_delivery_guard import install_chart_delivery_guard
 install_chart_delivery_guard(app)
 
+# A fallback publication transitions WEB_ADMIN signals from DRAFT to ACTIVE.
+# Permit only broker-confirmed, already-published ACTIVE signals with a queued
+# V24 repair job to be claimed by the screenshot-only ChartAgent. Without this
+# narrow bridge, a late repair job would be rejected by the original DRAFT-only
+# capture gate before the real chart could be regenerated.
+from .autotrade.chart_repair_claim_runtime import install_chart_repair_claim_runtime
+install_chart_repair_claim_runtime(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
