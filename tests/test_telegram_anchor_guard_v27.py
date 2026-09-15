@@ -48,7 +48,11 @@ def test_v27_only_self_heals_web_admin_and_explicit_missing_message_errors():
     assert '!= "WEB_ADMIN"' in src
     assert "stale_channels = _missing_anchor_channels" in src
     assert "if stale_channels:" in src
-    assert "if raw:" in src
+    # The hardened guard is fail-closed when the staged PNG is missing/invalid:
+    # it returns repair_pending instead of attempting a replacement publish.
+    assert "if not raw:" in src
+    assert "STALE_ANCHOR_WITHOUT_VALID_ASSET" in src
+    assert 'result["repair_pending"] = True' in src
     assert "send_photo" in src
     assert "edit_message_media" not in src
 
