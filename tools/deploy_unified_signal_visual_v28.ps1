@@ -8,6 +8,26 @@ $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Backup = Join-Path $Prod "_backup\unified-visual-v28-$Stamp"
 $Python = Join-Path $Prod ".venv\Scripts\python.exe"
 
+function Wait-PublicApi {
+    param([int]$Attempts = 30,[int]$DelaySeconds = 3)
+    $Last = $null
+    for ($i=1; $i -le $Attempts; $i++) {
+        try {
+            $R = Invoke-WebRequest "https://api.nexustrade.ir/openapi.json" -UseBasicParsing -TimeoutSec 15
+            if ($R.StatusCode -eq 200) {
+                Write-Host "OPENAPI READY attempt=$i bytes=$($R.RawContentLength)"
+                return
+            }
+            $Last = "HTTP $($R.StatusCode)"
+        } catch {
+            $Last = $_.Exception.Message
+            Write-Warning "API readiness $i/$Attempts failed: $Last"
+        }
+        if ($i -lt $Attempts) { Start-Sleep -Seconds $DelaySeconds }
+    }
+    throw "Public API did not become ready: $Last"
+}
+
 $Files = @(
     "app\autotrade\broker_chart_fallback.py",
     "app\autotrade\telegram_anchor_guard.py",
@@ -74,7 +94,12 @@ try {
 }
 
 Restart-Service -Name "NEXUS-AutoTrade-API" -Force
-Start-Sleep -Seconds 4
-if ((Get-Service -Name "NEXUS-AutoTrade-API").Status -ne "Running") { throw "Backend service not running" }
+$Deadline = (Get-Date).AddSeconds(45)
+do {
+    Start-Sleep -Seconds 1
+    $Svc = Get-Service -Name "NEXUS-AutoTrade-API"
+} until ($Svc.Status -eq "Running" -or (Get-Date) -ge $Deadline)
+if ($Svc.Status -ne "Running") { throw "Backend service not running" }
 Write-Host "SERVICE: RUNNING"
+Wait-PublicApi
 Write-Host "UNIFIED SIGNAL VISUAL V28 DEPLOY: PASS"
