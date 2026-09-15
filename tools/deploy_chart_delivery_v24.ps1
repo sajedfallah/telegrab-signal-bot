@@ -69,6 +69,7 @@ if ([string]$E.commit -ne $Commit) { throw "Evidence commit mismatch" }
 if (-not $E.tests_pass) { throw "Evidence says pytest failed" }
 if (-not $E.chartagent_patch_pass) { throw "Evidence says ChartAgent patch failed" }
 if (-not $E.mq5_compile_pass) { throw "Evidence says MQ5 compile failed" }
+if (-not $E.repair_claim_bridge_pass) { throw "Evidence says post-fallback repair claim bridge failed" }
 if ($E.production_changed) { throw "Invalid staging evidence: production_changed must be false" }
 $Release = [string]$E.release
 $StageEx5 = [string]$E.compiled_ex5
@@ -77,6 +78,7 @@ Assert-File $StageEx5 "Staged compiled ChartAgent EX5"
 
 $Required = @(
     "app\autotrade\chart_delivery_guard.py",
+    "app\autotrade\chart_repair_claim_runtime.py",
     "app\combined_api.py",
     "miniapp\admin-positions-v24.css",
     "miniapp\vazirmatn.css",
@@ -107,6 +109,7 @@ Write-Host "`n=== 3. BACKUP TARGETED PRODUCTION FILES ==="
 New-Item -ItemType Directory -Force -Path $Backup | Out-Null
 $ProdTargets = @(
     "app\autotrade\chart_delivery_guard.py",
+    "app\autotrade\chart_repair_claim_runtime.py",
     "app\combined_api.py",
     "miniapp\admin-positions-v24.css",
     "miniapp\vazirmatn.css",
@@ -130,6 +133,7 @@ Write-Host "Backup:" $Backup
 Write-Host "`n=== 4. TARGETED BACKEND + UI DEPLOY ==="
 foreach ($Rel in @(
     "app\autotrade\chart_delivery_guard.py",
+    "app\autotrade\chart_repair_claim_runtime.py",
     "app\combined_api.py",
     "miniapp\admin-positions-v24.css",
     "miniapp\vazirmatn.css",
