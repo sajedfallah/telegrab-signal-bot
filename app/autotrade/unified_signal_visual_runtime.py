@@ -11,7 +11,7 @@ from .broker_chart_fallback import ensure_broker_chart_asset
 
 log = logging.getLogger("nexus.unified_signal_visual")
 
-_STYLE_VERSION = "nexus-clean-signal-v1"
+_STYLE_VERSION = "nexus-clean-signal-v2"
 _SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}
 
 
@@ -38,7 +38,8 @@ def _clean_publication_image(chart_bytes: bytes | None, signal: dict) -> bytes:
 
     The old renderer added a header rail, large logo panel and a numeric footer.
     Those decorations intentionally disappear. A valid staged PNG is normalized
-    to RGB/1280x720 and returned with no added text, numbers or panels.
+    to RGB/1280x720 and returned without adding any extra text or panels. Level
+    labels/prices, when present, are already part of the canonical staged chart.
     """
     if chart_bytes:
         try:
