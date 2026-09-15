@@ -9,6 +9,30 @@ $Evidence = "C:\NEXUS_DEPLOY\_stage-evidence\chart-delivery-v24-$Commit.json"
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $Backup = Join-Path $Prod "_backup\admin-positions-v24-$Stamp"
 
+function Invoke-HttpReady {
+    param(
+        [Parameter(Mandatory=$true)][string]$Url,
+        [int]$Attempts = 15,
+        [int]$DelaySeconds = 2
+    )
+    $LastError = $null
+    for ($Attempt = 1; $Attempt -le $Attempts; $Attempt++) {
+        try {
+            $Response = Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 15
+            if ($Response.StatusCode -eq 200) {
+                if ($Attempt -gt 1) { Write-Host "READY after attempt" $Attempt ":" $Url }
+                return $Response
+            }
+            $LastError = "HTTP $($Response.StatusCode)"
+        } catch {
+            $LastError = $_.Exception.Message
+            Write-Warning "Static readiness attempt $Attempt/$Attempts failed: $Url :: $LastError"
+        }
+        if ($Attempt -lt $Attempts) { Start-Sleep -Seconds $DelaySeconds }
+    }
+    throw "Public UI check failed after $Attempts attempts: $Url :: $LastError"
+}
+
 if (-not (Test-Path $Prod)) { throw "Production runtime not found: $Prod" }
 if (-not (Test-Path $Evidence)) { throw "Mandatory V24 staging evidence not found: $Evidence" }
 $E = Get-Content $Evidence -Raw | ConvertFrom-Json
@@ -60,9 +84,8 @@ foreach ($Url in @(
     "https://api.nexustrade.ir/miniapp/admin-positions-v24.css?v=20260915-positions1",
     "https://api.nexustrade.ir/miniapp/vazirmatn.css?v=20260915-v24-positions1"
 )) {
-    $R = Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 15
+    $R = Invoke-HttpReady -Url $Url -Attempts 15 -DelaySeconds 2
     Write-Host "HTTP" $R.StatusCode "|" $R.Headers["Content-Type"] "|" $Url
-    if ($R.StatusCode -ne 200) { throw "Public UI check failed: $Url" }
 }
 
 Write-Host "`nADMIN POSITIONS V24 DEPLOY: PASS"
