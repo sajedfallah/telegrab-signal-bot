@@ -14,6 +14,7 @@
 2. **Rate-limit collision**: poll دوثانیه‌ای `/next` و POSTهای `/result`/`/fail` از یک bucket مشترک account استفاده می‌کردند. poll می‌توانست ظرفیت POST را مصرف کند و نتیجه با `HTTP 429` از دست برود.
 3. **Transient upload failure**: ChartAgent برای `429/502/503/504` روی result/fail retry درون‌درخواستی نداشت و بعد از تولید موفق PNG نیز ممکن بود upload از دست برود.
 4. **Fallback بدون repair**: اگر placeholder با `MT5 CHART UNAVAILABLE` منتشر می‌شد، رسیدن دیرهنگام PNG پیام Telegram موجود را جایگزین نمی‌کرد. وجود `free_message_id/vip_message_id` باعث می‌شد publication idempotency از ارسال دوباره جلوگیری کند، اما media نیز repair نمی‌شد.
+5. **DRAFT-only claim بعد از fallback**: انتشار fallback سیگنال `WEB_ADMIN` را `ACTIVE` می‌کند، در حالی‌که claim اولیه ChartAgent فقط `DRAFT` را قبول می‌کرد. بنابراین حتی اگر job repair دوباره صف می‌شد، بعد از fallback امکان claim شدن نداشت.
 
 ## تغییرات V24
 
@@ -39,6 +40,7 @@
 
 - حداکثر **2 repair cycle** جدید queue می‌شود؛
 - اگر fallback قبلاً در Telegram منتشر شده باشد، stage به `PUBLISHED_REPAIR_PENDING` می‌رود؛
+- `app/autotrade/chart_repair_claim_runtime.py` اجازه claim مجدد را فقط برای حالت محدود `ACTIVE + Telegram message موجود + broker receipt معتبر` می‌دهد؛ مسیر اولیه `DRAFT` بدون تغییر باقی می‌ماند؛
 - وقتی PNG واقعی بعداً برسد، backend به‌جای ساخت پیام تکراری، همان photo message موجود را با `edit_message_media` جایگزین می‌کند؛
 - eventهای `CHART_REPAIR_QUEUED`, `CHART_REPAIR_APPLIED`, `CHART_REPAIR_FAILED` ثبت می‌شوند؛
 - publication/channel claimهای قبلی همچنان idempotent باقی می‌مانند.
@@ -98,11 +100,40 @@ Endpoint احراز هویت‌شده:
 5. ChartAgent دارای scale settle + HTTP retry + PNG validation باشد.
 6. health endpoint و admin alert نصب شده باشند.
 7. diagnostic script read-only باشد.
+8. fallback-published `ACTIVE` فقط با Telegram anchor و broker receipt معتبر بتواند repair job را claim کند.
+9. Production deploy با staging evidence قفل باشد و `app/autotrade/api.py` را overwrite نکند.
 
 فایل‌های pytest:
 
 - `tests/test_chart_delivery_reliability_v24.py`
-- `tests/test_market_candles_and_publication_recovery.py`
+- `tests/test_admin_positions_v24.py`
+- regression قبلی: `tests/test_market_candles_and_publication_recovery.py`
+
+اسکریپت gate:
+
+`tools/stage_chart_delivery_v24.ps1`
+
+این اسکریپت exact commit را در staging ایزوله archive می‌کند، Python syntax/pytest را اجرا می‌کند، ChartAgent patch را فقط روی staged MQ5 اعمال می‌کند و MetaEditor را ملزم به `0 errors` می‌کند. فقط در صورت PASS فایل evidence برای همان commit تولید می‌شود؛ Production تغییر نمی‌کند.
+
+## Production deploy
+
+Backend/ChartAgent deploy:
+
+`tools/deploy_chart_delivery_v24.ps1`
+
+- بدون evidence همان commit اجرا نمی‌شود؛
+- `app/autotrade/api.py` را عمداً کپی نمی‌کند تا emergency hotfix تولیدی overwrite نشود؛
+- فقط `NEXUS-AutoTrade-API` را restart می‌کند؛
+- Telegram Bot، Trading EA، T05/T07 و MarketFeed را دست نمی‌زند؛
+- screenshot-only `NEXUS_ChartAgent` را backup و compile می‌کند.
+
+Admin Positions UI deploy:
+
+`tools/deploy_admin_positions_v24.ps1`
+
+- `admin.html`, `admin-positions-v24.css`, `vazirmatn.css` را targeted deploy می‌کند؛
+- cache-bust صریح دارد؛
+- هیچ سرویس یا MT5 را restart نمی‌کند.
 
 ## Production acceptance
 
@@ -118,6 +149,6 @@ Endpoint احراز هویت‌شده:
 
 ## Rollback
 
-Backend V24 additive است: برای rollback فایل‌های backup `chart_delivery_guard.py`/`combined_api.py` را برگردانید و فقط `NEXUS-AutoTrade-API` را restart کنید. UI positions نیز static است و با برگرداندن CSS/`vazirmatn.css` rollback می‌شود.
+Backend V24 additive است: برای rollback فایل‌های backup `chart_delivery_guard.py`, `chart_repair_claim_runtime.py`, `combined_api.py` را برگردانید و فقط `NEXUS-AutoTrade-API` را restart کنید. UI positions نیز static است و با برگرداندن `admin.html`, CSS و `vazirmatn.css` rollback می‌شود.
 
 ChartAgent rollback باید با EX5 backup انجام شود. Trading EA، T05/T07 و MarketFeed در V24 تغییر نمی‌کنند.
