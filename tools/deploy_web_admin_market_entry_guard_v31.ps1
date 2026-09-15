@@ -25,6 +25,7 @@ foreach ($Marker in @(
     '/miniapp/api/admin/signals',
     'market_quote',
     'spread * 3.0',
+    'DEFERRED_NO_FRESH_QUOTE',
     'Refresh Market Price and publish again',
     'target_route.dependant.call = guarded_create_signal'
 )) {
@@ -33,12 +34,12 @@ foreach ($Marker in @(
 if (-not $Combined.Contains('install_web_admin_market_entry_guard(app)')) {
     throw "V31 guard is not installed in combined_api"
 }
-if ($Combined.IndexOf('install_web_admin_market_entry_guard(app)') -gt $Combined.IndexOf('install_miniapp_execution_gate(app)')) {
-    throw "V31 guard must install before Mini App execution bridge"
+if ($Combined.IndexOf('install_web_admin_market_entry_guard(app)') -lt $Combined.IndexOf('install_miniapp_execution_gate(app)')) {
+    throw "V31 guard must wrap the final route AFTER Mini App execution bridge"
 }
 Write-Host "SOURCE CONTRACT: PASS"
 
-Write-Host "=== V31 STAGING TESTS ==="
+Write-Host "=== V31 STAGING TESTS: STATIC + QUOTE CONTRACT ==="
 Push-Location $SourceRoot
 try {
     & $Python -m py_compile `
@@ -48,14 +49,30 @@ try {
 
     & $Python -m pytest `
       "tests\test_web_admin_market_entry_truth_v31.py" `
-      "tests\test_miniapp_admin_signal_center.py" `
+      "tests\test_miniapp_admin_v14.py" `
       "tests\test_market_order_entry_deviation_policy.py" `
       -q
-    if ($LASTEXITCODE -ne 0) { throw "V31 staging tests failed" }
+    if ($LASTEXITCODE -ne 0) { throw "V31 static/quote staging tests failed" }
 } finally {
     Pop-Location
 }
-Write-Host "STAGING TESTS: PASS"
+Write-Host "STATIC/QUOTE TESTS: PASS"
+
+# Run the final-route integration suite in a fresh Python process. Importing
+# combined_api intentionally mutates the shared FastAPI route stack; mixing it
+# into the legacy chart-first test module creates false failures because the
+# current Production architecture is execution-first (chart job after receipt).
+Write-Host "=== V31 STAGING TESTS: FINAL ROUTE INTEGRATION ==="
+Push-Location $SourceRoot
+try {
+    & $Python -m pytest `
+      "tests\test_web_admin_market_entry_truth_v31_integration.py" `
+      -q
+    if ($LASTEXITCODE -ne 0) { throw "V31 final-route integration tests failed" }
+} finally {
+    Pop-Location
+}
+Write-Host "FINAL ROUTE INTEGRATION: PASS"
 
 Write-Host "=== BACKUP ==="
 New-Item -ItemType Directory -Force -Path $Backup | Out-Null
@@ -78,6 +95,7 @@ foreach ($Rel in $Files) {
 }
 Write-Host "PRESERVED: app\miniapp_admin_api.py"
 Write-Host "PRESERVED: app\autotrade\api.py"
+Write-Host "PRESERVED: app\autotrade\miniapp_execution_runtime.py"
 Write-Host "PRESERVED: DB / Telegram lifecycle / renderer / Trading EA / T05 / T07 / MarketFeed / ChartAgent"
 
 Push-Location $Prod
