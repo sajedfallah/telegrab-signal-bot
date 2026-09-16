@@ -60,6 +60,17 @@ def _ensure_schema() -> None:
         )
 
 
+def _resolve_account(account: str) -> None:
+    # A clean health cycle closes all previous alert identities for this MT5.
+    # If the same problem genuinely returns after recovery it is allowed to
+    # produce one fresh alert again.
+    with db.conn() as con:
+        con.execute(
+            "DELETE FROM chart_delivery_alert_incidents WHERE account_number=?",
+            (str(account),),
+        )
+
+
 def _claim_incident(account: str, health: dict[str, Any]) -> bool:
     data = _incident_payload(account, health)
     if data is None:
@@ -107,6 +118,10 @@ def install_chart_alert_dedup_runtime(app) -> None:
     _ensure_schema()
 
     def durable_alert_due(account: str, health: dict[str, Any]) -> bool:
+        severity = str(health.get("severity") or "").upper()
+        if severity not in {"WARN", "CRITICAL"}:
+            _resolve_account(str(account))
+            return False
         return _claim_incident(str(account), health)
 
     guard._alert_due = durable_alert_due
