@@ -24,25 +24,29 @@ void NexusTrailSet(const string sig,const string field,const double v)
    GlobalVariableSet(NexusTrailPrefix(sig)+field,v);
   }
 
+// Legacy helper retained for backwards source compatibility and old state.
 bool NexusTrailClaimManageSecond(const string sig,const datetime now)
   {
    string key=NexusTrailPrefix(sig)+"trail_last_sec";
-
-   if(!GlobalVariableCheck(key))
-      GlobalVariableSet(key,0.0);
-
+   if(!GlobalVariableCheck(key)) GlobalVariableSet(key,0.0);
    double previous=GlobalVariableGet(key);
+   if((double)now<=previous) return false;
+   return GlobalVariableSetOnCondition(key,(double)now,previous);
+  }
 
-   if((double)now<=previous)
-      return false;
-
-   // Atomic CAS: with multiple EA charts only one instance may manage
-   // this signal during the current terminal second.
-   return GlobalVariableSetOnCondition(
-      key,
-      (double)now,
-      previous
-   );
+// V35: use the broker tick timestamp rather than a one-second gate. This keeps
+// multi-chart ownership atomic while preventing a fast TP touch from being
+// ignored simply because another chart instance managed the same signal earlier
+// in the current second. Millisecond Unix timestamps are exactly representable
+// in an MQL double at present-day magnitudes.
+bool NexusTrailClaimManageTick(const string sig,const long tick_msc)
+  {
+   if(tick_msc<=0) return false;
+   string key=NexusTrailPrefix(sig)+"trail_last_tick_msc";
+   if(!GlobalVariableCheck(key)) GlobalVariableSet(key,0.0);
+   double previous=GlobalVariableGet(key);
+   if((double)tick_msc<=previous) return false;
+   return GlobalVariableSetOnCondition(key,(double)tick_msc,previous);
   }
 
 string NexusTrailSignalForTicket(const ulong ticket,const string broker_comment)
@@ -78,6 +82,7 @@ private:
    CNexusTradeManager *m_tm;
    long m_magic;
    ENUM_TIMEFRAMES m_tf;
+   ENUM_TIMEFRAMES m_default_tf;
 
    double Price(const string symbol,const ENUM_POSITION_TYPE pt)
      { return pt==POSITION_TYPE_BUY?SymbolInfoDouble(symbol,SYMBOL_BID):SymbolInfoDouble(symbol,SYMBOL_ASK); }
@@ -100,14 +105,14 @@ private:
      }
    ENUM_TIMEFRAMES SignalTF(const string sig)
      {
-      int tf=(int)NexusTrailGet(sig,"timeframe_code",(double)m_tf);
+      int tf=(int)NexusTrailGet(sig,"timeframe_code",(double)m_default_tf);
       switch(tf)
         {
          case PERIOD_M1: return PERIOD_M1; case PERIOD_M3: return PERIOD_M3; case PERIOD_M5: return PERIOD_M5;
          case PERIOD_M15: return PERIOD_M15; case PERIOD_M30: return PERIOD_M30; case PERIOD_H1: return PERIOD_H1;
          case PERIOD_H4: return PERIOD_H4; case PERIOD_D1: return PERIOD_D1; case PERIOD_W1: return PERIOD_W1;
         }
-      return m_tf;
+      return m_default_tf;
      }
 
    double ATR(const string symbol,const int period)
@@ -136,7 +141,13 @@ private:
       if(NexusTrailGet(sig,"be_done",0)>0.5)return;
       if(!PositionSelectByTicket(ticket))return;
       string symbol=PositionGetString(POSITION_SYMBOL);
-      double point=SymbolInfoDouble(symbol,SYMBOL_POINT);
+      double point=SymbolInfoDouble(symbol,SYMBOL_POINT); if(point<=0)return;
+      double current_sl=PositionGetDouble(POSITION_SL);
+      // A manual/previous milestone may already have protected entry or better.
+      // Reconcile state instead of retrying an impossible non-improving move.
+      if(current_sl>0 && ((pt==POSITION_TYPE_BUY && current_sl>=entry-point*0.1) ||
+                          (pt==POSITION_TYPE_SELL && current_sl<=entry+point*0.1)))
+        { NexusTrailSet(sig,"be_done",1); return; }
       double px=Price(symbol,pt);
       int stops=(int)SymbolInfoInteger(symbol,SYMBOL_TRADE_STOPS_LEVEL);
       int freeze=(int)SymbolInfoInteger(symbol,SYMBOL_TRADE_FREEZE_LEVEL);
@@ -152,17 +163,34 @@ private:
 
    void Step(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const double entry,const double risk,const double pr,const double trigger,const double step,const double lock)
      {
-      if(pr<trigger)return; BE(ticket,sig,pt,entry); if(step<=0||lock<=0)return;
-      int levels=(int)MathFloor((pr-trigger)/step)+1; MoveSL(ticket,pt,AtR(pt,entry,risk,levels*lock));
+      if(pr<trigger)return;
+      BE(ticket,sig,pt,entry);
+      if(step<=0||lock<=0)return;
+      // Trigger itself is Break Even. Profit locking starts only after one
+      // complete step beyond the trigger: e.g. T01 1R=BE, 1.5R=+0.3R.
+      int levels=(int)MathFloor((pr-trigger)/step);
+      if(levels<=0)return;
+      MoveSL(ticket,pt,AtR(pt,entry,risk,levels*lock));
      }
    void ATRTrail(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const string symbol,const double pr)
      {
       if(pr<NexusTrailGet(sig,"activation_r",1))return; double a=ATR(symbol,(int)NexusTrailGet(sig,"atr_period",14)); if(a<=0)return;
       double px=Price(symbol,pt), mult=NexusTrailGet(sig,"atr_multiplier",2); MoveSL(ticket,pt,pt==POSITION_TYPE_BUY?px-a*mult:px+a*mult);
      }
-   void StructureTrail(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const string symbol,const double pr)
+   bool StructureTrail(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const string symbol,const double pr)
      {
-      if(pr<NexusTrailGet(sig,"activation_r",1))return; double sw=Swing(symbol,pt,(int)NexusTrailGet(sig,"swing_left",2),(int)NexusTrailGet(sig,"swing_right",2)); if(sw>0)MoveSL(ticket,pt,sw);
+      if(pr<NexusTrailGet(sig,"activation_r",1))return false;
+      double sw=Swing(symbol,pt,(int)NexusTrailGet(sig,"swing_left",2),(int)NexusTrailGet(sig,"swing_right",2));
+      if(sw<=0)return false;
+      // A valid market structure exists even when the current SL is already
+      // tighter. ATR is a true fallback only when no valid structure exists.
+      MoveSL(ticket,pt,sw);
+      return true;
+     }
+   void RunnerTrail(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const string symbol,const double pr)
+     {
+      if(!StructureTrail(ticket,sig,pt,symbol,pr))
+         ATRTrail(ticket,sig,pt,symbol,pr);
      }
 
    double Target(const string sig,const int n)
@@ -183,20 +211,18 @@ private:
      }
    double TargetClosePct(const string sig,const int n,const int count)
      {
-      // Percentages refer to the original position, not its current remainder.
-      // Reserve the configured runner for the final target when there are
-      // three targets; a shorter ladder closes all remainder at its last TP.
+      // T05/T07 contract: percentages are shares of ORIGINAL volume.
+      // TP1 closes configured first share; TP2 closes configured second share
+      // when a later final target exists; intermediate targets are milestones;
+      // the final target always closes the entire remaining runner.
+      if(count<=0||n<1)return 0.0;
       if(n>=count)return 100.0;
       double runner=MathMax(0.0,MathMin(100.0,NexusTrailGet(sig,"runner_pct",40)));
       double first=MathMax(0.0,MathMin(100.0-runner,NexusTrailGet(sig,"tp1_close_pct",30)));
-      if(count==2)return first;
-      if(count==3)
-        {
-         if(n==1)return first;
+      if(n==1)return first;
+      if(n==2 && count>=3)
          return MathMax(0.0,MathMin(100.0-runner-first,NexusTrailGet(sig,"tp2_close_pct",30)));
-        }
-      // Preserve the existing equal ladder for 4+ targets.
-      return 100.0/MathMax(1,count);
+      return 0.0;
      }
 
    double ExecutablePartialVolume(const string symbol,const double before,const double requested,const double reserve)
@@ -240,6 +266,16 @@ private:
       NexusTrailSet(sig,p+"_next_retry",0);
      }
 
+   void SavePartialTruth(const string sig,const int n,const double initial,const double before,const double after)
+     {
+      string p="tp"+IntegerToString(n);
+      double closed=MathMax(0.0,before-after);
+      NexusTrailSet(sig,p+"_closed_volume",closed);
+      NexusTrailSet(sig,p+"_remaining_volume",MathMax(0.0,after));
+      NexusTrailSet(sig,p+"_closed_pct_actual",initial>0?closed/initial*100.0:0.0);
+      NexusTrailSet(sig,p+"_remaining_pct_actual",initial>0?MathMax(0.0,after)/initial*100.0:0.0);
+     }
+
    void CompleteTarget(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,
                        const double entry,const int n,const bool is_final)
      {
@@ -253,7 +289,6 @@ private:
       if(is_final) NexusTrailSet(sig,"final_tp_done",1);
       GlobalVariablesFlush();
      }
-
 
    void Partials(const ulong ticket,const string sig,const ENUM_POSITION_TYPE pt,const double px,const double entry,const double risk)
      {
@@ -284,7 +319,21 @@ private:
         {
          string field="tp"+IntegerToString(n);
          if(NexusTrailGet(sig,field+"_done",0)>0.5) continue;
-         if(NexusTrailGet(sig,field+"_skipped",0)>0.5) continue;
+
+         // V34 and older could permanently mark an impossible broker-grid split
+         // as "skipped" after the target was already hit. Reconcile that durable
+         // state into a completed milestone so an upgraded live position cannot
+         // get stuck forever at the old target.
+         if(NexusTrailGet(sig,field+"_skipped",0)>0.5)
+           {
+            NexusTrailSet(sig,field+"_skipped",0);
+            NexusTrailSet(sig,field+"_volume_skipped",1);
+            CompleteTarget(ticket,sig,pt,entry,n,n==count);
+            Print("NEXUS TP LEGACY SKIP RECONCILED | signal=",sig," tp=",(string)n);
+            if(n==count)return;
+            continue;
+           }
+
          bool is_final_target=(n==count);
          double pending_before=NexusTrailGet(sig,field+"_pending_before",0);
          if(pending_before>0)
@@ -297,6 +346,7 @@ private:
               {
                // The previous attempt reduced broker volume before the EA
                // restarted or lost its acknowledgement. Never close twice.
+               SavePartialTruth(sig,n,initv,pending_before,current);
                Print("NEXUS TP PARTIAL RECONCILED | signal=",sig," tp=",(string)n,
                      " before=",DoubleToString(pending_before,8),
                      " after=",DoubleToString(current,8));
@@ -316,6 +366,18 @@ private:
 
          double close_pct=TargetClosePct(sig,n,count);
          double before=PositionGetDouble(POSITION_VOLUME);
+
+         // Intermediate TP3..TP(n-1) are management milestones in the 30/30/40
+         // runner contract. They advance the SL but never consume runner volume.
+         if(!is_final_target && close_pct<=0)
+           {
+            NexusTrailSet(sig,field+"_milestone_only",1);
+            CompleteTarget(ticket,sig,pt,entry,n,false);
+            Print("NEXUS TP MILESTONE | signal=",sig," tp=",(string)n,
+                  " target=",DoubleToString(target,8)," volume_unchanged=",DoubleToString(before,8));
+            continue;
+           }
+
          double close_volume=is_final_target?before:initv*close_pct/100.0;
          if(!is_final_target)
            {
@@ -323,8 +385,7 @@ private:
             double step=SymbolInfoDouble(symbol,SYMBOL_VOLUME_STEP);
             double minv=SymbolInfoDouble(symbol,SYMBOL_VOLUME_MIN);
             if(step<=0)step=minv;
-            double runner_pct=count<=3?NexusTrailGet(sig,"runner_pct",40):100.0/MathMax(1,count);
-            runner_pct=MathMax(0.0,MathMin(100.0,runner_pct));
+            double runner_pct=MathMax(0.0,MathMin(100.0,NexusTrailGet(sig,"runner_pct",40)));
             double reserve=(step>0?MathCeil(initv*runner_pct/100.0/step-1e-9)*step:0);
             close_volume=ExecutablePartialVolume(symbol,before,close_volume,reserve);
             if(close_volume<0)
@@ -334,13 +395,19 @@ private:
               }
             if(close_volume<=0)
               {
-               // This broker cannot split the remaining lot while preserving
-               // its minimum runner. Do not retry an impossible operation or
-               // claim TP execution; leave the volume for the next target.
-               NexusTrailSet(sig,field+"_skipped",1);
-               Print("NEXUS TP PARTIAL SKIPPED | signal=",sig," tp=",(string)n,
+               // The target really was reached, but broker min/step prevents
+               // another legal split while preserving the runner. Complete the
+               // target milestone and advance protection; never claim a volume
+               // close that did not happen and never retry an impossible split.
+               NexusTrailSet(sig,field+"_volume_skipped",1);
+               NexusTrailSet(sig,field+"_closed_volume",0);
+               NexusTrailSet(sig,field+"_closed_pct_actual",0);
+               NexusTrailSet(sig,field+"_remaining_volume",before);
+               NexusTrailSet(sig,field+"_remaining_pct_actual",initv>0?before/initv*100.0:0);
+               CompleteTarget(ticket,sig,pt,entry,n,false);
+               Print("NEXUS TP PARTIAL GRID-SKIPPED | signal=",sig," tp=",(string)n,
                      " before=",DoubleToString(before,8)," initial=",DoubleToString(initv,8),
-                     " reason=broker minimum volume/step");
+                     " reason=broker minimum volume/step; milestone completed");
                continue;
               }
            }
@@ -358,11 +425,18 @@ private:
             continue;
            }
 
+         double after=0.0;
+         if(PositionSelectByTicket(ticket)) after=PositionGetDouble(POSITION_VOLUME);
+         SavePartialTruth(sig,n,initv,before,after);
+
          // Target completion is a state transition. The target anchor is
          // applied only after execution is confirmed, never before.
          CompleteTarget(ticket,sig,pt,entry,n,is_final_target);
          Print("NEXUS TP COMPLETED | signal=",sig," tp=",(string)n,
-               " final=",is_final_target?"YES":"NO");
+               " final=",is_final_target?"YES":"NO",
+               " actual_closed=",DoubleToString(NexusTrailGet(sig,field+"_closed_volume",0),8),
+               " actual_closed_pct_initial=",DoubleToString(NexusTrailGet(sig,field+"_closed_pct_actual",0),2),
+               " remaining=",DoubleToString(NexusTrailGet(sig,field+"_remaining_volume",0),8));
 
          if(is_final_target || !PositionSelectByTicket(ticket)) return;
         }
@@ -394,16 +468,17 @@ private:
       if(tp>0 && ((pt==POSITION_TYPE_BUY && tp<=e)||(pt==POSITION_TYPE_SELL && tp>=e))) tp=0;
       ManualProfile(sig,code); int m=(int)NexusTrailGet(sig,"profile_mode",7);
       NexusTrailSet(sig,"initialized",1);NexusTrailSet(sig,"manual",1);NexusTrailSet(sig,"identifier",(double)identifier);NexusTrailSet(sig,"mode",m);NexusTrailSet(sig,"initial_sl",sl);NexusTrailSet(sig,"signal_entry",e);NexusTrailSet(sig,"final_tp",tp);NexusTrailSet(sig,"initial_volume",v);
+      NexusTrailSet(sig,"timeframe_code",(double)m_default_tf);
       NexusTrailSet(sig,"be_done",0);NexusTrailSet(sig,"tp1_done",0);NexusTrailSet(sig,"tp2_done",0);NexusTrailSet(sig,"has_tp1",0);NexusTrailSet(sig,"has_tp2",0);
-      NexusTrailSet(sig,"trail_last_sec",0);
+      NexusTrailSet(sig,"trail_last_sec",0);NexusTrailSet(sig,"trail_last_tick_msc",0);
       NexusTrailSet(sig,"break_even_r",NexusTrailGet(sig,"profile_be",1));NexusTrailSet(sig,"trail_step_r",NexusTrailGet(sig,"profile_step",.35));NexusTrailSet(sig,"lock_step_r",NexusTrailGet(sig,"profile_lock",.25));
       NexusTrailSet(sig,"activation_r",NexusTrailGet(sig,"profile_activation",1));NexusTrailSet(sig,"atr_period",NexusTrailGet(sig,"profile_atr_period",14));NexusTrailSet(sig,"atr_multiplier",NexusTrailGet(sig,"profile_atr_multiplier",2));
-      NexusTrailSet(sig,"swing_left",NexusTrailGet(sig,"profile_swing_left",2));NexusTrailSet(sig,"swing_right",NexusTrailGet(sig,"profile_swing_right",2));NexusTrailSet(sig,"tp1_close_pct",NexusTrailGet(sig,"profile_tp1_pct",30));NexusTrailSet(sig,"tp2_close_pct",NexusTrailGet(sig,"profile_tp2_pct",30));
+      NexusTrailSet(sig,"swing_left",NexusTrailGet(sig,"profile_swing_left",2));NexusTrailSet(sig,"swing_right",NexusTrailGet(sig,"profile_swing_right",2));NexusTrailSet(sig,"tp1_close_pct",NexusTrailGet(sig,"profile_tp1_pct",30));NexusTrailSet(sig,"tp2_close_pct",NexusTrailGet(sig,"profile_tp2_pct",30));NexusTrailSet(sig,"runner_pct",40);
      }
 
 public:
-   CNexusTrailingEngine():m_tm(NULL),m_magic(258025),m_tf(PERIOD_M1){}
-   void Configure(CNexusTradeManager *tm,const long magic,const ENUM_TIMEFRAMES tf){m_tm=tm;m_magic=magic;m_tf=tf;}
+   CNexusTrailingEngine():m_tm(NULL),m_magic(258025),m_tf(PERIOD_M1),m_default_tf(PERIOD_M1){}
+   void Configure(CNexusTradeManager *tm,const long magic,const ENUM_TIMEFRAMES tf){m_tm=tm;m_magic=magic;m_tf=tf;m_default_tf=tf;}
 
    void ManageAll(const bool manage_manual=false,const string manual_profile="NEXUS_TRAIL_07")
      {
@@ -417,13 +492,19 @@ public:
          int mode=(int)NexusTrailGet(sig,"mode",0); if(mode<1||mode>7)continue;
          m_tf=SignalTF(sig);
          string symbol=PositionGetString(POSITION_SYMBOL); ENUM_POSITION_TYPE pt=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE); double entry=PositionGetDouble(POSITION_PRICE_OPEN);
-         datetime now=TimeCurrent();
 
-         // Multi-chart safe ownership. Only one EA instance can execute
-         // TP/partial/SL management for this signal in this terminal second.
-         if(!NexusTrailClaimManageSecond(sig,now))
-            continue;
-         double risk=MathAbs(entry-NexusTrailGet(sig,"initial_sl",PositionGetDouble(POSITION_SL))); if(risk<=0)continue; double pr=R(pt,Price(symbol,pt),entry,risk);
+         MqlTick tick;
+         if(!SymbolInfoTick(symbol,tick))continue;
+         long tick_msc=(long)tick.time_msc;
+         if(tick_msc<=0)tick_msc=(long)TimeCurrent()*1000;
+
+         // Multi-chart safe ownership, now per broker tick instead of per
+         // second. Only one EA instance may manage this signal for a tick.
+         if(!NexusTrailClaimManageTick(sig,tick_msc))continue;
+
+         double risk=MathAbs(entry-NexusTrailGet(sig,"initial_sl",PositionGetDouble(POSITION_SL))); if(risk<=0)continue;
+         double px=pt==POSITION_TYPE_BUY?tick.bid:tick.ask; if(px<=0)continue;
+         double pr=R(pt,px,entry,risk);
          if(mode==1)
             Step(ticket,sig,pt,entry,risk,pr,NexusTrailGet(sig,"break_even_r",1),NexusTrailGet(sig,"trail_step_r",.5),NexusTrailGet(sig,"lock_step_r",.3));
          else if(mode==2)
@@ -442,12 +523,11 @@ public:
            {
             // TP execution is confirmed before any runner trail is allowed to
             // react to the newly reached target.
-            Partials(ticket,sig,pt,Price(symbol,pt),entry,risk);
+            Partials(ticket,sig,pt,px,entry,risk);
             if(PositionSelectByTicket(ticket) && NexusTrailGet(sig,"tp1_done",0)>0.5)
               {
                double runner_pr=R(pt,Price(symbol,pt),entry,risk);
-               StructureTrail(ticket,sig,pt,symbol,runner_pr);
-               ATRTrail(ticket,sig,pt,symbol,runner_pr);
+               RunnerTrail(ticket,sig,pt,symbol,runner_pr);
               }
            }
          else if(mode==6)
@@ -455,14 +535,13 @@ public:
          else
            {
             if(pr>=NexusTrailGet(sig,"break_even_r",1)) BE(ticket,sig,pt,entry);
-            Partials(ticket,sig,pt,Price(symbol,pt),entry,risk);
+            Partials(ticket,sig,pt,px,entry,risk);
             if(PositionSelectByTicket(ticket) && NexusTrailGet(sig,"tp1_done",0)>0.5)
               {
-               // Structure and ATR are runner-only. They never get a chance to
-               // falsely mark a target as complete and they remain monotonic.
+               // Structure is authoritative when available. ATR is used only
+               // when no valid swing structure can be found.
                double runner_pr=R(pt,Price(symbol,pt),entry,risk);
-               StructureTrail(ticket,sig,pt,symbol,runner_pr);
-               ATRTrail(ticket,sig,pt,symbol,runner_pr);
+               RunnerTrail(ticket,sig,pt,symbol,runner_pr);
               }
            }
         }
