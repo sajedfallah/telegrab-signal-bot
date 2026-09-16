@@ -53,5 +53,15 @@ def test_break_even_waits_for_broker_stop_distance_and_verifies_actual_sl():
     assert 'px-entry<dist' in TR
 
 
-def test_trailing_is_throttled_to_one_update_per_second_per_position():
-    assert 'trail_last_sec' in TR
+def test_trailing_is_atomic_per_broker_tick_not_throttled_to_one_second():
+    assert 'trail_last_tick_msc' in TR
+    assert 'GlobalVariableSetOnCondition' in TR
+    assert 'tick.time_msc' in TR
+    manage = TR.split('void ManageAll',1)[1]
+    assert 'NexusTrailClaimManageTick(sig,tick_msc)' in manage
+    assert 'NexusTrailClaimManageSecond(sig,now)' not in manage
+
+
+def test_manual_timeframe_is_frozen_to_configured_default():
+    init = TR.split('void InitManual',1)[1].split('public:',1)[0]
+    assert 'NexusTrailSet(sig,"timeframe_code",(double)m_default_tf);' in init
