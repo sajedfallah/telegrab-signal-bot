@@ -72,6 +72,12 @@ install_publication_recovery(app)
 from .autotrade.chart_delivery_guard import install_chart_delivery_guard
 install_chart_delivery_guard(app)
 
+# V33 prevents historical CLOSED/REJECTED chart jobs from being requeued as
+# repair work. The ChartAgent should see only work that the claim gate can
+# actually accept, so stale terminal signals cannot create an HTTP-409 poll loop.
+from .autotrade.chart_capture_queue_guard import install_chart_capture_queue_guard
+install_chart_capture_queue_guard(app)
+
 # A fallback publication transitions WEB_ADMIN signals from DRAFT to ACTIVE.
 # Permit only broker-confirmed, already-published ACTIVE signals with a queued
 # V24 repair job to be claimed by the screenshot-only ChartAgent. Without this
@@ -87,9 +93,9 @@ install_chart_repair_claim_runtime(app)
 from .autotrade.telegram_anchor_guard import install_telegram_anchor_guard
 install_telegram_anchor_guard(app)
 
-# V28 is the final presentation layer. Both MT5_ADMIN and WEB_ADMIN publication
-# paths are canonicalized through the same broker-truth renderer immediately
-# before Telegram publication/repair. No execution or Telegram routing changes.
+# V28/V33 presentation rule: a real staged ChartAgent/MT5 screenshot is
+# authoritative. The fresh MarketFeed renderer is fallback-only when no real MT5
+# screenshot has been staged. Execution and Telegram routing remain unchanged.
 from .autotrade.unified_signal_visual_runtime import install_unified_signal_visual
 install_unified_signal_visual(app)
 
