@@ -15,18 +15,28 @@ def _incident_payload(account: str, health: dict[str, Any]) -> tuple[str, int | 
     exhausted = list(health.get("repair_exhausted") or [])
     first = dict(exhausted[0]) if exhausted else {}
     signal_id = int(first.get("signal_id")) if first.get("signal_id") else None
-    payload = {
+    job_id = int(first.get("job_id")) if first.get("job_id") else None
+    error = str(first.get("error_text") or "")
+    code = str(first.get("code") or "")
+
+    # Incident identity deliberately excludes rolling health counters. A new
+    # unrelated failure/fallback must not make the same exhausted NX signal
+    # alert again. A changed signal/job/error/severity is a genuinely new event.
+    identity = {
         "account": str(account),
         "severity": severity,
         "signal_id": signal_id,
-        "job_id": int(first.get("job_id")) if first.get("job_id") else None,
-        "code": str(first.get("code") or ""),
-        "error": str(first.get("error_text") or ""),
+        "job_id": job_id,
+        "error": error,
+    }
+    payload = {
+        **identity,
+        "code": code,
         "failed": int((health.get("counts") or {}).get("FAILED", 0)),
         "expired": int((health.get("counts") or {}).get("EXPIRED", 0)),
         "fallback": int(health.get("fallback_publications") or 0),
     }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), signal_id, payload
 
 
