@@ -127,14 +127,16 @@ if (Test-Path $Log) {
     Write-Host $LogText
 }
 
-$CompileOk = $SummarySeen -and $ErrorCount -eq 0 -and (Test-Path $TargetEx5)
+# Release gate is intentionally strict: V35 is accepted only with a clean
+# MetaEditor build (0 errors, 0 warnings) and a generated EX5.
+$CompileOk = $SummarySeen -and $ErrorCount -eq 0 -and $WarningCount -eq 0 -and (Test-Path $TargetEx5)
 if (-not $CompileOk) {
     Write-Host "V35 COMPILE FAILED - restoring previous runtime" -ForegroundColor Red
     Copy-Item (Join-Path $BackupDir "TrailingEngine.mqh") $TargetTrail -Force
     $OldEx5 = Join-Path $BackupDir "NEXUS_AutoTrade_Core.ex5"
     if (Test-Path $OldEx5) { Copy-Item $OldEx5 $TargetEx5 -Force }
     if (-not $SummarySeen) { throw "Trailing V35 compile timed out before final compiler summary; previous runtime restored." }
-    throw "Trailing V35 compile failed with $ErrorCount errors and $WarningCount warnings; previous runtime restored."
+    throw "Trailing V35 compile rejected: $ErrorCount errors and $WarningCount warnings; previous runtime restored."
 }
 
 $Ex5Hash = (Get-FileHash $TargetEx5 -Algorithm SHA256).Hash
