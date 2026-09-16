@@ -42,6 +42,10 @@ def executable_partial(before: float, requested: float, reserve: float, minimum:
     return volume
 
 
+def midpoint(previous: float, current: float) -> float:
+    return (previous + current) / 2.0
+
+
 def test_four_target_trail07_is_30_30_milestone_final_runner():
     assert [target_close_pct(i, 4) for i in range(1, 5)] == [30.0, 30.0, 0.0, 100.0]
 
@@ -100,3 +104,22 @@ def test_broker_tick_claim_and_actual_partial_truth_are_present():
     assert "SavePartialTruth" in TRAIL
     assert 'field+"_volume_skipped"' in TRAIL
     assert 'field+"_milestone_only"' in TRAIL
+
+
+def test_tp2_and_tp3_use_half_target_stop_anchors():
+    anchor = TRAIL.split("double MilestoneStopAnchor", 1)[1].split("double TargetClosePct", 1)[0]
+    assert "return (previous+current)/2.0;" in anchor
+    complete = TRAIL.split("void CompleteTarget", 1)[1].split("void Partials", 1)[0]
+    assert "MilestoneStopAnchor(sig,n)" in complete
+    assert "MoveSL(ticket,pt,anchor)" in complete
+    assert 'field+"_sl_anchor"' in complete
+    assert "Target(sig,n-1)" not in complete
+    assert midpoint(4310.0, 4320.0) == 4315.0
+    assert midpoint(4320.0, 4330.0) == 4325.0
+    assert midpoint(4290.0, 4280.0) == 4285.0
+
+
+def test_final_target_closes_runner_without_attempting_milestone_sl():
+    complete = TRAIL.split("void CompleteTarget", 1)[1].split("void Partials", 1)[0]
+    assert "else if(!is_final && PositionSelectByTicket(ticket))" in complete
+    assert 'if(is_final) NexusTrailSet(sig,"final_tp_done",1);' in complete
