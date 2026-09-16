@@ -72,6 +72,12 @@ install_publication_recovery(app)
 from .autotrade.chart_delivery_guard import install_chart_delivery_guard
 install_chart_delivery_guard(app)
 
+# V36 replaces V24's restart-sensitive ten-minute alert timer with a durable
+# incident claim. One unchanged chart incident produces one admin alert even
+# across API restarts; a materially new incident can alert again.
+from .autotrade.chart_alert_dedup_runtime import install_chart_alert_dedup_runtime
+install_chart_alert_dedup_runtime(app)
+
 # V33 prevents historical CLOSED/REJECTED chart jobs from being requeued as
 # repair work. The ChartAgent should see only work that the claim gate can
 # actually accept, so stale terminal signals cannot create an HTTP-409 poll loop.
@@ -104,6 +110,13 @@ install_unified_signal_visual(app)
 # channel publication, preventing FREE/VIP from diverging onto different assets.
 from .autotrade.publication_consistency_runtime import install_publication_consistency
 install_publication_consistency(app)
+
+# V36 Test Lab is installed after every production route/publisher wrapper. A
+# TEST: request is bound to one explicitly configured demo MT5 account and its
+# first Telegram publication is forced to the dedicated Test Channel. Normal
+# Admin Mini App requests and production FREE/VIP routing remain untouched.
+from .autotrade.test_lab_runtime import install_test_lab_runtime
+install_test_lab_runtime(app)
 
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
