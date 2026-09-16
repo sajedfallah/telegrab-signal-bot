@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Callable
 
 from PIL import Image
@@ -33,6 +34,53 @@ def _signal_id(row: Any) -> int:
         return 0
 
 
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except Exception:
+        return default
+
+
+def _authoritative_staged_chart(row: Any) -> str | None:
+    """Return a real staged MT5 chart when it must outrank renderer fallback.
+
+    WEB_ADMIN screenshots become authoritative only after the ChartAgent result
+    endpoint has durably staged the image and changed publication_stage to
+    CHART_RECEIVED. MT5_ADMIN may stage its own source screenshot directly, so an
+    existing valid image asset from that issuer is authoritative as well.
+
+    MarketFeed-rendered fallback assets never satisfy the WEB_ADMIN
+    CHART_RECEIVED gate and therefore remain fallback-only.
+    """
+    signal_id = _signal_id(row)
+    issuer = _issuer_type(row)
+    if signal_id <= 0 or issuer not in _SUPPORTED_ISSUERS:
+        return None
+
+    stage = str(_row_value(row, "publication_stage", "") or "").strip().upper()
+    if issuer == "WEB_ADMIN" and stage != "CHART_RECEIVED":
+        return None
+
+    asset = db.get_mt5_signal_publication_asset(signal_id)
+    if not asset:
+        return None
+
+    path = Path(str(asset))
+    try:
+        if not path.is_file() or path.stat().st_size < 512:
+            return None
+        with path.open("rb") as handle:
+            magic = handle.read(8)
+    except OSError:
+        return None
+
+    if not (magic.startswith(b"\x89PNG\r\n\x1a\n") or magic.startswith(b"\xff\xd8\xff")):
+        return None
+    return str(path)
+
+
 def _clean_publication_image(chart_bytes: bytes | None, signal: dict) -> bytes:
     """Publication renderer contract: the staged chart is already final artwork.
 
@@ -62,13 +110,12 @@ def _clean_publication_image(chart_bytes: bytes | None, signal: dict) -> bytes:
 
 
 def install_unified_signal_visual(app) -> None:
-    """Make MT5 Admin and Mini App signals use the same canonical chart renderer.
+    """Use a real MT5 screenshot first and MarketFeed rendering only as fallback.
 
     The wrapper is additive and does not touch execution, receipts, Telegram
-    routing or EA behavior. Immediately before publication/repair it stages the
-    approved broker-truth image from the fresh MT5 MarketFeed. Because the core
-    publisher imports build_publication_signal_image dynamically, replacing that
-    renderer here also prevents the old decorative frame/footer from returning.
+    routing or EA behavior. A successfully staged ChartAgent/MT5 source image is
+    authoritative. Only when no such source image exists may the existing fresh
+    MT5 MarketFeed renderer stage a fallback chart.
     """
     if getattr(app.state, "nexus_unified_signal_visual_v28", False):
         return
@@ -87,25 +134,49 @@ def install_unified_signal_visual(app) -> None:
         issuer = _issuer_type(canonical)
 
         broker_result: dict[str, Any] | None = None
-        if issuer in _SUPPORTED_ISSUERS and signal_id > 0:
+        visual_source = "EXISTING_PIPELINE"
+        authoritative_path = _authoritative_staged_chart(canonical)
+
+        if authoritative_path:
+            visual_source = "MT5_CHART_AGENT" if issuer == "WEB_ADMIN" else "MT5_SOURCE_SCREENSHOT"
+            try:
+                db.add_signal_event(
+                    signal_id,
+                    "SIGNAL_VISUAL_CANONICALIZED",
+                    actor_type="BACKEND",
+                    actor_id=_row_value(canonical, "created_by"),
+                    account_number=str(_row_value(canonical, "issuer_account", "") or ""),
+                    correlation_id=str(_row_value(canonical, "code", "") or ""),
+                    payload={
+                        "style_version": _STYLE_VERSION,
+                        "issuer_type": issuer,
+                        "source": visual_source,
+                        "file_path": authoritative_path,
+                        "authoritative_mt5_screenshot": True,
+                    },
+                )
+            except Exception:
+                log.exception("failed recording authoritative visual event signal_id=%s", signal_id)
+
+        elif issuer in _SUPPORTED_ISSUERS and signal_id > 0:
             broker_result = ensure_broker_chart_asset(canonical)
             if broker_result.get("ok"):
-                # The broker renderer has staged the final PNG in the canonical
-                # DB asset slot. Ignore source-specific screenshot bytes so MT5
-                # and Mini App publication paths cannot diverge visually.
+                # There is no real staged MT5 screenshot. MarketFeed rendering is
+                # fallback-only and may stage the final PNG in the DB asset slot.
                 chart_base64 = None
+                visual_source = "MT5_MARKET_FEED_FALLBACK"
                 try:
                     db.add_signal_event(
                         signal_id,
                         "SIGNAL_VISUAL_CANONICALIZED",
                         actor_type="BACKEND",
-                        actor_id=canonical["created_by"],
-                        account_number=str(canonical["issuer_account"] or ""),
-                        correlation_id=str(canonical["code"]),
+                        actor_id=_row_value(canonical, "created_by"),
+                        account_number=str(_row_value(canonical, "issuer_account", "") or ""),
+                        correlation_id=str(_row_value(canonical, "code", "") or ""),
                         payload={
                             "style_version": _STYLE_VERSION,
                             "issuer_type": issuer,
-                            "source": "MT5_MARKET_FEED",
+                            "source": visual_source,
                             "file_path": broker_result.get("file_path"),
                             "age_seconds": broker_result.get("age_seconds"),
                             "anchor_applied": broker_result.get("anchor_applied"),
@@ -114,7 +185,7 @@ def install_unified_signal_visual(app) -> None:
                         },
                     )
                 except Exception:
-                    log.exception("failed recording canonical visual event signal_id=%s", signal_id)
+                    log.exception("failed recording fallback visual event signal_id=%s", signal_id)
             else:
                 # Reliability stays fail-open for the visual layer only: if the
                 # feed is temporarily unavailable, the existing chart pipeline
@@ -124,15 +195,15 @@ def install_unified_signal_visual(app) -> None:
                         signal_id,
                         "SIGNAL_VISUAL_CANONICALIZE_FAILED",
                         actor_type="BACKEND",
-                        actor_id=canonical["created_by"],
-                        account_number=str(canonical["issuer_account"] or ""),
-                        correlation_id=str(canonical["code"]),
+                        actor_id=_row_value(canonical, "created_by"),
+                        account_number=str(_row_value(canonical, "issuer_account", "") or ""),
+                        correlation_id=str(_row_value(canonical, "code", "") or ""),
                         result="FAILED",
                         reason=str(broker_result.get("reason") or "canonical renderer unavailable")[:1000],
                         payload={
                             "style_version": _STYLE_VERSION,
                             "issuer_type": issuer,
-                            "source": "MT5_MARKET_FEED",
+                            "source": "MT5_MARKET_FEED_FALLBACK",
                         },
                     )
                 except Exception:
@@ -145,7 +216,7 @@ def install_unified_signal_visual(app) -> None:
         )
         if isinstance(result, dict):
             result["visual_style_version"] = _STYLE_VERSION
-            result["visual_source"] = "MT5_MARKET_FEED" if broker_result and broker_result.get("ok") else "EXISTING_PIPELINE"
+            result["visual_source"] = visual_source
         return result
 
     api_mod._publish_mt5_admin_signal_async = unified_publish
