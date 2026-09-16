@@ -209,6 +209,16 @@ private:
       for(int n=1;n<=10;n++) if(TargetEnabled(sig,n)) count=n;
       return count;
      }
+   double MilestoneStopAnchor(const string sig,const int n)
+     {
+      if(n<2)return 0.0;
+      double previous=Target(sig,n-1),current=Target(sig,n);
+      if(previous<=0||current<=0)return 0.0;
+      // Lock at the geometric midpoint between the previous and current TP:
+      // TP2 -> TP1.5, TP3 -> TP2.5, etc. MoveSL remains monotonic, so a
+      // structure/ATR stop that is already better is never moved backward.
+      return (previous+current)/2.0;
+     }
    double TargetClosePct(const string sig,const int n,const int count)
      {
       // T05/T07 contract: percentages are shares of ORIGINAL volume.
@@ -285,7 +295,18 @@ private:
       NexusTrailSet(sig,field+"_pending_before",0);
       NexusTrailSet(sig,field+"_pending_volume",0);
       if(n==1) BE(ticket,sig,pt,entry);
-      else if(PositionSelectByTicket(ticket)) MoveSL(ticket,pt,Target(sig,n-1));
+      else if(!is_final && PositionSelectByTicket(ticket))
+        {
+         double anchor=MilestoneStopAnchor(sig,n);
+         if(anchor>0)
+           {
+            NexusTrailSet(sig,field+"_sl_anchor",anchor);
+            bool moved=MoveSL(ticket,pt,anchor);
+            Print("NEXUS TP MILESTONE SL | signal=",sig," tp=",(string)n,
+                  " anchor=",DoubleToString(anchor,8),
+                  " moved=",moved?"YES":"NO_OR_ALREADY_BETTER");
+           }
+        }
       if(is_final) NexusTrailSet(sig,"final_tp_done",1);
       GlobalVariablesFlush();
      }
