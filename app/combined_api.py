@@ -99,6 +99,12 @@ install_telegram_anchor_guard(app)
 from .autotrade.unified_signal_visual_runtime import install_unified_signal_visual
 install_unified_signal_visual(app)
 
+# V34 is the outermost publication wrapper. It serializes concurrent recovery
+# tasks per signal and re-stages the completed ChartAgent image before BOTH
+# channel publication, preventing FREE/VIP from diverging onto different assets.
+from .autotrade.publication_consistency_runtime import install_publication_consistency
+install_publication_consistency(app)
+
 MINIAPP_DIR = Path(__file__).resolve().parent.parent / "miniapp"
 if MINIAPP_DIR.is_dir():
     app.mount("/miniapp", StaticFiles(directory=str(MINIAPP_DIR), html=True), name="miniapp")
