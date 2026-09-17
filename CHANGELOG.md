@@ -8,7 +8,7 @@
 **دامنه:** MT5 ICT Expert / Position Management  
 **NEXUS CORE Backend:** بدون تغییر  
 **Issue:** #47  
-**Pull Request:** در زمان ایجاد این فایل هنوز تخصیص داده نشده و بعد از بازشدن PR به‌روزرسانی می‌شود.
+**Pull Request:** #48
 
 ### Added
 
@@ -158,5 +158,6 @@ Volume-step examples با `min=0.01`, `step=0.01`:
 ### Related
 
 - Issue #47 — مستندسازی و Release governance برای V22.31.
+- PR #48 — مستندات release و runbook این نسخه.
 - Source behavior reference: `app/autotrade/trailing_profiles.py` و `mt5/NEXUS_AutoTrade/Include/TrailingEngine.mqh`.
 - Execution-truth reference: `mt5/NEXUS_AutoTrade/Include/TradeManager.mqh` و `tests/test_v063_trailing_execution_truth.py`.
