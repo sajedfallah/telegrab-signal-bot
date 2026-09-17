@@ -37,14 +37,17 @@ def test_supervisor_waits_on_specialist_conflict():
     assert d.state == WorkflowState.WAIT
 
 
-def test_supervisor_arms_when_context_missing():
+def test_supervisor_waits_when_required_context_missing():
     s = _snap()
     d = supervise(s, (_a(s,"nexus-ict-v1",Direction.LONG), _a(s,"nexus-macro-v1",Direction.NEUTRAL,("structured_macro_context",))))
-    assert d.state == WorkflowState.ARMED
+    assert d.state == WorkflowState.WAIT
+    assert d.direction == Direction.NEUTRAL
 
 
-def test_supervisor_candidate_requires_no_conflict_or_missing_context():
+def test_supervisor_arms_but_never_mints_candidate_from_original_snapshot():
     s = _snap()
     d = supervise(s, (_a(s,"nexus-ict-v1",Direction.LONG), _a(s,"nexus-macro-v1",Direction.LONG), _a(s,"nexus-news-v1",Direction.NEUTRAL)))
-    assert d.state == WorkflowState.SIGNAL_CANDIDATE
+    assert d.state == WorkflowState.ARMED
     assert d.direction == Direction.LONG
+    assert d.state != WorkflowState.SIGNAL_CANDIDATE
+    assert "fresh ICT confirmation" in d.required_confirmation[0]
