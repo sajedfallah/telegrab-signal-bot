@@ -1,3 +1,33 @@
+# NEXUS
+
+## NEXUS ICT Expert V22.31 — NEXUS TRAIL 07
+
+نسخه Companion Expert فعلی برای مدیریت Position در MT5: **V22.31** با Profile رسمی **`NEXUS_TRAIL_07 / NEXUS Smart Hybrid v2`**.
+
+رفتار اصلی:
+
+- Break Even دقیق روی Entry در `1R`.
+- TP1: بستن `30%` از حجم اولیه پس از تأیید واقعی Execution.
+- TP2: بستن `30%` دیگر از حجم اولیه پس از TP1 تأییدشده.
+- Remaining Volume اسماً `40%` و مدیریت Runner با `Market Structure 2/2 + ATR(14)×2` بعد از TP1.
+- SL فقط در جهت بهبود حرکت می‌کند و هرگز عقب نمی‌رود.
+- Final TP/TP3 تمام Remaining Volume را می‌بندد.
+- Partial Close ناموفق Stage را Done نمی‌کند و با backoff `1/2/4/8/16/30s` Retry می‌شود.
+- Safetyهای execution truth، ownership چند Instance، broker min/step و Stops/Freeze حفظ شده‌اند.
+
+**این انتشار Backend/DB/API breaking change ندارد.** NEXUS CORE و AutoTrade API فعلی بدون Migration باقی می‌مانند.
+
+مستندات:
+
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
+- Release فنی و عملیاتی کامل: [`docs/releases/NEXUS_ICT_V22_31_FA.md`](docs/releases/NEXUS_ICT_V22_31_FA.md)
+- Runbook استقرار، تست و Rollback: [`docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md`](docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md)
+- Tracking issue: #47
+
+> وضعیت QA: Static integration checks پاس شده‌اند؛ Compile واقعی MetaEditor و Demo forward-test باید قبل از Production ثبت شوند.
+
+---
+
 ## v7.1.0 — Current Release
 
 - قیمت سرویس‌ها فقط بر اساس USDT: VIP SIGNAL و AUTO TRADE VIP
