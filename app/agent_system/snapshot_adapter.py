@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
+from typing import Any, Iterator
 
 from .. import db
 from ..autotrade.symbol_registry import normalize_symbol
@@ -14,6 +18,7 @@ _TIMEFRAMES = ("D1", "H1", "M15", "M5")
 _REQUIRED_TIMEFRAMES = ("H1", "M15", "M5")
 _QUOTE_MAX_AGE_MS = 15_000
 _CANDLE_CAPTURE_MAX_AGE_MS = 30_000
+_SHADOW_DB_ENV = "NEXUS_AGENT_MARKET_DB_PATH"
 
 
 def _parse_iso(value: str | None) -> datetime | None:
@@ -50,9 +55,35 @@ def _snapshot_id(account: str, symbol: str, as_of: datetime, quote_time_ms: int 
     return "snap-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
 
 
+@contextmanager
+def _market_conn() -> Iterator[sqlite3.Connection]:
+    """Open the configured shadow market DB read-only, or use the app DB normally.
+
+    NEXUS_AGENT_MARKET_DB_PATH is intentionally shadow-only. When present we
+    never initialize schemas and SQLite itself enforces mode=ro.
+    """
+    configured = os.getenv(_SHADOW_DB_ENV, "").strip()
+    if not configured:
+        init_market_candle_schema()
+        with db.conn() as con:
+            yield con
+        return
+
+    path = Path(configured).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"shadow market database not found: {path}")
+    con = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True, timeout=10.0)
+    con.row_factory = sqlite3.Row
+    con.execute("PRAGMA query_only = ON")
+    con.execute("PRAGMA busy_timeout = 10000")
+    try:
+        yield con
+    finally:
+        con.close()
+
+
 def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, now_utc: datetime | None = None) -> MarketSnapshot:
-    """Build an immutable, read-only snapshot from existing MT5 market tables."""
-    init_market_candle_schema()
+    """Build an immutable snapshot from existing MT5 market tables."""
     now = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
     canonical = normalize_symbol(symbol)
     account = str(account).strip()
@@ -62,7 +93,7 @@ def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, no
     bid = ask = None
     quote_time_ms: int | None = None
     freshness_candidates: list[int] = []
-    with db.conn() as con:
+    with _market_conn() as con:
         quote = con.execute("SELECT bid,ask,quote_time_ms,captured_at FROM mt5_market_quotes WHERE account_number=? AND symbol=? LIMIT 1", (account, canonical)).fetchone()
         if quote:
             raw_bid, raw_ask = float(quote["bid"]), float(quote["ask"])
