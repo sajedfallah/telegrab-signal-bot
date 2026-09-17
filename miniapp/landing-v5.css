@@ -22,8 +22,9 @@ body.landing-active > .app-shell {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100vw;
   height: 100dvh;
   overflow: hidden;
@@ -38,9 +39,13 @@ body.landing-active > .app-shell {
   display: none !important;
 }
 
+/* Keep the approved 480x852 artwork fully visible on every Telegram viewport. */
 .nexus-landing-poster-frame {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 0 0 auto;
+  width: min(100vw, 56.338dvh);
+  height: min(100dvh, 177.5vw);
+  aspect-ratio: 480 / 852;
   overflow: hidden;
   background: var(--landing-bg);
 }
@@ -51,25 +56,29 @@ body.landing-active > .app-shell {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: 50% 50%;
+  opacity: 0;
   pointer-events: none;
   -webkit-user-drag: none;
+  transform: translateZ(0);
+  transition: opacity 120ms ease;
 }
 
-/*
- * The approved artwork already contains the visible CTA. This real HTML button
- * sits directly over that artwork so the visual remains pixel-clean while the
- * landing still has a native, accessible tap target.
- */
+.nexus-landing-poster.is-ready,
+.nexus-landing-poster.is-fallback {
+  opacity: 1;
+}
+
+/* The visible CTA is part of the approved artwork. This is only its native hit target. */
 .nexus-landing-enter {
   position: absolute;
   z-index: 2;
-  top: 76.8%;
-  left: 11%;
-  right: 11%;
-  height: 10.2%;
-  min-height: 54px;
+  top: 75.2%;
+  left: 31.5%;
+  right: 31.5%;
+  height: 5.8%;
+  min-height: 44px;
   padding: 0;
   border: 0;
   border-radius: 999px;
@@ -89,7 +98,7 @@ body.landing-active > .app-shell {
 
 .nexus-landing-enter:focus-visible {
   outline: 2px solid rgba(77, 239, 224, 0.9);
-  outline-offset: -4px;
+  outline-offset: -3px;
 }
 
 .nexus-landing-enter:disabled {
@@ -110,33 +119,20 @@ body.landing-active > .app-shell {
 
 .nexus-landing.is-leaving {
   opacity: 0;
-  transform: scale(1.006);
+  transform: scale(1.003);
   pointer-events: none;
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
-/* Very tall/narrow Telegram viewports crop the poster horizontally. The CTA
- * remains centered, so widen the invisible hit target slightly for that case. */
-@media (max-aspect-ratio: 1 / 2) {
-  .nexus-landing-enter {
-    left: 7%;
-    right: 7%;
-  }
-}
-
 @media (orientation: landscape) {
-  .nexus-landing-poster {
-    object-fit: contain;
-  }
-
   .nexus-landing-enter {
-    left: 30%;
-    right: 30%;
+    min-height: 36px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nexus-landing {
+  .nexus-landing,
+  .nexus-landing-poster {
     transition: none !important;
   }
 }
