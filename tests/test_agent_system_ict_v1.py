@@ -12,6 +12,14 @@ def _trend_rows(direction: str, count: int = 50):
     return rows
 
 
+def _daily_rows(count: int = 20):
+    rows = _trend_rows("up", count)
+    # Give the last ten closed D1 candles real wicks so the NEXUS Daily
+    # Quadrant engine has deterministic context without creating an entry.
+    rows[-3] = {**rows[-3], "high": rows[-3]["high"] + 1.5}
+    return rows
+
+
 def _bull_trigger_rows():
     rows = _trend_rows("up")
     prior_low = min(x["low"] for x in rows[-14:-2])
@@ -21,7 +29,8 @@ def _bull_trigger_rows():
     return rows
 
 
-def _snapshot(h1=None, m15=None, m5=None, **overrides):
+def _snapshot(d1=None, h1=None, m15=None, m5=None, **overrides):
+    d1 = d1 or _daily_rows()
     h1 = h1 or _trend_rows("up")
     m15 = m15 or _trend_rows("up")
     m5 = m5 or _bull_trigger_rows()
@@ -30,7 +39,7 @@ def _snapshot(h1=None, m15=None, m5=None, **overrides):
         "symbol": "XAUUSD",
         "as_of": datetime(2026, 9, 17, 8, 0, tzinfo=timezone.utc),
         "source": "MT5_MARKET_FEED",
-        "timeframes": {"H1": tuple(h1), "M15": tuple(m15), "M5": tuple(m5)},
+        "timeframes": {"D1": tuple(d1), "H1": tuple(h1), "M15": tuple(m15), "M5": tuple(m5)},
         "bid": 114.7, "ask": 114.9, "session": "LONDON", "data_freshness_ms": 1000,
     }
     data.update(overrides)
@@ -42,6 +51,7 @@ def test_ict_long_requires_h1_and_m5_alignment():
     assert result.direction == Direction.LONG
     assert result.confidence is None
     assert any("5M sell-side" in x for x in result.evidence)
+    assert any("Daily Quadrant" in x for x in result.evidence)
 
 
 def test_ict_does_not_force_trade_without_trigger():
@@ -56,6 +66,13 @@ def test_ict_fails_closed_on_stale_snapshot():
     assert "stale_market_data" in result.missing_data
 
 
-def test_ict_does_not_treat_quadrant_as_entry():
-    result = assess_ict(_snapshot())
-    assert any("Quadrant" in x and "not yet attached" in x for x in result.evidence)
+def test_ict_fails_closed_without_daily_context():
+    result = assess_ict(_snapshot(timeframes={"H1": tuple(_trend_rows("up")), "M15": tuple(_trend_rows("up")), "M5": tuple(_bull_trigger_rows())}))
+    assert result.direction == Direction.NEUTRAL
+    assert "candles:D1" in result.missing_data
+
+
+def test_quadrant_context_alone_does_not_create_entry():
+    result = assess_ict(_snapshot(m5=_trend_rows("up")))
+    assert any("Daily Quadrant" in x for x in result.evidence)
+    assert result.direction == Direction.NEUTRAL
