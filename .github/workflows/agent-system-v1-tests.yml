@@ -1,0 +1,26 @@
+name: Agent System V1 Tests
+
+on:
+  push:
+    branches:
+      - feature/nexus-agent-system-v1
+    paths:
+      - 'app/agent_system/**'
+      - 'tests/test_agent_system_*.py'
+      - '.github/workflows/agent-system-v1-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  agent-system-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install project dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Run isolated Agent System V1 tests
+        run: python -m pytest -q tests/test_agent_system_contracts_v1.py tests/test_agent_system_scanner_v1.py tests/test_agent_system_ict_v1.py tests/test_agent_system_supervisor_v1.py tests/test_agent_system_risk_reverify_v1.py tests/test_agent_system_orchestrator_v1.py
