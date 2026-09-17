@@ -75,23 +75,54 @@ def run_cycle(
     return tuple(output)
 
 
-def _report_records(records: tuple[dict[str, object], ...], reporter: TelegramShadowReporter | None) -> None:
+def _decision_fingerprint(record: dict[str, object]) -> tuple[object, ...]:
+    """Stable decision identity; intentionally excludes snapshot_id/time noise."""
+    return (
+        record.get("scan"),
+        record.get("supervisor"),
+        record.get("final"),
+        record.get("direction"),
+        record.get("risk_allowed"),
+        tuple(str(x) for x in (record.get("risk_blocks") or [])),
+        record.get("error"),
+    )
+
+
+def _report_records(
+    records: tuple[dict[str, object], ...],
+    reporter: TelegramShadowReporter | None,
+    *,
+    change_only: bool = False,
+    last_sent: dict[str, tuple[object, ...]] | None = None,
+) -> None:
     if reporter is None:
         return
+    state = last_sent if last_sent is not None else {}
     for record in records:
+        symbol = str(record.get("symbol") or "UNKNOWN")
+        fingerprint = _decision_fingerprint(record)
+        if change_only and state.get(symbol) == fingerprint:
+            continue
         try:
             reporter.send_text(format_shadow_record(record))
+            state[symbol] = fingerprint
         except Exception as exc:
             # Telegram reporting is non-authoritative. A reporting outage must
             # never change market decisions or create an execution path.
-            print(json.dumps({"telegram_report_error": f"{type(exc).__name__}: {exc}", "symbol": record.get("symbol")}, ensure_ascii=False))
+            print(json.dumps({"telegram_report_error": f"{type(exc).__name__}: {exc}", "symbol": symbol}, ensure_ascii=False))
 
 
-def run_forever(config: ShadowRunnerConfig, reporter: TelegramShadowReporter | None = None) -> None:
+def run_forever(
+    config: ShadowRunnerConfig,
+    reporter: TelegramShadowReporter | None = None,
+    *,
+    change_only: bool = False,
+) -> None:
+    last_sent: dict[str, tuple[object, ...]] = {}
     while True:
         records = run_cycle(config)
         print(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "records": records}, ensure_ascii=False))
-        _report_records(records, reporter)
+        _report_records(records, reporter, change_only=change_only, last_sent=last_sent)
         time.sleep(config.interval_seconds)
 
 
@@ -120,8 +151,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--journal-dir", default="data/agent_shadow", help="Isolated JSONL journal root")
     parser.add_argument("--once", action="store_true", help="Run one observation cycle and exit")
     parser.add_argument("--telegram", action="store_true", help="Send observation results only to the isolated Agent Test Bot")
+    parser.add_argument("--telegram-changes-only", action="store_true", help="In continuous mode, send Telegram only when the decision fingerprint changes")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
+    if args.telegram_changes_only and not args.telegram:
+        parser.error("--telegram-changes-only requires --telegram")
     config = ShadowRunnerConfig(account=args.account, symbols=args.symbols, interval_seconds=args.interval, journal_dir=Path(args.journal_dir), risk_policy=None)
     reporter = _reporter_from_env(args.telegram)
     if args.once:
@@ -129,7 +163,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         print(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "records": records}, ensure_ascii=False))
         _report_records(records, reporter)
         return 0
-    run_forever(config, reporter)
+    run_forever(config, reporter, change_only=args.telegram_changes_only)
     return 0
 
 
