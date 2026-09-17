@@ -2,6 +2,7 @@
   const landing = document.getElementById('nexusLanding');
   const enterButton = document.getElementById('enterNexus');
   const appShell = document.querySelector('.app-shell');
+  const poster = document.querySelector('.nexus-landing-poster');
 
   if (!landing || !enterButton || !appShell) {
     document.body.classList.remove('landing-active');
@@ -9,6 +10,18 @@
   }
 
   let entered = false;
+
+  // Reveal the poster after it has loaded. Handle cached images too.
+  if (poster) {
+    const revealPoster = () => poster.classList.add('is-ready');
+    const revealFallback = () => poster.classList.add('is-fallback');
+    poster.addEventListener('load', revealPoster, { once: true });
+    poster.addEventListener('error', revealFallback, { once: true });
+    if (poster.complete) {
+      if (poster.naturalWidth > 0) revealPoster();
+      else revealFallback();
+    }
+  }
 
   const showLanding = () => {
     entered = false;
