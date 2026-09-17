@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.agent_system.contracts import MarketSnapshot, WorkflowState
 from app.agent_system.orchestrator import run_shadow
+from app.agent_system.risk_gate import RiskPolicy
 
 
 def _rows(count=50, trend=True):
@@ -12,41 +13,47 @@ def _rows(count=50, trend=True):
     return out
 
 
-def _flat_rows(count=50):
-    return [{"time":1700000000+i*300,"open":100.0,"high":101.5,"low":99.5,"close":100.0,"tick_volume":10} for i in range(count)]
-
-
 def _snapshot(seq=0, watch=False, news=True):
     h1=_rows(); m15=_rows(); m5=_rows(); d1=_rows(20)
     if watch:
         pl=min(x["low"] for x in m5[-14:-2]); m5[-2]={**m5[-2],"low":pl-1,"close":pl+.1}; br=max(x["high"] for x in m5[-7:-1])+.5; m5[-1]={**m5[-1],"high":br+.2,"close":br}
+    else:
+        m15=[{**x,"high":130.0,"low":90.0,"open":110.0,"close":110.0} for x in m15]
+        m5=[{**x,"high":111.0,"low":109.0,"open":110.0,"close":110.0} for x in m5]
     ctx=({"kind":"macro","summary":"macro neutral","direction":"NEUTRAL"},{"kind":"news","title":"news neutral","direction":"NEUTRAL"}) if news else ()
     return MarketSnapshot(snapshot_id=f"shadow-snapshot-{seq:04d}",symbol="XAUUSD",as_of=datetime(2026,9,17,8,0,tzinfo=timezone.utc)+timedelta(seconds=seq),source="TEST",timeframes={"D1":tuple(d1),"H1":tuple(h1),"M15":tuple(m15),"M5":tuple(m5)},bid=114.7+seq*.01,ask=114.9+seq*.01,session="LONDON",news_context=ctx,data_freshness_ms=1000)
 
 
 def test_shadow_stops_before_specialists_when_scanner_waits():
-    def builder(a,s):
-        snap=_snapshot()
-        flat=tuple(_flat_rows())
-        return snap.model_copy(update={"timeframes": {"D1": snap.timeframes["D1"], "H1": flat, "M15": flat, "M5": flat}, "bid":100.49, "ask":100.51})
+    def builder(a,s): return _snapshot()
     r=run_shadow("1","XAUUSD",snapshot_builder=builder)
     assert r.scan.state==WorkflowState.WAIT
     assert r.assessments==() and r.fresh_snapshot is None and r.risk is None
 
 
-def test_shadow_runs_candidate_through_fresh_snapshot_and_risk():
+def test_shadow_arms_then_fresh_reverify_promotes_candidate_and_runs_risk():
     calls=[]
     def builder(a,s):
         calls.append(1); return _snapshot(len(calls),watch=True,news=True)
-    r=run_shadow("1","XAUUSD",proposed_rr=2.0,snapshot_builder=builder)
+    r=run_shadow("1","XAUUSD",proposed_rr=2.0,risk_policy=RiskPolicy(min_rr=1.5),snapshot_builder=builder)
     assert len(calls)==2
-    assert r.supervisor.state==WorkflowState.SIGNAL_CANDIDATE
+    assert r.supervisor.state==WorkflowState.ARMED
     assert r.final_decision.state==WorkflowState.SIGNAL_CANDIDATE
     assert r.risk is not None and r.risk.allowed
 
 
-def test_shadow_arms_instead_of_candidate_when_context_missing():
-    def builder(a,s): return _snapshot(1,watch=True,news=False)
+def test_shadow_fails_closed_when_risk_threshold_policy_is_missing():
+    calls=[]
+    def builder(a,s):
+        calls.append(1); return _snapshot(len(calls),watch=True,news=True)
     r=run_shadow("1","XAUUSD",proposed_rr=2.0,snapshot_builder=builder)
-    assert r.supervisor.state==WorkflowState.ARMED
+    assert r.final_decision.state==WorkflowState.SIGNAL_CANDIDATE
+    assert r.risk is not None and not r.risk.allowed
+    assert "risk_policy_missing:min_rr" in r.risk.hard_blocks
+
+
+def test_shadow_waits_without_fresh_snapshot_when_required_context_missing():
+    def builder(a,s): return _snapshot(1,watch=True,news=False)
+    r=run_shadow("1","XAUUSD",proposed_rr=2.0,risk_policy=RiskPolicy(min_rr=1.5),snapshot_builder=builder)
+    assert r.supervisor.state==WorkflowState.WAIT
     assert r.fresh_snapshot is None and r.risk is None
