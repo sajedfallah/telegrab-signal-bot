@@ -3,7 +3,7 @@ from pathlib import Path
 from app.agent_system.contracts import Direction, MarketSnapshot, SupervisorDecision, WorkflowState
 from app.agent_system.orchestrator import ShadowRunResult
 from app.agent_system.scanner import ScanDecision
-from app.agent_system.shadow_runner import ShadowRunnerConfig, run_cycle
+from app.agent_system.shadow_runner import ShadowRunnerConfig, _report_records, run_cycle
 
 
 def _result(symbol: str) -> ShadowRunResult:
@@ -37,3 +37,23 @@ def test_shadow_runner_rejects_unsafe_fast_loop():
         assert "interval_seconds" in str(exc)
     else:
         raise AssertionError("expected interval validation")
+
+
+def test_change_only_reporting_suppresses_identical_decisions():
+    class Reporter:
+        def __init__(self):
+            self.messages=[]
+        def send_text(self,text):
+            self.messages.append(text)
+
+    reporter=Reporter()
+    state={}
+    first=({"symbol":"XAUUSD","snapshot_id":"snap-1","scan":"WAIT","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","risk_allowed":None,"risk_blocks":[]},)
+    second=({"symbol":"XAUUSD","snapshot_id":"snap-2","scan":"WAIT","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","risk_allowed":None,"risk_blocks":[]},)
+    changed=({"symbol":"XAUUSD","snapshot_id":"snap-3","scan":"ARMED","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","risk_allowed":None,"risk_blocks":[]},)
+
+    _report_records(first,reporter,change_only=True,last_sent=state)
+    _report_records(second,reporter,change_only=True,last_sent=state)
+    assert len(reporter.messages)==1
+    _report_records(changed,reporter,change_only=True,last_sent=state)
+    assert len(reporter.messages)==2
