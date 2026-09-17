@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from typing import Callable, Iterable
 from .contracts import WorkflowState
 from .orchestrator import ShadowRunResult, run_shadow
 from .risk_gate import RiskPolicy
+from .telegram_reporter import TelegramShadowReporter, format_shadow_record
 
 
 DEFAULT_SYMBOLS = ("XAUUSD", "US30", "BTC", "SOL")
@@ -57,11 +59,7 @@ def run_cycle(
     *,
     runner: Callable[..., ShadowRunResult] = run_shadow,
 ) -> tuple[dict[str, object], ...]:
-    """Run one read-only observation cycle for all configured symbols.
-
-    Each symbol is isolated: one bad/missing market feed cannot stop the others.
-    Errors are returned as observation records and never converted into trades.
-    """
+    """Run one read-only observation cycle for all configured symbols."""
     output: list[dict[str, object]] = []
     for symbol in config.symbols:
         try:
@@ -73,21 +71,27 @@ def run_cycle(
             )
             output.append(_summary(result))
         except Exception as exc:
-            output.append(
-                {
-                    "symbol": symbol,
-                    "final": WorkflowState.NO_TRADE.value,
-                    "error": f"{type(exc).__name__}: {exc}",
-                }
-            )
+            output.append({"symbol": symbol, "final": WorkflowState.NO_TRADE.value, "error": f"{type(exc).__name__}: {exc}"})
     return tuple(output)
 
 
-def run_forever(config: ShadowRunnerConfig) -> None:
-    """Continuously observe. This function has no Telegram or execution hooks."""
+def _report_records(records: tuple[dict[str, object], ...], reporter: TelegramShadowReporter | None) -> None:
+    if reporter is None:
+        return
+    for record in records:
+        try:
+            reporter.send_text(format_shadow_record(record))
+        except Exception as exc:
+            # Telegram reporting is non-authoritative. A reporting outage must
+            # never change market decisions or create an execution path.
+            print(json.dumps({"telegram_report_error": f"{type(exc).__name__}: {exc}", "symbol": record.get("symbol")}, ensure_ascii=False))
+
+
+def run_forever(config: ShadowRunnerConfig, reporter: TelegramShadowReporter | None = None) -> None:
     while True:
         records = run_cycle(config)
         print(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "records": records}, ensure_ascii=False))
+        _report_records(records, reporter)
         time.sleep(config.interval_seconds)
 
 
@@ -98,6 +102,16 @@ def _symbols(value: str) -> tuple[str, ...]:
     return items
 
 
+def _reporter_from_env(enabled: bool) -> TelegramShadowReporter | None:
+    if not enabled:
+        return None
+    token = os.getenv("NEXUS_AGENT_TEST_BOT_TOKEN", "").strip()
+    chat_id = os.getenv("NEXUS_AGENT_TEST_CHAT_ID", "").strip()
+    if not token or not chat_id:
+        raise RuntimeError("Telegram test reporting requires NEXUS_AGENT_TEST_BOT_TOKEN and NEXUS_AGENT_TEST_CHAT_ID")
+    return TelegramShadowReporter(token, chat_id)
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="NEXUS Agent System V1 observation-only shadow runner")
     parser.add_argument("--account", required=True, help="Existing MT5 market-feed account number")
@@ -105,19 +119,17 @@ def main(argv: Iterable[str] | None = None) -> int:
     parser.add_argument("--interval", type=int, default=60, help="Seconds between observation cycles")
     parser.add_argument("--journal-dir", default="data/agent_shadow", help="Isolated JSONL journal root")
     parser.add_argument("--once", action="store_true", help="Run one observation cycle and exit")
+    parser.add_argument("--telegram", action="store_true", help="Send observation results only to the isolated Agent Test Bot")
     args = parser.parse_args(list(argv) if argv is not None else None)
 
-    config = ShadowRunnerConfig(
-        account=args.account,
-        symbols=args.symbols,
-        interval_seconds=args.interval,
-        journal_dir=Path(args.journal_dir),
-        risk_policy=None,
-    )
+    config = ShadowRunnerConfig(account=args.account, symbols=args.symbols, interval_seconds=args.interval, journal_dir=Path(args.journal_dir), risk_policy=None)
+    reporter = _reporter_from_env(args.telegram)
     if args.once:
-        print(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "records": run_cycle(config)}, ensure_ascii=False))
+        records = run_cycle(config)
+        print(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "records": records}, ensure_ascii=False))
+        _report_records(records, reporter)
         return 0
-    run_forever(config)
+    run_forever(config, reporter)
     return 0
 
 
