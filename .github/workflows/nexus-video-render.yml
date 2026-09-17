@@ -1,0 +1,48 @@
+name: NEXUS Video Render
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: video/package-lock.json
+
+      - name: Install dependencies
+        working-directory: video
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium dependencies
+        working-directory: video
+        run: npx remotion browser ensure
+
+      - name: Render MP4
+        working-directory: video
+        run: npm run render
+
+      - name: Render poster
+        working-directory: video
+        run: npm run still
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-launch-video-v1
+          path: |
+            video/out/nexus-launch-v1.mp4
+            video/out/nexus-launch-v1-poster.png
+          if-no-files-found: error
+          retention-days: 14
