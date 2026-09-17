@@ -10,7 +10,8 @@ from ..market_candles import init_market_candle_schema
 from .contracts import MarketSnapshot
 
 
-_TIMEFRAMES = ("H1", "M15", "M5")
+_TIMEFRAMES = ("D1", "H1", "M15", "M5")
+_REQUIRED_TIMEFRAMES = ("H1", "M15", "M5")
 _QUOTE_MAX_AGE_MS = 15_000
 _CANDLE_CAPTURE_MAX_AGE_MS = 30_000
 
@@ -50,33 +51,21 @@ def _snapshot_id(account: str, symbol: str, as_of: datetime, quote_time_ms: int 
 
 
 def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, now_utc: datetime | None = None) -> MarketSnapshot:
-    """Build an immutable, read-only snapshot from the existing MT5 market tables.
-
-    This adapter never creates prices, calls MT5, publishes messages, or mutates
-    trading state. Missing/stale inputs are recorded explicitly so downstream
-    scanner/risk logic can fail closed.
-    """
+    """Build an immutable, read-only snapshot from existing MT5 market tables."""
     init_market_candle_schema()
     now = (now_utc or datetime.now(timezone.utc)).astimezone(timezone.utc)
     canonical = normalize_symbol(symbol)
     account = str(account).strip()
     if not account:
         raise ValueError("account is required")
-
     missing: list[str] = []
     bid = ask = None
     quote_time_ms: int | None = None
     freshness_candidates: list[int] = []
-
     with db.conn() as con:
-        quote = con.execute(
-            """SELECT bid,ask,quote_time_ms,captured_at FROM mt5_market_quotes
-               WHERE account_number=? AND symbol=? LIMIT 1""",
-            (account, canonical),
-        ).fetchone()
+        quote = con.execute("SELECT bid,ask,quote_time_ms,captured_at FROM mt5_market_quotes WHERE account_number=? AND symbol=? LIMIT 1", (account, canonical)).fetchone()
         if quote:
-            raw_bid = float(quote["bid"])
-            raw_ask = float(quote["ask"])
+            raw_bid, raw_ask = float(quote["bid"]), float(quote["ask"])
             quote_time_ms = int(quote["quote_time_ms"])
             capture_age = _age_ms(_parse_iso(str(quote["captured_at"] or "")), now)
             tick_age = max(0, int(now.timestamp() * 1000) - quote_time_ms)
@@ -87,46 +76,25 @@ def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, no
                 missing.append("quote")
         else:
             missing.append("quote")
-
         timeframes: dict[str, tuple[dict[str, Any], ...]] = {}
         for timeframe in _TIMEFRAMES:
-            rows = con.execute(
-                """SELECT bar_time,open,high,low,close,tick_volume,captured_at
-                   FROM mt5_market_candles
-                   WHERE account_number=? AND symbol=? AND timeframe=?
-                   ORDER BY bar_time DESC LIMIT ?""",
-                (account, canonical, timeframe, max(20, min(500, int(candle_limit)))),
-            ).fetchall()
-            ordered = list(reversed(rows))
+            limit = 20 if timeframe == "D1" else max(20, min(500, int(candle_limit)))
+            rows = con.execute("SELECT bar_time,open,high,low,close,tick_volume,captured_at FROM mt5_market_candles WHERE account_number=? AND symbol=? AND timeframe=? ORDER BY bar_time DESC LIMIT ?", (account, canonical, timeframe, limit)).fetchall()
             valid: list[dict[str, Any]] = []
-            for row in ordered:
+            for row in reversed(rows):
                 o, h, l, c = (float(row[x]) for x in ("open", "high", "low", "close"))
                 if min(o, h, l, c) <= 0 or h < max(o, c, l) or l > min(o, c, h):
                     continue
-                valid.append({
-                    "time": int(row["bar_time"]), "open": o, "high": h, "low": l, "close": c,
-                    "tick_volume": float(row["tick_volume"] or 0),
-                })
+                valid.append({"time": int(row["bar_time"]), "open": o, "high": h, "low": l, "close": c, "tick_volume": float(row["tick_volume"] or 0)})
             timeframes[timeframe] = tuple(valid)
-            if len(valid) < 20:
+            minimum = 10 if timeframe == "D1" else 20
+            if len(valid) < minimum:
                 missing.append(f"candles:{timeframe}")
             if rows:
                 capture_age = _age_ms(_parse_iso(str(rows[0]["captured_at"] or "")), now)
-                if capture_age is None or capture_age > _CANDLE_CAPTURE_MAX_AGE_MS:
-                    missing.append(f"stale_candles:{timeframe}")
-                else:
-                    freshness_candidates.append(capture_age)
-
-    return MarketSnapshot(
-        snapshot_id=_snapshot_id(account, canonical, now, quote_time_ms),
-        symbol=canonical,
-        as_of=now,
-        source="MT5_MARKET_FEED",
-        timeframes=timeframes,
-        bid=bid,
-        ask=ask,
-        last=None,
-        session=_session(now),
-        data_freshness_ms=max(freshness_candidates) if freshness_candidates else 10**9,
-        missing_data=tuple(dict.fromkeys(missing)),
-    )
+                if timeframe in _REQUIRED_TIMEFRAMES:
+                    if capture_age is None or capture_age > _CANDLE_CAPTURE_MAX_AGE_MS:
+                        missing.append(f"stale_candles:{timeframe}")
+                    else:
+                        freshness_candidates.append(capture_age)
+    return MarketSnapshot(snapshot_id=_snapshot_id(account, canonical, now, quote_time_ms), symbol=canonical, as_of=now, source="MT5_MARKET_FEED", timeframes=timeframes, bid=bid, ask=ask, last=None, session=_session(now), data_freshness_ms=max(freshness_candidates) if freshness_candidates else 10**9, missing_data=tuple(dict.fromkeys(missing)))
