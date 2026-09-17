@@ -10,7 +10,7 @@ from .agents.news import assess_news
 from .contracts import AgentAssessment, Direction, MarketSnapshot, RiskDecision, SupervisorDecision, WorkflowState
 from .journal import JournalRecord, append_jsonl
 from .reverify import reverify
-from .risk_gate import evaluate_risk
+from .risk_gate import RiskPolicy, evaluate_risk
 from .scanner import ScanDecision, scan
 from .snapshot_adapter import build_mt5_snapshot
 from .supervisor import supervise
@@ -30,7 +30,15 @@ class ShadowRunResult:
 def _scanner_terminal(snapshot: MarketSnapshot, scan_result: ScanDecision) -> SupervisorDecision:
     state = WorkflowState.NO_TRADE if scan_result.state == WorkflowState.NO_TRADE else WorkflowState.WAIT
     explanation = "Scanner blocked deeper analysis" if state == WorkflowState.NO_TRADE else "Scanner found no objective event requiring specialist escalation"
-    return SupervisorDecision(symbol=snapshot.symbol, snapshot_id=snapshot.snapshot_id, state=state, direction=Direction.NEUTRAL, conflicts=scan_result.blocks, required_confirmation=scan_result.triggers, explanation=explanation)
+    return SupervisorDecision(
+        symbol=snapshot.symbol,
+        snapshot_id=snapshot.snapshot_id,
+        state=state,
+        direction=Direction.NEUTRAL,
+        conflicts=scan_result.blocks,
+        required_confirmation=scan_result.triggers,
+        explanation=explanation,
+    )
 
 
 def run_shadow(
@@ -38,6 +46,7 @@ def run_shadow(
     symbol: str,
     *,
     proposed_rr: float | None = None,
+    risk_policy: RiskPolicy | None = None,
     journal_path: str | Path | None = None,
     snapshot_builder: Callable[[str, str], MarketSnapshot] = build_mt5_snapshot,
 ) -> ShadowRunResult:
@@ -59,13 +68,17 @@ def run_shadow(
         assessments = (assess_ict(initial), assess_macro(initial), assess_news(initial))
         supervisor = supervise(initial, assessments)
         final = supervisor
-        if supervisor.state == WorkflowState.SIGNAL_CANDIDATE:
+        if supervisor.state == WorkflowState.ARMED:
             fresh = snapshot_builder(account, symbol)
             final = reverify(initial, fresh, supervisor)
-            risk = evaluate_risk(fresh, final, proposed_rr=proposed_rr)
+            if final.state == WorkflowState.SIGNAL_CANDIDATE:
+                risk = evaluate_risk(fresh, final, proposed_rr=proposed_rr, policy=risk_policy)
 
     result = ShadowRunResult(initial, scan_result, assessments, supervisor, fresh, final, risk)
     if journal_path is not None:
         journal_snapshot = fresh if fresh is not None else initial
-        append_jsonl(journal_path, JournalRecord(snapshot=journal_snapshot, assessments=assessments, supervisor=final, risk=risk))
+        append_jsonl(
+            journal_path,
+            JournalRecord(snapshot=journal_snapshot, assessments=assessments, supervisor=final, risk=risk),
+        )
     return result
