@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from typing import Mapping
+
+
+class TelegramReportError(RuntimeError):
+    """Sanitized outbound reporting error that never includes the bot token."""
 
 
 @dataclass(frozen=True)
@@ -38,10 +43,20 @@ class TelegramShadowReporter:
             data=payload,
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
-            body = json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            raise TelegramReportError(f"Telegram sendMessage HTTP {exc.code}") from None
+        except urllib.error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            label = type(reason).__name__ if reason is not None else "network_error"
+            raise TelegramReportError(f"Telegram sendMessage network failure: {label}") from None
+        except (TimeoutError, OSError, ValueError, json.JSONDecodeError) as exc:
+            raise TelegramReportError(f"Telegram sendMessage failure: {type(exc).__name__}") from None
         if not body.get("ok"):
-            raise RuntimeError(f"Telegram sendMessage failed: {body.get('description') or 'unknown error'}")
+            description = str(body.get("description") or "unknown error")
+            raise TelegramReportError(f"Telegram sendMessage rejected: {description}")
 
 
 def format_shadow_record(record: Mapping[str, object]) -> str:
