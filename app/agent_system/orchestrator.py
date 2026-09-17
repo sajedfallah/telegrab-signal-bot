@@ -12,6 +12,7 @@ from .journal import JournalRecord, append_jsonl
 from .reverify import reverify
 from .risk_gate import RiskPolicy, evaluate_risk
 from .scanner import ScanDecision, scan
+from .signal_engine import SignalBuildResult, SignalPlan, build_signal
 from .snapshot_adapter import build_mt5_snapshot
 from .supervisor import supervise
 
@@ -25,6 +26,8 @@ class ShadowRunResult:
     fresh_snapshot: MarketSnapshot | None
     final_decision: SupervisorDecision
     risk: RiskDecision | None
+    signal: SignalPlan | None = None
+    signal_blocks: tuple[str, ...] = ()
 
 
 def _scanner_terminal(snapshot: MarketSnapshot, scan_result: ScanDecision) -> SupervisorDecision:
@@ -60,6 +63,8 @@ def run_shadow(
     assessments: tuple[AgentAssessment, ...] = ()
     fresh: MarketSnapshot | None = None
     risk: RiskDecision | None = None
+    signal: SignalPlan | None = None
+    signal_blocks: tuple[str, ...] = ()
 
     if scan_result.state != WorkflowState.WATCH:
         supervisor = _scanner_terminal(initial, scan_result)
@@ -72,9 +77,12 @@ def run_shadow(
             fresh = snapshot_builder(account, symbol)
             final = reverify(initial, fresh, supervisor)
             if final.state == WorkflowState.SIGNAL_CANDIDATE:
-                risk = evaluate_risk(fresh, final, proposed_rr=proposed_rr, policy=risk_policy)
+                built: SignalBuildResult = build_signal(fresh, final)
+                signal, signal_blocks = built.plan, built.blocks
+                if signal is not None:
+                    risk = evaluate_risk(fresh, final, proposed_rr=signal.rr, policy=risk_policy)
 
-    result = ShadowRunResult(initial, scan_result, assessments, supervisor, fresh, final, risk)
+    result = ShadowRunResult(initial, scan_result, assessments, supervisor, fresh, final, risk, signal, signal_blocks)
     if journal_path is not None:
         journal_snapshot = fresh if fresh is not None else initial
         append_jsonl(
