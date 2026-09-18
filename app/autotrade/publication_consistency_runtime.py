@@ -89,7 +89,12 @@ def install_publication_consistency(app) -> None:
         allow_without_chart: bool = False,
     ) -> dict:
         signal_id = _signal_id(row)
-        if signal_id <= 0:
+        issuer_hint = str(
+            (row.get("issuer_type") if isinstance(row, dict) else row["issuer_type"])
+            if ((isinstance(row, dict) and "issuer_type" in row) or (not isinstance(row, dict) and "issuer_type" in row.keys()))
+            else ""
+        ).strip().upper()
+        if signal_id <= 0 or issuer_hint != "WEB_ADMIN":
             return await original_publish(
                 row,
                 chart_base64,
