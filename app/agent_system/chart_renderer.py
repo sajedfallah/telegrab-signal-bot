@@ -118,12 +118,9 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
             d.text((x1+8,top_y+6),tag,font=small,fill=(180,155,225))
             continue
         if bottom_y-top_y<5: bottom_y=top_y+5
+        # Approved minimal template: FVG/OB zones are visual only.
+        # Their meaning is carried by color + legend; no text is drawn inside zones.
         d.rectangle((x1,top_y,right,bottom_y),fill=fill,outline=outline,width=2)
-        tag=f"{label}  {lo:.2f}-{hi:.2f}"
-        tw=d.textbbox((0,0),tag,font=small)[2]
-        tag_x=min(x1+8,right-tw-20)
-        d.rectangle((tag_x,top_y+5,tag_x+12+tw,top_y+32),fill=(15,18,24))
-        d.text((tag_x+6,top_y+7),tag,font=small,fill=outline)
 
     for i,r in enumerate(rows):
         x=left+(i+0.5)*step; o,c,h,l=map(float,(r["open"],r["close"],r["high"],r["low"]))
