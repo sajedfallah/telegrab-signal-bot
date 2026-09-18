@@ -48,7 +48,7 @@ def _fast_gate(snapshot,plan,policy):
     return tuple(dict.fromkeys(blocks))
 
 
-def run(account,symbols,interval,reporter,standard_min_rr,fast_min_rr):
+def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
     standard_policy=RiskPolicy(version="standard-m5-shadow-v1",min_rr=standard_min_rr)
     fast_policy=RiskPolicy(version="fast-scalp-m1-shadow-v1",min_rr=fast_min_rr)
     sent={}
