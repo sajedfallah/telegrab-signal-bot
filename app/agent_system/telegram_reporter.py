@@ -49,7 +49,7 @@ def format_shadow_record(record:Mapping[str,object])->str:
 def format_hourly_analysis(record:Mapping[str,object])->str:
     symbol=str(record.get("symbol") or "UNKNOWN")
     if record.get("error"):
-        return f"🕐 آپدیت ساعتی NEXUS | {symbol}\n\nبچه‌ها، فعلاً داده کافی برای آپدیت بازار نداریم: {record['error']}"
+        return f"📊 آپدیت NEXUS | {symbol}\n\nبچه‌ها، فعلاً داده کافی برای آپدیت بازار نداریم: {record['error']}"
     assessments=record.get("assessments") or []
     ict=next((a for a in assessments if isinstance(a,Mapping) and str(a.get("agent") or "").startswith("nexus-ict")),None)
     direction=str((ict or {}).get("direction") or record.get("direction") or "NEUTRAL")
