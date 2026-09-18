@@ -62,7 +62,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     }
     level_styles = {"Q25": (145, 125, 210), "Q50": (190, 155, 245), "Q75": (220, 180, 255)}
     step=(right-left)/len(rows)
-    first_time=int(rows[0]["time"])
+    body=max(3,int(step*0.55))
 
     # ICT zones are rays: they begin at the candle that created them and extend
     # only to the right. Never back-fill a zone across candles that predate it.
