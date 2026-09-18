@@ -57,13 +57,15 @@ def test_v26_broker_chart_renderer_outputs_valid_png_with_real_level_contract():
         assert image.size == (1280, 720)
 
 
-def test_v26_publication_recovery_prefers_fresh_mt5_marketfeed_before_placeholder():
+def test_v37_publication_recovery_uses_marketfeed_immediately_and_never_placeholder_for_web_admin():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     assert "ensure_broker_chart_asset" in src
-    assert '"fallback_mode": "CHART_GRACE_TIMEOUT"' in src
-    assert '"fallback_asset_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER"' in src
+    assert '"PUBLICATION_CANONICAL_VISUAL_QUEUED"' in src
+    assert '"PUBLICATION_CANONICAL_VISUAL_WAIT"' in src
+    assert '"MT5_MARKET_FEED_CANONICAL"' in src
     assert "publication_broker_chart_signal_ids" in src
-    assert "fresh MT5 MarketFeed chart staged after ChartAgent grace timeout" in src
+    web_admin_block = src[src.index('if issuer_type == "WEB_ADMIN"'):src.index("job = db.get_signal_chart_capture_job", src.index('if issuer_type == "WEB_ADMIN"'))]
+    assert "CHART_PLACEHOLDER" not in web_admin_block
 
 
 def test_v26_broker_fallback_never_uses_external_or_synthetic_price_source():
