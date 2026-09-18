@@ -23,7 +23,7 @@ _ALLOWED_TIMEFRAMES = {
     "1D": "D1", "D1": "D1",
 }
 _PUBLIC_TIMEFRAMES = {"M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m", "H1": "1h", "H4": "4h", "D1": "1D"}
-_MAX_SERIES = 50
+_MAX_SERIES = 64
 _MAX_CANDLES_PER_SERIES = 500
 _RETAIN_PER_SERIES = 1500
 _STALE_SECONDS = 30
