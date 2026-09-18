@@ -149,8 +149,8 @@ public:
                          const string trailing_code,const double max_dev_pct,const double max_dev_abs,
                          const string destination,const string request_id,string &response)
      {
-      // V46: signal issuance is text-only. No chart screenshot field is
-      // generated or uploaded by the current MT5 client.
+      // V46 TEXT_ONLY: signal issuance has no chart screenshot field and the
+      // current MT5 client uploads no signal image payload.
       string body=StringFormat("{\"market_type\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"order_type\":\"%s\",\"timeframe\":\"%s\",\"entry_price\":%s,\"stop_loss\":%s,\"targets\":[%s],\"risk_percent\":%s,\"volume_mode\":\"%s\",\"lot_size\":%s,\"trailing_code\":%s,\"max_entry_deviation_pct\":%s,\"max_entry_deviation_abs\":%s,\"destination\":\"%s\",\"request_id\":\"%s\"}",
          NexusJsonEscape(market_type),NexusJsonEscape(symbol),NexusJsonEscape(direction),NexusJsonEscape(order_type),NexusJsonEscape(timeframe),
          DoubleToString(entry,8),DoubleToString(sl,8),targets_json,DoubleToString(risk_percent,8),NexusJsonEscape(volume_mode),
