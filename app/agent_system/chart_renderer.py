@@ -35,7 +35,7 @@ def _zones(evidence):
     return out
 
 
-def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], *, timeframe: str="M15", candle_count: int=120) -> bytes:
+def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], *, timeframe: str="M15", candle_count: int=180) -> bytes:
     rows=list(snapshot.timeframes.get(timeframe, ()))[-candle_count:]
     if len(rows)<20: raise ValueError(f"not enough {timeframe} candles for chart")
     evidence=list(assessment.get("evidence") or [])
@@ -43,7 +43,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     highs=[float(x["high"]) for x in rows]; lows=[float(x["low"]) for x in rows]
     zvals=[v for _,lo,hi,_ in zones for v in (lo,hi)]
     visible_z=[v for v in zvals if min(lows)*0.97 <= v <= max(highs)*1.03]
-    pmin=min(lows+visible_z); pmax=max(highs+visible_z); pad=max((pmax-pmin)*0.14,0.01); pmin-=pad; pmax+=pad
+    pmin=min(lows+visible_z); pmax=max(highs+visible_z); pad=max((pmax-pmin)*0.18,0.01); pmin-=pad; pmax+=pad
     W,H=1600,900; left,right,top,bottom=42,1480,105,735
     im=Image.new("RGB",(W,H),(15,18,24)); d=ImageDraw.Draw(im, "RGB")
     title=_font(38); normal=_font(22); small=_font(18); tiny=_font(15)
