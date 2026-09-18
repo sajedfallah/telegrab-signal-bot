@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from datetime import datetime, timezone
 from io import BytesIO
@@ -21,7 +23,7 @@ _TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "D1": 86400}
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-clean-signal-v3"
+_STYLE_VERSION = "nexus-signal-canonical-v4"
 
 # Approved minimal chart palette. Keep the number of semantic colors small:
 # neutral navy, cyan/teal candles, blue entry, green targets, red stop.
@@ -78,6 +80,39 @@ def _signal_value(signal: Any, key: str, default=None):
         return signal[key]
     except Exception:
         return default
+
+
+def _canonical_visual_payload(signal: Any, targets: list[float]) -> dict[str, Any]:
+    """Immutable publication identity used to bind one image to one signal snapshot."""
+    return {
+        "signal_id": int(_signal_value(signal, "id", 0) or 0),
+        "code": str(_signal_value(signal, "code", "") or ""),
+        "symbol": normalize_symbol(str(_signal_value(signal, "symbol", "") or "")),
+        "timeframe": str(_signal_value(signal, "timeframe", "M5") or "M5").upper(),
+        "direction": str(_signal_value(signal, "direction", "") or "").upper(),
+        "order_type": str(_signal_value(signal, "order_type", "MARKET") or "MARKET").upper(),
+        "entry_price": float(_signal_value(signal, "entry_price", 0) or 0),
+        "stop_loss": float(_signal_value(signal, "stop_loss", 0) or 0),
+        "targets": [float(value) for value in targets],
+        "risk_percent": float(_signal_value(signal, "risk_percent", 0) or 0),
+        "rr_ratio": float(_signal_value(signal, "rr_ratio", 0) or 0),
+        "destination": str(_signal_value(signal, "destination", "BOTH") or "BOTH").upper(),
+    }
+
+
+def signal_visual_fingerprint(signal: Any, targets: list[float]) -> str:
+    payload = json.dumps(
+        _canonical_visual_payload(signal, targets),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _format_level_price(value: float, digits: int | None) -> str:
+    precision = int(digits) if isinstance(digits, int) and 0 <= int(digits) <= 8 else (5 if abs(value) < 10 else 2)
+    return f"{float(value):.{precision}f}"
 
 
 def _signal_anchor(signal: Any, timeframe: str) -> tuple[int | None, str | None, str | None]:
@@ -266,64 +301,89 @@ def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]
 
 
 def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, Any], targets: list[float]) -> bytes:
-    """Render the approved minimal NEXUS chart.
+    """Render the canonical NEXUS Mini App signal visual from broker-truth OHLC.
 
-    Visual contract:
-      * chart + small NEXUS logo only;
-      * ENTRY blue, TP green, SL red;
-      * short fine-dashed levels start at the entry-time candle and extend only
-        into reserved right-side whitespace;
-      * semantic labels stay small; price values use a light 11px yellow font;
-      * no label boxes, header, footer, source text, axes text or side panels.
+    The image is deterministic from the stored signal snapshot + fresh MT5
+    MarketFeed candles. Uploaded/ChartAgent screenshots are never used as
+    publication artwork for WEB_ADMIN signals, so stale chart objects cannot
+    change ENTRY/SL/TP values shown to channel users.
     """
     width, height = 1280, 720
     image = Image.new("RGB", (width, height), _BG)
     draw = ImageDraw.Draw(image)
 
-    candle_left, candle_right = 18, 925
-    top, bottom = 24, 696
-    chart_w = candle_right - candle_left
-    chart_h = bottom - top
+    header_h = 62
+    footer_h = 30
+    chart_left, chart_right = 28, 920
+    chart_top, chart_bottom = 82, height - footer_h - 14
+    rail_left, rail_right = 944, 1254
+    chart_w = chart_right - chart_left
+    chart_h = chart_bottom - chart_top
 
-    # Low-contrast grid: enough structure without visual competition.
-    for i in range(1, 8):
-        x = int(width * i / 8)
-        draw.line((x, 0, x, height), fill=_GRID, width=1)
-    for i in range(1, 6):
-        y = int(height * i / 6)
-        draw.line((0, y, width, y), fill=_GRID, width=1)
-
+    code = str(_signal_value(signal, "code", "NEXUS") or "NEXUS")
+    symbol = normalize_symbol(str(_signal_value(signal, "symbol", "") or ""))
+    timeframe = str(_signal_value(signal, "timeframe", "M5") or "M5").upper()
+    direction = str(_signal_value(signal, "direction", "") or "").upper()
+    order_type = str(_signal_value(signal, "order_type", "MARKET") or "MARKET").upper()
     entry = float(_signal_value(signal, "entry_price", 0) or 0)
     sl = float(_signal_value(signal, "stop_loss", 0) or 0)
+    digits = meta.get("digits")
+    direction_color = _UP if direction in {"BUY", "LONG"} else _DOWN
+
+    # Header: compact brand + signal identity. No marketing copy.
+    _paste_small_logo(image)
+    draw.text((28, 20), "NEXUS SIGNAL", font=_font(18, True), fill=(236, 243, 250))
+    draw.text((174, 22), code, font=_font(15, True), fill=_PRICE_TEXT)
+    identity = f"{symbol}  •  {direction}  •  {timeframe}  •  {order_type.replace('_', ' ')}"
+    draw.text((1254, 22), identity, font=_font(14, True), fill=direction_color, anchor="ra")
+    draw.line((28, header_h, 1254, header_h), fill=(25, 48, 68), width=1)
+
+    # Chart surface.
+    draw.rounded_rectangle(
+        (chart_left, chart_top, chart_right, chart_bottom),
+        radius=16,
+        fill=(5, 15, 27),
+        outline=(28, 52, 72),
+        width=1,
+    )
+    for i in range(1, 8):
+        x = int(chart_left + chart_w * i / 8)
+        draw.line((x, chart_top + 1, x, chart_bottom - 1), fill=_GRID, width=1)
+    for i in range(1, 6):
+        y = int(chart_top + chart_h * i / 6)
+        draw.line((chart_left + 1, y, chart_right - 1, y), fill=_GRID, width=1)
+
     level_values = [value for value in [entry, sl, *targets] if isinstance(value, (int, float)) and value > 0]
-    lows = [float(c["low"]) for c in candles]
-    highs = [float(c["high"]) for c in candles]
+    lows = [float(item["low"]) for item in candles]
+    highs = [float(item["high"]) for item in candles]
     y_min = min(lows + level_values) if level_values else min(lows)
     y_max = max(highs + level_values) if level_values else max(highs)
     span = max(y_max - y_min, max(abs(y_max), 1.0) * 0.0005)
-    y_min -= span * 0.075
-    y_max += span * 0.075
+    y_min -= span * 0.09
+    y_max += span * 0.09
     span = y_max - y_min
 
     def y_of(price: float) -> int:
-        ratio = (y_max - price) / span
-        return int(top + ratio * chart_h)
+        ratio = (y_max - float(price)) / span
+        return int(chart_top + ratio * chart_h)
 
     count = len(candles)
     step = chart_w / max(count, 1)
-    body_w = max(3, min(9, int(step * 0.58)))
-    last_x = candle_left
+    body_w = max(3, min(9, int(step * 0.56)))
     for idx, candle in enumerate(candles):
-        x = int(candle_left + (idx + 0.5) * step)
-        last_x = x
-        o, h, l, c = map(float, (candle["open"], candle["high"], candle["low"], candle["close"]))
-        color = _UP if c >= o else _DOWN
-        y_h, y_l, y_o, y_c = y_of(h), y_of(l), y_of(o), y_of(c)
+        x = int(chart_left + (idx + 0.5) * step)
+        o, h, l, close = map(float, (candle["open"], candle["high"], candle["low"], candle["close"]))
+        color = _UP if close >= o else _DOWN
+        y_h, y_l, y_o, y_c = y_of(h), y_of(l), y_of(o), y_of(close)
         draw.line((x, y_h, x, y_l), fill=color, width=1)
-        top_body, bottom_body = sorted((y_o, y_c))
-        if bottom_body - top_body < 2:
-            bottom_body = top_body + 2
-        draw.rectangle((x - body_w // 2, top_body, x + body_w // 2, bottom_body), fill=color)
+        body_top, body_bottom = sorted((y_o, y_c))
+        if body_bottom - body_top < 2:
+            body_bottom = body_top + 2
+        draw.rounded_rectangle(
+            (x - body_w // 2, body_top, x + body_w // 2, body_bottom),
+            radius=1,
+            fill=color,
+        )
 
     level_specs: list[tuple[str, float, tuple[int, int, int]]] = []
     if entry > 0:
@@ -331,30 +391,61 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     if sl > 0:
         level_specs.append(("SL", sl, _SL))
     for idx, value in enumerate(targets[:5], start=1):
-        if value > 0:
+        if float(value) > 0:
             level_specs.append((f"TP{idx}", float(value), _TP))
 
-    desired_levels = [(label, y_of(price), color) for label, price, color in level_specs]
-    label_positions = _resolve_label_positions(desired_levels)
-    line_start = min(width - 300, last_x + max(8, body_w // 2 + 5))
-    line_end = 1158
-    label_x = 1172
-    price_x = 1262
-    label_font = _font(12, True)
-    price_font = _font(11, False)
-    digits = meta.get("digits")
-    precision = int(digits) if isinstance(digits, int) else (5 if max(y_max, 0) < 10 else 2)
-
+    # Exact canonical levels across the broker chart.
     for label, price, color in level_specs:
-        y = y_of(price)
-        label_y = label_positions.get(label, y)
-        _draw_dashed(draw, (line_start, y, line_end, y), color, width=2, dash=6, gap=5)
-        if abs(label_y - y) > 2:
-            draw.line((line_end, y, label_x - 6, label_y), fill=color, width=1)
-        draw.text((label_x, label_y), label, font=label_font, fill=color, anchor="lm")
-        draw.text((price_x, label_y), f"{price:.{precision}f}", font=price_font, fill=_PRICE_TEXT, anchor="rm")
+        y = max(chart_top + 2, min(chart_bottom - 2, y_of(price)))
+        _draw_dashed(draw, (chart_left + 8, y, chart_right - 8, y), color, width=2, dash=7, gap=6)
+        draw.text((chart_left + 16, y - 16), label, font=_font(11, True), fill=color)
 
-    _paste_small_logo(image)
+    # Right rail. Values come from the exact stored signal snapshot used by the caption.
+    draw.rounded_rectangle(
+        (rail_left, chart_top, rail_right, chart_bottom),
+        radius=16,
+        fill=(8, 21, 35),
+        outline=(29, 55, 76),
+        width=1,
+    )
+    draw.text((rail_left + 20, chart_top + 18), "TRADE LEVELS", font=_font(14, True), fill=(178, 194, 208))
+    chip_w = 88
+    draw.rounded_rectangle(
+        (rail_right - chip_w - 18, chart_top + 12, rail_right - 18, chart_top + 40),
+        radius=8,
+        fill=(11, 39, 48) if direction_color == _UP else (51, 20, 28),
+        outline=direction_color,
+        width=1,
+    )
+    draw.text((rail_right - 18 - chip_w / 2, chart_top + 18), direction or "—",
+              font=_font(12, True), fill=direction_color, anchor="ma")
+
+    rail_y = chart_top + 60
+    rail_gap = 54
+    for label, price, color in level_specs:
+        draw.text((rail_left + 20, rail_y), label, font=_font(11, True), fill=color)
+        draw.text((rail_right - 20, rail_y - 2), _format_level_price(price, digits),
+                  font=_font(17, True), fill=(240, 244, 248), anchor="ra")
+        draw.line((rail_left + 20, rail_y + 28, rail_right - 20, rail_y + 28), fill=(25, 47, 64), width=1)
+        rail_y += rail_gap
+
+    risk = float(_signal_value(signal, "risk_percent", 0) or 0)
+    rr = float(_signal_value(signal, "rr_ratio", 0) or 0)
+    meta_y = max(rail_y + 4, chart_bottom - 112)
+    draw.text((rail_left + 20, meta_y), "RISK", font=_font(10, True), fill=(132, 151, 169))
+    draw.text((rail_left + 20, meta_y + 18), f"{risk:g}%" if risk > 0 else "—", font=_font(14, True), fill=(228, 235, 242))
+    draw.text((rail_left + 124, meta_y), "R:R", font=_font(10, True), fill=(132, 151, 169))
+    draw.text((rail_left + 124, meta_y + 18), f"1:{rr:g}" if rr > 0 else "—", font=_font(14, True), fill=(228, 235, 242))
+    draw.text((rail_left + 206, meta_y), "SOURCE", font=_font(10, True), fill=(132, 151, 169))
+    draw.text((rail_left + 206, meta_y + 18), "MT5", font=_font(14, True), fill=_PRICE_TEXT)
+
+    broker_symbol = str(meta.get("broker_symbol") or symbol)
+    captured = str(meta.get("captured_at") or "")
+    footer = f"BROKER TRUTH  •  {broker_symbol}  •  {timeframe}"
+    if captured:
+        footer += f"  •  {captured[:19].replace('T', ' ')} UTC"
+    draw.text((28, height - 22), footer, font=_font(10, False), fill=(107, 126, 143))
+    draw.text((1254, height - 22), _STYLE_VERSION, font=_font(9, False), fill=(71, 91, 108), anchor="ra")
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
@@ -362,10 +453,12 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
 
 
 def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
-    """Render the canonical broker-truth publication chart from MT5 MarketFeed.
+    """Render and stage the canonical broker-truth publication image.
 
-    This renderer is shared by MT5_ADMIN and WEB_ADMIN publication paths. It
-    never invents OHLC values and refuses stale/missing/insufficient broker data.
+    For WEB_ADMIN/Mini App signals this is the publication authority. It uses
+    only stored signal values and fresh MT5 MarketFeed OHLC. A ChartAgent
+    screenshot may still exist for diagnostics, but it cannot become the
+    Telegram publication image.
     """
     signal_id = int(_signal_value(signal, "id", 0) or 0)
     if signal_id <= 0:
@@ -377,26 +470,28 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
 
     try:
         targets = [float(row["price"]) for row in db.get_signal_targets(signal_id)]
+        fingerprint = signal_visual_fingerprint(signal, targets)
         raw = _render_chart(signal, candles, meta, targets)
         if not raw.startswith(b"\x89PNG\r\n\x1a\n") or len(raw) < 10_000:
-            return {"ok": False, "reason": "RENDER_INVALID", **meta}
+            return {"ok": False, "reason": "RENDER_INVALID", "fingerprint": fingerprint, **meta}
 
         _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         code = str(_signal_value(signal, "code", f"NX-{signal_id}") or f"NX-{signal_id}")
-        path = _OUTPUT_DIR / f"{code}_broker_feed_{signal_id}.png"
+        path = _OUTPUT_DIR / f"{code}_canonical_{signal_id}_{fingerprint[:12]}.png"
         temp = path.with_suffix(".tmp")
         temp.write_bytes(raw)
         temp.replace(path)
         db.save_mt5_signal_publication_asset(signal_id, str(path))
         db.add_signal_event(
             signal_id,
-            "BROKER_CHART_FALLBACK_GENERATED",
+            "CANONICAL_SIGNAL_VISUAL_GENERATED",
             actor_type="BACKEND",
             account_number=str(meta.get("account") or ""),
             correlation_id=code,
             payload={
                 "source": "MT5_MARKET_FEED",
                 "style_version": _STYLE_VERSION,
+                "signal_visual_fingerprint": fingerprint,
                 "broker_symbol": meta.get("broker_symbol"),
                 "timeframe": meta.get("timeframe"),
                 "bars": len(candles),
@@ -405,6 +500,7 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
                 "anchor_bar_time": meta.get("anchor_bar_time"),
                 "anchor_field": meta.get("anchor_field"),
                 "file_path": str(path),
+                "image_sha256": hashlib.sha256(raw).hexdigest(),
                 "bytes": len(raw),
             },
         )
@@ -414,14 +510,16 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
             "bytes": len(raw),
             "bars": len(candles),
             "style_version": _STYLE_VERSION,
+            "fingerprint": fingerprint,
+            "image_sha256": hashlib.sha256(raw).hexdigest(),
             **meta,
         }
     except Exception as exc:
-        log.exception("broker chart fallback failed signal_id=%s", signal_id)
+        log.exception("canonical broker chart render failed signal_id=%s", signal_id)
         try:
             db.add_signal_event(
                 signal_id,
-                "BROKER_CHART_FALLBACK_FAILED",
+                "CANONICAL_SIGNAL_VISUAL_FAILED",
                 actor_type="BACKEND",
                 account_number=str(meta.get("account") or ""),
                 correlation_id=str(_signal_value(signal, "code", signal_id)),
@@ -432,3 +530,4 @@ def ensure_broker_chart_asset(signal: Any) -> dict[str, Any]:
         except Exception:
             pass
         return {"ok": False, "reason": f"RENDER_ERROR:{exc}", **meta}
+
