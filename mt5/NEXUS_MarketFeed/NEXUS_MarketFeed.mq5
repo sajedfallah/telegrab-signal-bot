@@ -72,7 +72,9 @@ string TimeframeCode(const ENUM_TIMEFRAMES tf)
    if(tf==PERIOD_M1) return "M1";
    if(tf==PERIOD_M5) return "M5";
    if(tf==PERIOD_M15) return "M15";
+   if(tf==PERIOD_M30) return "M30";
    if(tf==PERIOD_H1) return "H1";
+   if(tf==PERIOD_H4) return "H4";
    if(tf==PERIOD_D1) return "D1";
    return "";
   }
@@ -152,7 +154,7 @@ bool BuildPayload(string &payload,const int bars_count)
    int count=StringSplit(InpSymbols,',',symbols);
    if(count<=0) return false;
 
-   ENUM_TIMEFRAMES tfs[5]={PERIOD_M1,PERIOD_M5,PERIOD_M15,PERIOD_H1,PERIOD_D1};
+   ENUM_TIMEFRAMES tfs[7]={PERIOD_M1,PERIOD_M5,PERIOD_M15,PERIOD_M30,PERIOD_H1,PERIOD_H4,PERIOD_D1};
    string account=(string)AccountInfoInteger(ACCOUNT_LOGIN);
    string broker=AccountInfoString(ACCOUNT_COMPANY);
    string server=AccountInfoString(ACCOUNT_SERVER);

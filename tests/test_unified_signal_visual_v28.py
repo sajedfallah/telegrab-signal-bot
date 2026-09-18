@@ -5,6 +5,7 @@ from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
+import pytest
 
 from app.autotrade.broker_chart_fallback import (
     _render_chart,
@@ -62,14 +63,14 @@ def _fixture_chart() -> tuple[dict, list[dict[str, float]], dict, list[float]]:
     return signal, candles, meta, [4282.5, 4284.0, 4287.0]
 
 
-def test_v37_canonical_chart_is_valid_1280x720_png():
+def test_v38_canonical_chart_is_valid_1600x900_png():
     signal, candles, meta, targets = _fixture_chart()
     raw = _render_chart(signal, candles, meta, targets)
     assert raw.startswith(b"\x89PNG\r\n\x1a\n")
     assert len(raw) > 10_000
     with Image.open(BytesIO(raw)) as image:
         assert image.format == "PNG"
-        assert image.size == (1280, 720)
+        assert image.size == (1600, 900)
 
 
 def test_v30_signal_anchor_prefers_execution_time_and_floors_to_mt5_bar():
@@ -88,7 +89,7 @@ def test_v30_signal_anchor_prefers_execution_time_and_floors_to_mt5_bar():
 
 def test_v37_visual_contract_has_branded_header_chart_and_trade_level_rail():
     src = _text("app/autotrade/broker_chart_fallback.py")
-    assert '_STYLE_VERSION = "nexus-signal-canonical-v4"' in src
+    assert '_STYLE_VERSION = "nexus-signal-canonical-v5"' in src
     assert '"NEXUS SIGNAL"' in src
     assert '"TRADE LEVELS"' in src
     assert '"BROKER TRUTH' in src
@@ -130,9 +131,9 @@ def test_v37_publication_normalizer_preserves_final_render_dimensions():
     raw = _render_chart(signal, candles, meta, targets)
     normalized = _clean_publication_image(raw, {"entry": 4278.0, "tp1": 4282.5})
     with Image.open(BytesIO(normalized)) as image:
-        assert image.size == (1280, 720)
+        assert image.size == (1600, 900)
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert '_STYLE_VERSION = "nexus-signal-canonical-v4"' in src
+    assert '_STYLE_VERSION = "nexus-signal-canonical-v5"' in src
 
 
 def test_v37_web_admin_uses_broker_renderer_as_sole_publication_authority():
@@ -167,3 +168,18 @@ def test_v37_visual_code_does_not_touch_execution_or_generate_market_data():
     )
     for marker in forbidden:
         assert marker not in combined
+
+
+def test_v38_publication_normalizer_never_generates_blank_fallback():
+    with pytest.raises(ValueError, match="missing"):
+        _clean_publication_image(None, {})
+    with pytest.raises(ValueError, match="invalid"):
+        _clean_publication_image(b"not-a-png", {})
+
+
+def test_v38_web_admin_publication_is_fingerprint_bound_and_chartagent_is_diagnostic_only():
+    api = _text("app/autotrade/api.py")
+    assert "expected_fingerprint = signal_visual_fingerprint(row, expected_targets)" in api
+    assert "staged artwork does not match canonical signal fingerprint" in api
+    assert 'if str(signal["issuer_type"] or "").upper() != "WEB_ADMIN":' in api
+    assert '"DIAGNOSTIC_CHART_RECEIVED"' in api

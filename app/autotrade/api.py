@@ -599,6 +599,26 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
 
     raw = b""
     asset_path = db.get_mt5_signal_publication_asset(int(row["id"]))
+
+    # V38 hard binding: WEB_ADMIN publication accepts only the canonical file
+    # generated from the current stored signal snapshot. A late ChartAgent upload
+    # must never overwrite/reuse the Telegram artwork for another visual state.
+    if issuer_type == "WEB_ADMIN":
+        try:
+            from .broker_chart_fallback import signal_visual_fingerprint
+            expected_targets = [float(target["price"]) for target in db.get_signal_targets(int(row["id"]))]
+            expected_fingerprint = signal_visual_fingerprint(row, expected_targets)
+        except Exception as exc:
+            return {"free_message_id": None, "vip_message_id": None,
+                    "errors": [f"VISUAL_GATE: fingerprint generation failed: {exc}"],
+                    "published": False, "complete": False, "visual_retryable": True}
+        asset_name = Path(str(asset_path or "")).name
+        expected_marker = f"_canonical_{int(row['id'])}_{expected_fingerprint[:12]}.png"
+        if not asset_path or not asset_name.endswith(expected_marker):
+            return {"free_message_id": None, "vip_message_id": None,
+                    "errors": ["VISUAL_GATE: staged artwork does not match canonical signal fingerprint"],
+                    "published": False, "complete": False, "visual_retryable": True}
+
     if asset_path:
         try:
             raw = Path(asset_path).read_bytes()
@@ -627,6 +647,11 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     except Exception as exc:
         errors.append(f"CHART_RENDER: {exc}")
         chart_frame = b""
+
+    if issuer_type == "WEB_ADMIN" and not chart_frame:
+        return {"free_message_id": None, "vip_message_id": None,
+                "errors": [*errors, "VISUAL_GATE: canonical artwork render failed"],
+                "published": False, "complete": False, "visual_retryable": True}
 
     if issuer_type == "WEB_ADMIN":
         with db.conn() as con:
@@ -790,7 +815,11 @@ async def upload_chart_capture_result(
             published = str(signal["publication_stage"] or "").upper() == "PUBLISHED"
             if not published:
                 with db.conn() as con:
-                    con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+                    con.execute(
+                        "UPDATE signals SET publication_stage=? WHERE id=?",
+                        ("DIAGNOSTIC_CHART_RECEIVED" if str(signal["issuer_type"] or "").upper() == "WEB_ADMIN" else "CHART_RECEIVED",
+                         int(signal["id"])),
+                    )
                 background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None)
             return {"ok": True, "idempotent": True, "status": current_status,
                     "publication": "ALREADY_PUBLISHED" if published else "RETRY_QUEUED"}
@@ -805,9 +834,17 @@ async def upload_chart_capture_result(
             job_id, account, broker_symbol=str(req.broker_symbol or signal["symbol"]), timeframe=timeframe,
             image_path=str(path), image_sha256=digest,
         )
-        db.save_mt5_signal_publication_asset(int(signal["id"]), str(path))
+        # V38: ChartAgent pixels are diagnostic evidence for WEB_ADMIN only.
+        # Do not stage them in the Telegram publication slot; canonical broker
+        # rendering is the sole publication authority for Mini App signals.
+        if str(signal["issuer_type"] or "").upper() != "WEB_ADMIN":
+            db.save_mt5_signal_publication_asset(int(signal["id"]), str(path))
         with db.conn() as con:
-            con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+            con.execute(
+                "UPDATE signals SET publication_stage=? WHERE id=?",
+                ("DIAGNOSTIC_CHART_RECEIVED" if str(signal["issuer_type"] or "").upper() == "WEB_ADMIN" else "CHART_RECEIVED",
+                 int(signal["id"])),
+            )
         if changed:
             capture_timestamp = req.capture_timestamp or datetime.now(timezone.utc).isoformat()
             db.add_signal_event(int(signal["id"]), "CHART_CAPTURED", actor_type="MT5_ADMIN",

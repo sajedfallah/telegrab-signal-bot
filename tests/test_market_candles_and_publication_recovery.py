@@ -21,10 +21,12 @@ def test_market_timeframe_contract_is_exact_and_small():
     assert _tf("1m") == "M1"
     assert _tf("5m") == "M5"
     assert _tf("15m") == "M15"
+    assert _tf("30m") == "M30"
     assert _tf("1h") == "H1"
+    assert _tf("4h") == "H4"
     assert _tf("1D") == "D1"
     with pytest.raises(ValueError):
-        _tf("H4")
+        _tf("H2")
 
 
 def test_candle_validation_rejects_impossible_ohlc():
@@ -124,3 +126,6 @@ def test_market_feed_ea_sends_only_admin_authenticated_broker_candles():
     assert "X-Admin-Mode: 1" in src
     assert "/api/v1/autotrade/admin/market-candles" in src
     assert "CopyRates" in src
+    assert "PERIOD_M30" in src
+    assert "PERIOD_H4" in src
+    assert "ENUM_TIMEFRAMES tfs[7]" in src
