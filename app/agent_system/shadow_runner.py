@@ -40,7 +40,11 @@ def _hourly_ict_record(config: ShadowRunnerConfig, symbol: str) -> dict[str,obje
     try:
         snapshot=build_mt5_snapshot(config.account,symbol)
         ict=assess_ict(snapshot)
-        return {"symbol":snapshot.symbol,"snapshot_id":snapshot.snapshot_id,"final":"ANALYSIS","direction":ict.direction.value,"bid":snapshot.bid,"ask":snapshot.ask,"assessments":[_assessment_summary(ict)]}
+        m5=snapshot.timeframes.get("M5", ())
+        recent=m5[-24:] if m5 else ()
+        m5_high=max((float(x["high"]) for x in recent), default=None)
+        m5_low=min((float(x["low"]) for x in recent), default=None)
+        return {"symbol":snapshot.symbol,"snapshot_id":snapshot.snapshot_id,"final":"ANALYSIS","direction":ict.direction.value,"bid":snapshot.bid,"ask":snapshot.ask,"m5_recent_high":m5_high,"m5_recent_low":m5_low,"assessments":[_assessment_summary(ict)]}
     except Exception as exc:
         return {"symbol":symbol,"final":WorkflowState.NO_TRADE.value,"error":f"{type(exc).__name__}: {exc}"}
 
