@@ -21,12 +21,12 @@ _allowed_chat_id = ""
 _allowed_user_id = ""
 
 
-def _analysis_record(config: ShadowRunnerConfig, symbol: str):
+def _analysis_record(config: ShadowRunnerConfig, symbol: str, timeframe: str = "M5"):
     snapshot = build_mt5_snapshot(config.account, symbol)
     ict = assess_ict(snapshot)
     assessment = _assessment_summary(ict)
-    m5 = snapshot.timeframes.get("M5", ())
-    recent = m5[-24:] if m5 else ()
+    trigger_rows = snapshot.timeframes.get(timeframe, ())
+    recent = trigger_rows[-24:] if trigger_rows else ()
     return snapshot, assessment, {
         "symbol": snapshot.symbol,
         "snapshot_id": snapshot.snapshot_id,
@@ -34,6 +34,7 @@ def _analysis_record(config: ShadowRunnerConfig, symbol: str):
         "direction": ict.direction.value,
         "bid": snapshot.bid,
         "ask": snapshot.ask,
+        "analysis_timeframe": timeframe,
         "m5_recent_high": max((float(x["high"]) for x in recent), default=None),
         "m5_recent_low": min((float(x["low"]) for x in recent), default=None),
         "assessments": [assessment],
@@ -76,15 +77,25 @@ async def analysis_command(message: Message):
     if not _allowed_user_id or sender_id != _allowed_user_id:
         await message.answer("این دستور فقط برای ادمین NEXUS فعال است. /whoami را ارسال کنید.")
         return
-    parts = (message.text or "").split()
-    symbol = parts[1].upper() if len(parts) > 1 else "XAUUSD"
-    if symbol not in _config.symbols:
-        await message.answer("نماد مجاز نیست. فعلاً: " + ", ".join(_config.symbols))
-        return
-    status = await message.answer(f"در حال ساخت آپدیت تازه {symbol} از Snapshot متاتریدر…")
+    parts = (message.text or "").split()[1:]
+    supported_timeframes = {"M1", "M5", "M15", "H1", "D1"}
+    symbol = "XAUUSD"
+    timeframe = "M5"
+    for raw in parts:
+        value = raw.upper()
+        if value in supported_timeframes:
+            timeframe = value
+        elif value in _config.symbols:
+            symbol = value
+        else:
+            await message.answer("فرمت دستور نامعتبر است. مثال: /analysis M1 یا /analysis XAUUSD M5")
+            return
+    status = await message.answer(f"در حال ساخت آپدیت تازه {symbol} • {timeframe} از Snapshot متاتریدر…")
     try:
-        snapshot, assessment, record = await asyncio.to_thread(_analysis_record, _config, symbol)
-        png = await asyncio.to_thread(render_ict_chart, snapshot, assessment)
+        snapshot, assessment, record = await asyncio.to_thread(_analysis_record, _config, symbol, timeframe)
+        if timeframe not in snapshot.timeframes or len(snapshot.timeframes.get(timeframe, ())) < 20:
+            raise ValueError(f"داده کافی {timeframe} در MT5 Market Feed موجود نیست")
+        png = await asyncio.to_thread(render_ict_chart, snapshot, assessment, timeframe=timeframe)
         await message.answer_photo(BufferedInputFile(png, filename=f"nexus_{symbol}_ict.png"))
         await message.answer(format_hourly_analysis(record))
         await status.delete()
