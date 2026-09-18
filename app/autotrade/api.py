@@ -582,13 +582,10 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     # keeps the gate independent from ambient/runtime database contents.
     row = db.get_signal(int(row["id"])) or row
 
+    # V37: WEB_ADMIN publication no longer depends on a ChartAgent screenshot.
+    # The outer canonical-visual wrapper stages a deterministic broker-truth PNG
+    # from MT5 MarketFeed + the stored signal snapshot before this publisher runs.
     chart_job = db.get_signal_chart_capture_job(int(row["id"])) if issuer_type == "WEB_ADMIN" else None
-    if issuer_type == "WEB_ADMIN" and not allow_without_chart and (
-        not chart_job or str(chart_job["status"]).upper() not in {"UPLOADED", "COMPLETED"}
-    ):
-        return {"free_message_id": None, "vip_message_id": None,
-                "errors": ["CHART_GATE: real MT5 chart has not been uploaded"],
-                "published": False, "complete": False, "execution_status": "NOT_APPLICABLE"}
 
     errors: list[str] = []
     try:
@@ -618,7 +615,7 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
 
     if issuer_type == "WEB_ADMIN" and not raw and not allow_without_chart:
         return {"free_message_id": None, "vip_message_id": None,
-                "errors": ["CHART_GATE: uploaded chart asset is missing"],
+                "errors": ["VISUAL_GATE: canonical signal visual asset is missing"],
                 "published": False, "complete": False}
 
     try:
