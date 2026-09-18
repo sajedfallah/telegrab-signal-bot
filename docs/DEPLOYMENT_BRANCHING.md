@@ -46,8 +46,8 @@ There is no permanent `staging` branch. The PR Preview is the pre-production env
 
 - Trigger: commit/merge to `main`.
 - Canonical URL: https://telegrab-signal-bot.vercel.app/
-- Current production deployment lineage: PR #51 -> merge commit `ccaaa11f80805efad148536479ad377b9e9190d9`.
-- Vercel deployment for that release: `dpl_AzCNoBk5Ay4aqmnxg7pP8tEiTyU6` (`READY`).
+- Frontend release lineage: PR #51 introduced the approved Mini App production frontend into `main`.
+- The exact production deployment ID changes whenever `main` changes; the canonical production identity is the stable domain `https://telegrab-signal-bot.vercel.app/`, not an ephemeral deployment ID.
 - Telegram BotFather points the Main Mini App to the canonical production URL.
 - Telegram default menu button points to the same URL.
 

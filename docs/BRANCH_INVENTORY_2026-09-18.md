@@ -50,21 +50,21 @@ The old stacked-PR structure is the main source of branch sprawl. New work must 
 
 Their branches still exist remotely and remain cleanup candidates; closing a PR does not delete a non-merged branch.
 
-## Fully contained in main — deletion candidates
+## Audited branch cleanup completed
 
-The branch head is already an ancestor of `main`:
+The following remote branches were deleted after dependency checks:
 
-- `bootstrap-v7-import`
-- `feature/customer-faq-nexus-vip-autotrade-delivery`
-- `fix/v060-end-to-end-execution`
-- `nexus-miniapp-trust-ui-v5`
-- `release/vercel-miniapp-approved`
+- `bootstrap-v7-import` — fully contained in `main`
+- `feature/customer-faq-nexus-vip-autotrade-delivery` — fully contained in `main`
+- `fix/v060-end-to-end-execution` — fully contained in `main`
+- `nexus-miniapp-trust-ui-v5` — fully contained in `main`
+- `release/vercel-miniapp-approved` — PR #51 release branch, fully contained in `main`
+- `ops/telegram-miniapp-url` — completed one-time Telegram menu operation; intentionally not merged
 
-These are safe cleanup candidates after confirming no external automation refers to the branch name.
+Remote branch count moved from **67 to 61**. The temporary cleanup branch deleted itself after a successful GitHub Actions run.
 
 ## Operational / preview branches requiring cleanup decision
 
-- `ops/telegram-miniapp-url` — one-time Telegram Bot API operation completed on 2026-09-18. Do **not** merge its temporary workflow into `main`; delete after retaining this audit record.
 - `vercel-miniapp-e2862c7` — approved Mini App source line used to prepare PR #51; production content is now on `main`. Retain only if historical comparison is needed.
 - `vercel-ui-reference-v8` — old UI reference; superseded.
 - `vercel-user-miniapp-final` — old Mini App branch; superseded.
@@ -122,7 +122,7 @@ The following exist primarily because current historical PRs use them as bases o
 1. Close/merge open PRs that are still valuable.
 2. Superseded PRs #49 and #6 are already closed; review and delete their branches when no historical reference is required.
 3. Retarget valuable stacked PRs to `main` where practical.
-4. Delete fully merged branches.
+4. Fully merged audited branches listed above are already deleted.
 5. For diverged stale branches, inspect unique commits; cherry-pick only approved changes to a fresh branch from `main`.
 6. Delete superseded Vercel/ops branches.
 7. Run `git fetch --prune` on developer clones.
