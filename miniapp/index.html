@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="./design-v2.css?v=20260910-1215" />
   <link rel="stylesheet" href="./polish-v3.css?v=20260910-1215" />
   <link rel="stylesheet" href="./ui-v4.css?v=20260910-1215" />
-  <link rel="stylesheet" href="./landing-v18.css?v=20260918-starlanding1" />
+  <link rel="stylesheet" href="./landing-v18.css?v=20260918-minimal-landing1" />
   <link rel="stylesheet" href="./navigation-v7.css?v=20260910-1845" />
   <link rel="stylesheet" href="./signals-live-v8.css?v=20260912-1405" />
   <link rel="stylesheet" href="./user-v066-final.css?v=20260914-next-ui" />
@@ -31,18 +31,49 @@
 </head>
 <body class="landing-active">
   <section class="nexus-landing" id="nexusLanding" aria-label="NEXUS Landing">
-    <div class="nexus-starfield" aria-hidden="true">
-      <div class="nexus-bg-stars nexus-bg-stars-1"></div>
-      <div class="nexus-bg-stars nexus-bg-stars-2"></div>
-      <div class="nexus-bg-stars nexus-bg-stars-3"></div>
-    </div>
-    <div class="nexus-landing-content">
-      <img class="nexus-landing-logo" src="./assets/brand/nexus-logo.svg?v=20260918-starlanding1" alt="NEXUS" decoding="async" />
-      <button class="nexus-space-enter" id="enterNexus" type="button" aria-label="ورود به نکسوس">
-        <strong>ورود به نکسوس</strong>
-        <span class="nexus-btn-stars" aria-hidden="true"><span class="nexus-btn-stars-layer"></span></span>
-        <span class="nexus-btn-glow" aria-hidden="true"><span class="nexus-btn-circle"></span><span class="nexus-btn-circle"></span></span>
-      </button>
+    <div class="nexus-landing-stage">
+      <div class="nexus-landing-noise" aria-hidden="true"></div>
+
+      <svg class="nexus-landing-chart" viewBox="0 0 1200 620" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="nxLandingLine" x1="0" x2="1">
+            <stop offset="0" stop-color="#0d6fae" stop-opacity=".12"></stop>
+            <stop offset=".55" stop-color="#28a7ff" stop-opacity=".62"></stop>
+            <stop offset="1" stop-color="#58c4ff" stop-opacity=".22"></stop>
+          </linearGradient>
+          <linearGradient id="nxLandingCandle" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#4ec5ff"></stop>
+            <stop offset="1" stop-color="#0c5f98"></stop>
+          </linearGradient>
+        </defs>
+
+        <path class="nexus-chart-flow" d="M40 420 C150 386,215 292,330 330 S515 442,660 378 S842 275,925 322 S1054 290,1160 180" fill="none" stroke="url(#nxLandingLine)" stroke-width="2"></path>
+
+        <g class="nexus-chart-candles" opacity=".62">
+          <g class="nexus-chart-candle"><line x1="150" y1="355" x2="150" y2="458"></line><rect x="140" y="380" width="20" height="45" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="194" y1="306" x2="194" y2="408"></line><rect x="184" y="332" width="20" height="48" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="238" y1="270" x2="238" y2="368"></line><rect x="228" y="296" width="20" height="46" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="958" y1="273" x2="958" y2="366"></line><rect x="948" y="300" width="20" height="45" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="1008" y1="228" x2="1008" y2="327"></line><rect x="998" y="254" width="20" height="48" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="1058" y1="184" x2="1058" y2="282"></line><rect x="1048" y="210" width="20" height="49" rx="1"></rect></g>
+        </g>
+      </svg>
+
+      <div class="nexus-landing-content">
+        <img class="nexus-landing-logo" src="./assets/brand/nexus-logo.svg?v=20260918-minimal-landing1" alt="NEXUS" decoding="async" />
+        <div class="nexus-landing-brand" aria-hidden="true">NEXUS</div>
+        <div class="nexus-landing-tagline">TRADING INTELLIGENCE</div>
+      </div>
+
+      <div class="nexus-enter-wrap">
+        <button class="nexus-enter-button" id="enterNexus" type="button" aria-label="ورود به نکسوس">
+          <span class="nexus-enter-edge nexus-enter-edge-l" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-r" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-t" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-b" aria-hidden="true"></span>
+          <span class="nexus-enter-text"><span>ورود به نکسوس</span><span class="nexus-enter-arrow" aria-hidden="true">←</span></span>
+        </button>
+      </div>
     </div>
   </section>
   <div class="app-shell">
