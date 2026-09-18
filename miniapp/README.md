@@ -1,39 +1,57 @@
-# NEXUS Telegram Mini App UI v1
+# NEXUS Telegram Mini App
 
-این پوشه اولین پروتوتایپ قابل اجرای Mini App برای پروژه NEXUS است.
+Status: **Production**  
+Canonical URL: https://telegrab-signal-bot.vercel.app/  
+Vercel Root Directory: `miniapp`
 
-## ساختار
-- `index.html` — صفحات Home, Signals, Subscriptions, Account, Guide, Support
-- `styles.css` — Design System تاریک NEXUS و RTL mobile-first
-- `app.js` — Navigation، Telegram WebApp SDK، user hydration و hookهای API
+## Architecture
 
-## اصول UX
-- Home ساده و مناسب کاربر جدید است.
-- Home شامل EA/MT5/License status یا Products نیست.
-- Public Channel در Home قرار می‌گیرد.
-- Signals فقط Free Signal Channel و VIP Signal Channel را نمایش می‌دهد.
-- Subscription و My Account صفحات مستقل دارند.
-- اطلاعات AutoTrade/License در Account و flowهای اختصاصی قرار می‌گیرند.
+The Mini App is a static frontend hosted by Vercel. Protected business logic and Telegram authentication stay on the VPS.
 
-## اتصال بعدی به backend
-مقادیر `window.NEXUS_CONFIG` باید از environment/runtime تولید شوند:
-
-```js
-window.NEXUS_CONFIG = {
-  publicChannelUrl: '...',
-  freeSignalUrl: '...',
-  supportUrl: '...',
-  plansEndpoint: '/api/miniapp/plans'
-};
+```text
+Vercel frontend
+  /miniapp/api/*
+        |
+        v
+https://api.nexustrade.ir/miniapp/api/*
 ```
 
-در درخواست‌های API، `X-Telegram-Init-Data` ارسال می‌شود. Backend باید `Telegram.WebApp.initData` را سمت سرور validate کند و هیچ entitlement یا user id حساسی را فقط از داده‌ی client اعتماد نکند.
+The rewrite is defined in `vercel.json`.
 
-## Preview محلی
-از داخل ریشه پروژه یک static server اجرا کنید، برای مثال:
+## Main views
 
-```powershell
+- Landing
+- Home
+- Signals
+- Live Charts
+- Plans / subscriptions
+- Account
+- supporting performance, trade, payment and purchase flows
+
+Live Charts use the NEXUS/MT5 market feed. Gold/Forex prices are not synthesized in the frontend.
+
+## Telegram authentication
+
+Frontend API requests attach `Telegram.WebApp.initData` as `X-Telegram-Init-Data`. The VPS validates the Telegram HMAC signature, timestamp and user before protected routes return data.
+
+A normal desktop browser does not provide Telegram `initData`; therefore authenticated Home/Signals/Plans/Account API calls may return 401 outside Telegram. Public chart endpoints can still work in a browser.
+
+## Development
+
+UI-only local server:
+
+```bash
 python -m http.server 8088 --directory miniapp
 ```
 
-سپس `http://127.0.0.1:8088` را باز کنید. برای اجرای واقعی در Telegram، URL باید HTTPS و در BotFather به عنوان Mini App/Web App ثبت شود.
+For authenticated end-to-end testing, open the Vercel PR Preview from Telegram.
+
+## Deployment
+
+- Git branch / PR -> automatic Vercel Preview.
+- `main` -> automatic Vercel Production.
+- Canonical Production URL -> https://telegrab-signal-bot.vercel.app/
+- Vercel project -> `telegrab-signal-bot`.
+- Root Directory -> `miniapp`.
+
+Do not store bot tokens, broker credentials or VPS runtime secrets in the frontend or Vercel project.

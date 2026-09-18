@@ -4,10 +4,10 @@ on:
   push:
     branches:
       - main
-      - feature/content-editorial-taxonomy
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   content-tests:

@@ -6,7 +6,8 @@ on:
       - main
   push:
     branches:
-      - feature/nexus-miniapp-ui-v1
+      - main
+  workflow_dispatch:
 
 jobs:
   miniapp-tests:
