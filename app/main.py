@@ -2922,28 +2922,25 @@ def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
 
 
 
-async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes, caption: str) -> int:
-    """Publish exactly one signal post: framed chart + compact copyable caption."""
+async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes | None, caption: str) -> int:
+    """Publish exactly one text-only signal flash card."""
     try:
         await bot.get_chat(target)
     except Exception as exc:
         raise RuntimeError(f"Channel {target!s} is not accessible to the bot: {exc}") from exc
 
-    msg = await bot.send_photo(
+    msg = await bot.send_message(
         target,
-        BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-        caption=caption,
+        caption,
         parse_mode=ParseMode.HTML,
     )
     return msg.message_id
 
 
 async def _publish_signal(bot: Bot, row, *, only_missing: bool = False) -> tuple[int | None, int | None, list[str]]:
-    chart = await _download_bytes(bot, row["chart_file_id"])
-    chart_frame = await asyncio.to_thread(
-        build_publication_signal_image, chart,
-        publication_card_payload(row, db.get_signal_targets(int(row["id"]))),
-    )
+    # V45: every Telegram signal root is a text-only flash card. Historical
+    # chart_file_id values are ignored and never downloaded or rendered.
+    chart_frame = None
     caption = _signal_caption(row, get_lang(int(row["created_by"])))
     # Publication is idempotent: an already delivered channel message is the
     # canonical signal post and must never be published again for the same Signal.
