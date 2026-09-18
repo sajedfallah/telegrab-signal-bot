@@ -9,7 +9,20 @@ on:
 jobs:
   v37-chart-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
+    env:
+      BOT_TOKEN: "1:TEST"
+      ADMIN_IDS: "9001001"
+      PUBLIC_CHANNEL_ID: "-1001"
+      PUBLIC_CHANNEL_URL: "https://t.me/nexus_public_test"
+      FREE_CHANNEL_URL: "https://t.me/nexus_free_test"
+      VIP_CHANNEL_ID: "-1002"
+      SUPPORT_USERNAME: "nexus_support_test"
+      PAYMENT_CARD: "TEST"
+      PAYMENT_OWNER: "NEXUS TEST"
+      NEXUS_ADMIN_MT5_ACCOUNTS: "80150619"
+      NEXUS_ADMIN_TOKEN: "TEST_ADMIN_TOKEN"
+      CONTENT_AGENTS_ENABLED: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -25,4 +38,4 @@ jobs:
         run: python -m compileall -q app
       - name: Canonical visual regression
         run: |
-          python -m pytest tests/test_unified_signal_visual_v28.py tests/test_publication_consistency_v34.py tests/test_broker_chart_fallback_v26.py -q
+          python -m pytest             tests/test_unified_signal_visual_v28.py             tests/test_publication_consistency_v34.py             tests/test_broker_chart_fallback_v26.py             tests/test_market_candles_and_publication_recovery.py             tests/test_miniapp_admin_signal_center.py             tests/test_mt5_publication_execution_gate.py             tests/test_chart_delivery_reliability_v24.py             tests/test_v36_testlab_alert_visual.py -q
