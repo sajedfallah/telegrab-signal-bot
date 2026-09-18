@@ -55,14 +55,15 @@ def format_hourly_analysis(record:Mapping[str,object])->str:
     direction=str((ict or {}).get("direction") or record.get("direction") or "NEUTRAL")
     bias={"LONG":"صعودی","SHORT":"نزولی","NEUTRAL":"خنثی / منتظر تأیید"}.get(direction,direction)
     bid=record.get("bid"); ask=record.get("ask")
-    lines=[f"🕐 آپدیت ساعتی NEXUS | {symbol}","",f"بچه‌های نکسوس، یه آپدیت سریع از بازار داشته باشیم 👇","",f"📍 قیمت فعلی MT5: Bid {bid or '-'} | Ask {ask or '-'}",f"🧭 وضعیت فعلی ICT: {bias}"]
+    analysis_tf=str(record.get("analysis_timeframe") or "M5")
+    lines=[f"📊 آپدیت NEXUS | {symbol} • {analysis_tf}","",f"بچه‌های نکسوس، یه آپدیت سریع از بازار داشته باشیم 👇","",f"📍 قیمت فعلی MT5: Bid {bid or '-'} | Ask {ask or '-'}",f"🧭 وضعیت فعلی ICT: {bias}"]
     evidence=list((ict or {}).get("evidence") or [])
     h1=[str(x) for x in evidence if str(x).startswith("1H ")]
     quadrant=[str(x) for x in evidence if str(x).startswith("Daily Quadrant ")]
     inside=any(str(x).startswith("Price is inside Daily Quadrant") for x in evidence)
-    fvgs=[str(x) for x in evidence if "15M bullish FVG" in str(x) or "15M bearish FVG" in str(x)]
-    obs=[str(x) for x in evidence if "15M bullish OB" in str(x) or "15M bearish OB" in str(x)]
-    triggers=[str(x) for x in evidence if str(x).startswith("5M ")]
+    fvgs=[str(x) for x in evidence if f"{analysis_tf} bullish FVG" in str(x) or f"{analysis_tf} bearish FVG" in str(x)]
+    obs=[str(x) for x in evidence if f"{analysis_tf} bullish OB" in str(x) or f"{analysis_tf} bearish OB" in str(x)]
+    triggers=[str(x) for x in evidence if str(x).startswith(f"{analysis_tf} ")]
     translations={
         "1H structure HH/HL":"ساختار 1H فعلاً HH/HL است؛ یعنی دست بالا هنوز با خریدارهاست.",
         "1H structure LH/LL":"ساختار 1H فعلاً LH/LL است؛ یعنی فشار اصلی سمت فروشنده‌هاست.",
@@ -85,23 +86,23 @@ def format_hourly_analysis(record:Mapping[str,object])->str:
             if inside: lines.append("• قیمت الان داخل همین Quadrant روزانه است؛ پس این محدوده برای واکنش و برگشت احتمالی وزن بالایی دارد.")
         else: lines.append("• "+quadrant[0])
     else: lines.append("• Quadrant معتبر در Snapshot فعلی ثبت نشده.")
-    lines.extend(["","📐 نواحی مهم 15M:"])
+    lines.extend(["",f"📐 نواحی مهم {analysis_tf}:"])
     if fvgs or obs:
         for x in fvgs+obs:
-            s=x.replace("15M bullish FVG","• FVG صعودی 15M:").replace("15M bearish FVG","• FVG نزولی 15M:").replace("15M bullish OB","• OB صعودی 15M:").replace("15M bearish OB","• OB نزولی 15M:")
+            s=x.replace(f"{analysis_tf} bullish FVG",f"• FVG صعودی {analysis_tf}:").replace(f"{analysis_tf} bearish FVG",f"• FVG نزولی {analysis_tf}:").replace(f"{analysis_tf} bullish OB",f"• OB صعودی {analysis_tf}:").replace(f"{analysis_tf} bearish OB",f"• OB نزولی {analysis_tf}:")
             lines.append(s)
     else: lines.append("• FVG/OB فعالی در Snapshot فعلی ثبت نشده.")
     lines.extend(["","⏳ الان دقیقاً منتظر چی هستیم؟"])
     hi=record.get("m5_recent_high"); lo=record.get("m5_recent_low")
-    if lo is not None: lines.append(f"• سناریوی Long در {analysis_tf}: محدوده نقدینگی پایین تا حوالی {float(lo):g} زیر نظر است؛ اول Sweep/Reclaim سمت Sell-side و بعد MSS/Displacement صعودی 5M لازم داریم.")
-    if hi is not None: lines.append(f"• سناریوی Short در {analysis_tf}: محدوده نقدینگی بالا تا حوالی {float(hi):g} زیر نظر است؛ اول Sweep/Reclaim سمت Buy-side و بعد MSS/Displacement نزولی 5M لازم داریم.")
+    if lo is not None: lines.append(f"• سناریوی Long در {analysis_tf}: محدوده نقدینگی پایین تا حوالی {float(lo):g} زیر نظر است؛ اول Sweep/Reclaim سمت Sell-side و بعد MSS/Displacement صعودی {analysis_tf} لازم داریم.")
+    if hi is not None: lines.append(f"• سناریوی Short در {analysis_tf}: محدوده نقدینگی بالا تا حوالی {float(hi):g} زیر نظر است؛ اول Sweep/Reclaim سمت Buy-side و بعد MSS/Displacement نزولی {analysis_tf} لازم داریم.")
     for x in triggers[:4]: lines.append("• "+translations.get(x,x))
     invalid=list((ict or {}).get("invalidation") or [])
-    if "HTF/LTF alignment required" in invalid: lines.append("• اگر تریگر 5M خلاف جهت ساختار 1H باشد، عجله نمی‌کنیم و منتظر هم‌جهتی می‌مانیم.")
+    if "HTF/LTF alignment required" in invalid: lines.append(f"• اگر تریگر {analysis_tf} خلاف جهت ساختار 1H باشد، عجله نمی‌کنیم و منتظر هم‌جهتی می‌مانیم.")
     missing=list((ict or {}).get("missing_data") or [])
     if missing: lines.extend(["",f"⚠️ داده ناقص: {', '.join(str(x) for x in missing)}"])
     lines.extend(["","📌 جمع‌بندی:"])
     if direction=="LONG": lines.append("فعلاً ساختار به نفع Long تأیید شده، ولی ورود فقط بعد از تکمیل شرایط اجرایی و Risk Gate.")
     elif direction=="SHORT": lines.append("فعلاً ساختار به نفع Short تأیید شده، ولی ورود فقط بعد از تکمیل شرایط اجرایی و Risk Gate.")
-    else: lines.append("فعلاً ورود نداریم. بازار توی ناحیه‌های مهم قرار گرفته و منتظریم 5M جهت بعدی رو با Sweep + MSS مشخص کنه؛ بدون تأیید وارد نمی‌شیم.")
+    else: lines.append("فعلاً ورود نداریم. بازار توی ناحیه‌های مهم قرار گرفته و منتظریم {analysis_tf} جهت بعدی رو با Sweep + MSS مشخص کنه؛ بدون تأیید وارد نمی‌شیم.")
     return "\n".join(lines)
