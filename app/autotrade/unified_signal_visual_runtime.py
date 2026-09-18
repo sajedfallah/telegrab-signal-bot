@@ -12,7 +12,7 @@ from .broker_chart_fallback import ensure_broker_chart_asset
 
 log = logging.getLogger("nexus.unified_signal_visual")
 
-_STYLE_VERSION = "nexus-signal-canonical-v4"
+_STYLE_VERSION = "nexus-signal-canonical-v5"
 _SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}
 
 
@@ -74,31 +74,35 @@ def _authoritative_staged_chart(row: Any) -> str | None:
 
 
 def _clean_publication_image(chart_bytes: bytes | None, signal: dict) -> bytes:
-    """Publication renderer contract: the staged chart is already final artwork.
+    """Normalize only a real canonical publication image.
 
-    The old renderer added a header rail, large logo panel and a numeric footer.
-    Those decorations intentionally disappear. A valid staged PNG is normalized
-    to RGB/1280x720 and returned without adding any extra text or panels. Level
-    labels/prices, when present, are already part of the canonical staged chart.
+    V38 removes the historical blank-image fallback. If the canonical broker
+    visual is missing, corrupt, or unsafe, publication must fail closed and be
+    retried later. Telegram must never receive a synthetic blank chart.
     """
-    if chart_bytes:
-        try:
-            with Image.open(BytesIO(chart_bytes)) as source:
-                image = source.convert("RGB")
-            if image.size != (1280, 720):
-                image = image.resize((1280, 720), Image.Resampling.LANCZOS)
-            out = BytesIO()
-            image.save(out, format="PNG", optimize=True)
-            return out.getvalue()
-        except Exception:
-            log.exception("failed normalizing staged publication chart")
+    if not chart_bytes:
+        raise ValueError("canonical publication image is missing")
 
-    # Last-resort reliability image. It deliberately contains no synthetic
-    # prices, no trade numbers and no marketing copy.
-    image = Image.new("RGB", (1280, 720), (5, 16, 29))
+    try:
+        with Image.open(BytesIO(chart_bytes)) as source:
+            source.verify()
+        with Image.open(BytesIO(chart_bytes)) as source:
+            image = source.convert("RGB")
+    except Exception as exc:
+        raise ValueError("canonical publication image is invalid") from exc
+
+    if image.width < 1000 or image.height < 560 or image.width * image.height > 20_000_000:
+        raise ValueError(f"unsafe canonical publication dimensions: {image.size}")
+
+    if image.size != (1600, 900):
+        image = image.resize((1600, 900), Image.Resampling.LANCZOS)
+
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
-    return out.getvalue()
+    raw = out.getvalue()
+    if len(raw) < 10_000:
+        raise ValueError("canonical publication image is suspiciously small")
+    return raw
 
 
 def install_unified_signal_visual(app) -> None:
@@ -274,4 +278,4 @@ def install_unified_signal_visual(app) -> None:
         return result
 
     api_mod._publish_mt5_admin_signal_async = unified_publish
-    app.state.nexus_unified_signal_visual_v28 = True
+    app.state.nexus_unified_signal_visual_v37 = True
