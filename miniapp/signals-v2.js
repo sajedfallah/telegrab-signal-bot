@@ -323,7 +323,7 @@
 
   function hydrateNexusSignals() {
     if (state.route !== 'signals') return;
-    if (!window.Telegram?.WebApp?.initData) {
+    if (!window.Telegram?.WebApp?.initData && !window.NexusPreviewMode?.active?.()) {
       console.warn('[NEXUS][SIGNALS] missing Telegram initData');
       renderAuthUnavailable();
       return;
