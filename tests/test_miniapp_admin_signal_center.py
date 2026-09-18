@@ -418,24 +418,16 @@ def test_pricing_catalog_repair_does_not_overwrite_custom_price(tmp_path, monkey
     assert str(plan[0]) == "777"
 
 
-def test_legacy_chart_failure_does_not_requeue_screenshot_pipeline(client):
-    created, job = claim_job(client, "legacy-failure-retry")
-    failed = client.post(
-        f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/fail",
-        headers=chart_headers(), json={"error_code": "CAPTURE_FAILED", "error_text": "chart unavailable"},
-    )
-    assert failed.status_code == 200, failed.text
-    with db.conn() as con:
-        con.execute(
-            "UPDATE signal_chart_capture_jobs SET status='FAILED' WHERE id=?", (job["job_id"],)
-        )
-    retried = client.post(
-        f"/miniapp/api/admin/signals/{created['request_id']}/retry", headers=headers()
-    )
-    assert retried.status_code == 200, retried.text
-    assert retried.json()["publication"] == "WAITING_EXECUTION"
-    with db.conn() as con:
-        assert con.execute("SELECT status FROM signal_chart_capture_jobs WHERE id=?", (job["job_id"],)).fetchone()[0] == "FAILED"
+def test_v37_production_retry_no_longer_requeues_chartagent_screenshot_jobs():
+    runtime = Path("app/autotrade/miniapp_execution_runtime.py").read_text(encoding="utf-8")
+    retry_api = Path("app/miniapp_admin_api.py").read_text(encoding="utf-8")
+    accepted_block = runtime[runtime.index("if status_u in _ACCEPTED_EXECUTION_STATUSES:"):runtime.index("if status_u in _TERMINAL_FAILURE_STATUSES:")]
+    retry_block = retry_api[retry_api.index('@router.post("/signals/{request_id}/retry")'):retry_api.index('@router.get("/positions")')]
+    assert "create_chart_capture_job" not in accepted_block
+    assert "retry_chart_capture_job" not in accepted_block
+    assert "WAITING_FOR_VISUAL" in accepted_block
+    assert "retry_chart_capture_job" not in retry_block
+    assert "WAITING_FOR_VISUAL" in retry_block
 
 
 def test_web_admin_position_commands_are_allowed(client):
