@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from typing import Any
 
 from .. import db
+
+log = logging.getLogger("nexus.chart_alert_dedup")
+_DEDUP_VERSION = "v46"
 
 
 def _incident_payload(account: str, health: dict[str, Any]) -> tuple[str, int | None, dict[str, Any]] | None:
@@ -126,3 +130,5 @@ def install_chart_alert_dedup_runtime(app) -> None:
 
     guard._alert_due = durable_alert_due
     app.state.nexus_chart_alert_dedup_v36 = True
+    app.state.nexus_chart_alert_dedup_version = _DEDUP_VERSION
+    log.info("[NEXUS][CHART_ALERT_DEDUP] installed version=%s", _DEDUP_VERSION)
