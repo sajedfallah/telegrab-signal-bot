@@ -2,6 +2,34 @@
 
 این فایل از نسخه **NEXUS ICT Expert V22.31** به بعد، تغییرات Companion Expert را در کنار NEXUS CORE ثبت می‌کند. برای تاریخچه نسخه‌های قدیمی Core/AutoTrade به فایل‌های `NEXUS_V*.md`، `RELEASE_NOTES_*.md` و `README_FA.md` مراجعه کنید.
 
+## [NEXUS ICT V22.46] — 2026-09-18
+
+**نام انتشار:** `DEEP RESEARCH TELEMETRY + ANALYTICS VIEWER`  
+**Issue:** #50  
+**Pull Request:** #48
+
+### Added
+- Daily CE deep metadata: CE25/50/75, wick strength, age, touch count, entry penetration.
+- Sweep → MSS → FVG → Signal sequence timing and displacement metrics.
+- PDH/PDL/Asia liquidity map and nearest-liquidity distance.
+- Volatility percentile and additional time-of-day context.
+- Post-signal 1/3/5/10/20-bar path dataset with Return R, path MFE/MAE and time-to-event.
+- Counterfactual management comparison for Trail07 vs fixed TP and alternative BE triggers.
+- Mosaic-style Analytics Viewer with Signal / CE / Sequence / Timing / Execution / Management / Data Quality labs.
+
+### Important boundary
+**No new signal filter or hard gate is introduced in V22.46.**
+All new fields are observational and intended for later evidence-based calibration.
+
+### Viewer licensing
+The Analytics Viewer UI follows Mosaic Lite / Cruip UI patterns. Upstream README states GPL-3.0; a notice is included in the viewer package.
+
+### QA
+- Static integrity checks: PASS
+- SignalData member validation: PASS
+- MetaEditor compile: required
+- Demo forward-test: required
+
 ## [NEXUS ICT V22.42] — 2026-09-18
 
 **نام انتشار:** `OBSERVABILITY DATA LAKE`  
