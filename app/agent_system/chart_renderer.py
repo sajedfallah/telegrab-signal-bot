@@ -29,7 +29,7 @@ def _zones(evidence):
             out.append(("QUADRANT",float(lo),float(hi),side))
             for label,v in (("Q25",p25),("Q50",p50),("Q75",p75)): out.append((label,float(v),float(v),""))
             continue
-        m=re.search(r"15M (bullish|bearish) (FVG|OB) ([\d.]+)-([\d.]+)",s)
+        m=re.search(r"(M1|M5|M15|H1|D1|W1|MN1) (bullish|bearish) (FVG|OB) ([\d.]+)-([\d.]+)",s)
         if m:
             _tf,direction,kind,lo,hi=m.groups(); out.append((f"{kind} {direction.upper()}",float(lo),float(hi),""))
     return out
