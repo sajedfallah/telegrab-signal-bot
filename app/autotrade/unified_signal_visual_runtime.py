@@ -44,15 +44,11 @@ def _row_value(row: Any, key: str, default: Any = None) -> Any:
 
 
 def _authoritative_staged_chart(row: Any) -> str | None:
-    """Return a real staged MT5 chart when it must outrank renderer fallback.
+    """Return a staged source screenshot only for MT5_ADMIN compatibility.
 
-    WEB_ADMIN screenshots become authoritative only after the ChartAgent result
-    endpoint has durably staged the image and changed publication_stage to
-    CHART_RECEIVED. MT5_ADMIN may stage its own source screenshot directly, so an
-    existing valid image asset from that issuer is authoritative as well.
-
-    MarketFeed-rendered fallback assets never satisfy the WEB_ADMIN
-    CHART_RECEIVED gate and therefore remain fallback-only.
+    WEB_ADMIN/Mini App screenshots are never publication authority in V37.
+    Their Telegram artwork is always regenerated from fresh MT5 MarketFeed
+    candles plus the canonical stored signal snapshot.
     """
     signal_id = _signal_id(row)
     issuer = _issuer_type(row)
@@ -106,14 +102,13 @@ def _clean_publication_image(chart_bytes: bytes | None, signal: dict) -> bytes:
 
 
 def install_unified_signal_visual(app) -> None:
-    """Use a real MT5 screenshot first and MarketFeed rendering only as fallback.
+    """Install canonical publication visuals without touching execution truth.
 
-    The wrapper is additive and does not touch execution, receipts, Telegram
-    routing or EA behavior. A successfully staged ChartAgent/MT5 source image is
-    authoritative. Only when no such source image exists may the existing fresh
-    MT5 MarketFeed renderer stage a fallback chart.
+    WEB_ADMIN/Mini App signals always render from fresh authenticated MT5
+    MarketFeed candles and canonical DB levels. MT5_ADMIN keeps direct source
+    screenshot compatibility and may fall back to the same broker renderer.
     """
-    if getattr(app.state, "nexus_unified_signal_visual_v28", False):
+    if getattr(app.state, "nexus_unified_signal_visual_v37", False):
         return
 
     from . import api as api_mod
