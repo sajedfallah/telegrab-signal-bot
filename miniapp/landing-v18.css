@@ -83,20 +83,37 @@ body.landing-active>.app-shell{
   animation:nexusChartDash 8s linear infinite;
 }
 
-.nexus-chart-candle line{
-  stroke:#49bfff;
-  stroke-width:2;
-}
-
-.nexus-chart-candle rect{
-  fill:url(#nxLandingCandle);
-}
-
 .nexus-chart-candle{
+  --nx-candle:#31d69a;
+  --nx-candle-glow:rgba(49,214,154,.48);
   opacity:.42;
   animation:nexusCandlePulse 2.4s ease-in-out infinite;
   transform-box:fill-box;
   transform-origin:center;
+}
+
+.nexus-chart-candle line{
+  stroke:var(--nx-candle);
+  stroke-width:2;
+}
+
+.nexus-chart-candle rect{
+  fill:var(--nx-candle);
+}
+
+/* Market-style direction: bearish candles red, bullish candles green. */
+.nexus-chart-candle:nth-child(1),
+.nexus-chart-candle:nth-child(4){
+  --nx-candle:#ff5d6c;
+  --nx-candle-glow:rgba(255,93,108,.48);
+}
+
+.nexus-chart-candle:nth-child(2),
+.nexus-chart-candle:nth-child(3),
+.nexus-chart-candle:nth-child(5),
+.nexus-chart-candle:nth-child(6){
+  --nx-candle:#31d69a;
+  --nx-candle-glow:rgba(49,214,154,.48);
 }
 
 .nexus-chart-candle:nth-child(2){animation-delay:.25s}
@@ -286,12 +303,12 @@ body.landing-active>.app-shell{
 
 @keyframes nexusCandlePulse{
   0%,100%{
-    opacity:.30;
-    filter:drop-shadow(0 0 0 rgba(0,160,255,0));
+    opacity:.34;
+    filter:drop-shadow(0 0 0 transparent);
   }
   50%{
-    opacity:.92;
-    filter:drop-shadow(0 0 8px rgba(0,176,255,.48));
+    opacity:.96;
+    filter:drop-shadow(0 0 8px var(--nx-candle-glow));
   }
 }
 
