@@ -4,7 +4,8 @@
 > **Canonical branch:** `main`  
 > **Last repository status update:** 2026-09-18  
 > **Core source baseline:** NEXUS Core v7.0.3  
-> **Current Mini App release lineage:** PR #51 / `ccaaa11f80805efad148536479ad377b9e9190d9`  
+> **Current Mini App production cutover:** PR #51 / `ccaaa11f80805efad148536479ad377b9e9190d9`  
+> **Current repository HEAD:** `4694fe20e8ee3436cf441aff53f4bb4add4c6b41` (PR #54 governance cleanup)  
 
 NEXUS is the Telegram trading platform that contains the Telegram bot, Mini App, subscription/payment flows, AutoTrade integration, MT5 components, signal lifecycle, content/academy modules, and supporting APIs.
 
@@ -14,6 +15,7 @@ NEXUS is the Telegram trading platform that contains the Telegram bot, Mini App,
 | --- | --- | --- |
 | GitHub production branch | `main` | Canonical |
 | Vercel project | `telegrab-signal-bot` / `prj_5MA4Bz9EelogSiiqj9vSrK8Yw5NS` | Active |
+| Current Vercel production deployment | `dpl_Dbn6jDByjhon1x6X6PqZetqPdEeT` / `main@4694fe20` | READY |
 | Vercel root directory | `miniapp` | Active |
 | Mini App production | https://telegrab-signal-bot.vercel.app/ | READY |
 | Main branch alias | https://telegrab-signal-bot-git-main-fallahsajed-2126s-projects.vercel.app/ | Production alias |
@@ -53,6 +55,10 @@ Vercel must not contain the bot token, MT5 secrets, broker credentials, payment 
 ## Latest changelog
 
 ### 2026-09-18 — Repository / deployment governance consolidation
+
+- Verified the canonical repository HEAD at `4694fe20e8ee3436cf441aff53f4bb4add4c6b41` and Vercel production deployment `dpl_Dbn6jDByjhon1x6X6PqZetqPdEeT` as `READY`.
+- Verified Vercel GitHub integration posts a `Ready` Preview link directly on pull requests (confirmed on PR #48).
+- Added a repository PR checklist template so new contributors see the required CI, Preview, Telegram-auth, rollback, and secret-handling checks before submission.
 
 - Merged PR #52 and established `README.md`, `CONTRIBUTING.md`, deployment/branching documentation, branch inventory and project dashboard.
 - Added repository governance CI and safe merged-branch housekeeping.
