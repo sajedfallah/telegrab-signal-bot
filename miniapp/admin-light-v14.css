@@ -1,0 +1,263 @@
+/* NEXUS Admin V14 — Professional Light Fintech Theme
+   Scope: admin.html only. User Mini App remains unchanged. */
+:root{
+  color-scheme:light;
+  --bg:#f6f8fc;
+  --panel:#ffffff;
+  --panel2:#f8fbff;
+  --surface-soft:#eef4fb;
+  --surface-blue:#eff6ff;
+  --line:#dbe5f0;
+  --line-accent:#c6d6e8;
+  --text:#102033;
+  --muted:#66778a;
+  --muted-2:#94a3b8;
+  --accent:#176bff;
+  --accent-2:#06b6d4;
+  --accent-strong:#0f5fe8;
+  --green:#059669;
+  --red:#dc2626;
+  --orange:#d97706;
+  --admin-border:#dbe5f0;
+  --admin-border-strong:#9bbdf2;
+  --card-shadow:0 10px 30px rgba(15,35,60,.07);
+  --soft-shadow:0 5px 16px rgba(15,35,60,.05);
+  --primary-gradient:linear-gradient(135deg,#176bff 0%,#06b6d4 100%);
+}
+
+html,body{
+  background:linear-gradient(180deg,#f8fbff 0%,#f4f7fb 46%,#f6f8fc 100%)!important;
+  color:var(--text)!important;
+}
+body{min-height:100dvh}
+.app{background:transparent!important;color:var(--text)!important}
+
+/* Header / hierarchy */
+.top{
+  background:rgba(255,255,255,.94)!important;
+  border-bottom:1px solid var(--line)!important;
+  box-shadow:0 4px 18px rgba(15,35,60,.04)!important;
+  backdrop-filter:blur(16px);
+}
+.brand,.top .brand{color:#0f1f33!important}
+.brand-logo{filter:none!important}
+.brand-copy small,.hero small,.mini-title{color:#1670d9!important}
+.hero h1,.section-head h2{color:#102033!important}
+.hero{color:var(--text)!important}
+
+/* Main cards / containers */
+.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,
+.admin-live,.trade-actions,.preview-grid>div,.risk,.targets article,
+.levels span,.auto-setup-grid>div,.empty,.operational-note{
+  background:#fff!important;
+  color:var(--text)!important;
+  border-color:var(--line)!important;
+}
+.panel,.card,.setup-fields,.metrics article,.auto-setup-panel{
+  border:1px solid var(--line)!important;
+  box-shadow:var(--card-shadow)!important;
+}
+.metrics article b{color:#0f5fe8!important}
+.metrics article span,.operational-note,.empty{color:var(--muted)!important}
+
+/* Form surfaces */
+.form,.form label,.auto-grid label{color:#33465b!important}
+.form input,.form select,.auto-grid input,.auto-grid select{
+  background:#f8fbff!important;
+  color:#102033!important;
+  border:1px solid #cbd9e8!important;
+  box-shadow:none!important;
+}
+.form input::placeholder,.auto-grid input::placeholder{color:#9aa9b8!important}
+.form input:focus,.form select:focus,.auto-grid input:focus,.auto-grid select:focus{
+  background:#fff!important;
+  border-color:#4b8cff!important;
+  box-shadow:0 0 0 3px rgba(23,107,255,.11)!important;
+  outline:none!important;
+}
+
+/* Segmented controls: remove yellow / dark legacy states */
+.segments,.direction{background:#eef3f8!important;border:1px solid #dde7f1!important;box-shadow:none!important}
+.segments button,.direction button{
+  background:transparent!important;
+  color:#5c6d80!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.segments button:hover,.direction button:hover{background:#e6eef8!important;color:#203247!important}
+.segments button.selected,
+.setup-mode button.selected,
+.volume-mode button.selected,
+.auto-volume-mode button.selected,
+.destination button.selected,
+.auto-destination button.selected{
+  background:var(--primary-gradient)!important;
+  color:#fff!important;
+  border:0!important;
+  box-shadow:0 7px 18px rgba(23,107,255,.20)!important;
+}
+.direction .buy.selected,
+.direction button[data-side="BUY"].selected,
+.direction button[data-auto-side="BUY"].selected{
+  background:#e8f8f2!important;
+  color:#047857!important;
+  box-shadow:inset 0 0 0 1px #a7e4ce!important;
+}
+.direction button[data-side="SELL"].selected,
+.direction button[data-auto-side="SELL"].selected{
+  background:#fff0f1!important;
+  color:#b4232d!important;
+  box-shadow:inset 0 0 0 1px #f2bdc2!important;
+}
+
+/* Primary / secondary actions */
+.primary,.submit-preview,#newSignal,#publish{
+  background:var(--primary-gradient)!important;
+  color:#fff!important;
+  border:0!important;
+  box-shadow:0 10px 24px rgba(23,107,255,.20)!important;
+}
+.primary:hover,.submit-preview:hover,#newSignal:hover,#publish:hover{
+  filter:brightness(.98);
+  box-shadow:0 12px 28px rgba(23,107,255,.25)!important;
+}
+.outline,.ghost,.section-head button,.icon,.entry-source button,#recalculatePreview,#cancelPreview{
+  background:#fff!important;
+  color:#24517f!important;
+  border:1px solid #c8d7e7!important;
+  box-shadow:var(--soft-shadow)!important;
+}
+.outline:hover,.ghost,.section-head button:hover,.icon:hover,.entry-source button:hover{
+  background:#f2f7fd!important;
+  border-color:#9cbbe0!important;
+}
+
+/* Live/risk/info blocks */
+.levels span,.admin-live-grid span,.preview-grid>div,.targets article,.auto-setup-grid>div{
+  background:#f7faff!important;
+  color:#61758a!important;
+  border:1px solid #dce7f2!important;
+}
+.levels span b,.admin-live-grid b,.preview-grid b,.targets article b,.auto-setup-grid b{color:#17324f!important}
+.risk{
+  background:linear-gradient(135deg,#eef6ff,#f2fcff)!important;
+  border:1px solid #c8def7!important;
+  color:#24517f!important;
+}
+.risk b{color:#0f5fe8!important}
+.auto-structure-note{
+  background:#fff8e8!important;
+  color:#795514!important;
+  border:1px solid #f0d79f!important;
+}
+.auto-setup-state{background:#edf4ff!important;color:#1d5fae!important;border-color:#c9dcf4!important}
+
+/* Status chips */
+.chip{background:#f4f8fc!important;color:#5e7185!important;border-color:#d7e2ed!important}
+.chip.online{background:#ecfdf5!important;color:#047857!important;border-color:#b7ead6!important}
+.chip.offline{background:#fff7ed!important;color:#b45309!important;border-color:#fed7aa!important}
+
+/* Position / log cards */
+.admin-action-sheet{margin-top:10px;border:1px solid var(--line)!important;border-radius:14px;padding:8px;background:#f8fbff!important}
+.admin-action-sheet summary{min-height:36px;display:flex;align-items:center;cursor:pointer;color:#176bff!important;font-weight:800;font-size:11px}
+#positions .card.admin-position-card-v7,
+#logs .card{background:#fff!important;border-color:var(--line)!important;color:var(--text)!important}
+#positions .card.admin-position-card-v7.expanded{background:#fff!important;border-color:#9bbdf2!important;box-shadow:0 12px 30px rgba(23,107,255,.10)!important}
+#positions .admin-position-card-v7.expanded .trade-actions{background:#fff!important}
+#positions .admin-position-card-v7.expanded .admin-action-sheet:not([open]) .trade-actions{display:none!important}
+#positions .admin-position-more{background:#eef6ff!important;border-color:#c7dcf5!important;color:#176bff!important}
+#clearRejectedLogs{color:#b4232d!important;background:#fff5f5!important;border:1px solid #f2c7cb!important;box-shadow:none!important}
+
+/* Modal / bottom navigation */
+.sheet{background:#fff!important;color:var(--text)!important;border-color:var(--line)!important;box-shadow:0 -20px 64px rgba(15,35,60,.18)!important}
+.modal{background:rgba(15,31,51,.36)!important}
+.safety{background:#f3f7fb!important;color:#64748b!important;border-color:#dbe5f0!important}
+.toast{background:#102033!important;color:#fff!important;border-color:#2c7df0!important}
+.bottom{
+  background:rgba(255,255,255,.97)!important;
+  border-top:1px solid var(--line)!important;
+  box-shadow:0 -6px 22px rgba(15,35,60,.05)!important;
+}
+.bottom button{color:#718297!important;background:transparent!important}
+.bottom button.selected{color:#176bff!important}
+.bottom button.selected b{color:#176bff!important}
+
+.entry-source{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.entry-source button{padding:8px 12px}
+.entry-source small{color:#718297!important;line-height:1.6}
+
+/* Eliminate legacy dark fills that leaked through older Admin styles */
+#signalForm [style*="background"],
+#manualSetupFields [style*="background"],
+#autoSetupFields [style*="background"]{color:inherit}
+#signalForm button:not(.primary):not(.selected):not(.danger),
+#manualSetupFields button:not(.primary):not(.selected):not(.danger),
+#autoSetupFields button:not(.primary):not(.selected):not(.danger){background-color:transparent}
+
+button:focus-visible,input:focus-visible,select:focus-visible{
+  outline:3px solid rgba(23,107,255,.23)!important;
+  outline-offset:2px;
+}
+
+/* V14.2 — stronger separation and exact neon step override */
+.steps{
+  margin:10px 6px 20px!important;
+}
+.steps span{
+  width:48px!important;
+  height:48px!important;
+  border-radius:50%!important;
+  background:linear-gradient(145deg,#ecfeff 0%,#e4f9ff 52%,#eef4ff 100%)!important;
+  border:1.5px solid rgba(34,211,238,.62)!important;
+  color:#0e7490!important;
+  box-shadow:0 0 0 4px rgba(34,211,238,.07),0 8px 20px rgba(14,116,144,.12)!important;
+}
+.steps span.on{
+  background:linear-gradient(135deg,#67e8f9 0%,#22d3ee 44%,#2563eb 100%)!important;
+  border-color:#22d3ee!important;
+  color:#fff!important;
+  box-shadow:0 0 0 4px rgba(34,211,238,.13),0 0 24px rgba(34,211,238,.34),0 12px 28px rgba(37,99,235,.18)!important;
+}
+.steps span small{color:inherit!important}
+.steps i{
+  height:2px!important;
+  background:linear-gradient(90deg,rgba(34,211,238,.16),rgba(59,130,246,.48),rgba(34,211,238,.16))!important;
+}
+
+#signalForm.panel,
+#manualSetupFields.setup-fields,
+#autoSetupFields.setup-fields,
+.auto-setup-panel,
+.metrics article,
+#signalList .card,
+#positionList .card,
+#logList .card,
+.admin-live,
+.admin-action-sheet,
+.preview-grid>div,
+.targets article,
+.auto-setup-grid>div{
+  background:rgba(255,255,255,.99)!important;
+  border:1.5px solid #c8d6e6!important;
+  box-shadow:0 14px 38px rgba(15,35,60,.11),0 3px 8px rgba(15,35,60,.05),inset 0 1px 0 rgba(255,255,255,.92)!important;
+}
+#signalForm.panel{border-radius:22px!important}
+#manualSetupFields.setup-fields,#autoSetupFields.setup-fields{border-radius:18px!important}
+#positionList .card,#signalList .card,#logList .card{border-radius:18px!important}
+#positionList .card:hover,#signalList .card:hover,#logList .card:hover{
+  border-color:#9bbdf2!important;
+  box-shadow:0 16px 42px rgba(23,107,255,.13),0 4px 10px rgba(15,35,60,.06)!important;
+}
+.form input,.form select,.auto-grid input,.auto-grid select{
+  border:1.5px solid #c7d5e5!important;
+  box-shadow:0 3px 9px rgba(15,35,60,.045),inset 0 1px 2px rgba(15,35,60,.025)!important;
+}
+
+@media(max-width:480px){
+  .panel,.setup-fields{box-shadow:0 12px 30px rgba(15,35,60,.10),0 2px 7px rgba(15,35,60,.04)!important}
+  .segments button,.direction button{min-height:42px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+}

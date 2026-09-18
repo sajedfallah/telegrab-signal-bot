@@ -1,0 +1,276 @@
+/* NEXUS Live Charts v2 — dedicated bottom-nav chart surface */
+.bottom-nav {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.bottom-nav .nav-item small {
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.nexus-live-charts-page {
+  direction: ltr;
+  min-height: calc(100dvh - 150px);
+  padding: 2px 0 max(20px, env(safe-area-inset-bottom));
+}
+
+.live-chart-page-head {
+  direction: rtl;
+  margin: 2px 0 14px;
+  padding: 18px 18px 16px;
+  border: 1px solid rgba(68, 190, 255, .18);
+  border-radius: 22px;
+  background: linear-gradient(150deg, rgba(12, 25, 35, .98), rgba(6, 11, 17, .98));
+  box-shadow: 0 16px 42px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.035);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.live-chart-page-head h1 {
+  margin: 2px 0 6px;
+  color: #f5f9fc;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.live-chart-page-head p {
+  margin: 0;
+  color: #7f909d;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.live-chart-page-badge {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid rgba(77, 204, 255, .24);
+  border-radius: 999px;
+  color: #67d5ff;
+  background: rgba(47, 158, 220, .08);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.live-chart-shell {
+  width: min(100%, 760px);
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+}
+
+.live-chart-header,
+.live-chart-panel,
+.live-chart-controls,
+.live-chart-statusbar {
+  border: 1px solid rgba(126, 160, 184, .14);
+  background: rgba(8, 13, 19, .94);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.live-chart-header {
+  border-radius: 18px;
+  padding: 14px 15px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-chart-symbol-wrap {
+  display: grid;
+  gap: 3px;
+}
+
+.live-chart-symbol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-chart-symbol h1 {
+  margin: 0;
+  color: #f5f9fc;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: .01em;
+}
+
+.live-chart-market-name {
+  color: #778894;
+  font-size: 11px;
+}
+
+.live-chart-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #60717e;
+  box-shadow: 0 0 0 4px rgba(96,113,126,.08);
+}
+
+.live-chart-live-dot.is-live {
+  background: #30d89a;
+  box-shadow: 0 0 0 4px rgba(48,216,154,.10), 0 0 14px rgba(48,216,154,.45);
+}
+
+.live-chart-live-dot.is-stale,
+.live-chart-live-dot.is-reconnecting {
+  background: #ffba55;
+  box-shadow: 0 0 0 4px rgba(255,186,85,.10);
+}
+
+.live-chart-price-wrap {
+  text-align: right;
+  display: grid;
+  gap: 4px;
+}
+
+.live-chart-price {
+  font-variant-numeric: tabular-nums;
+  color: #f8fbfd;
+  font-size: 20px;
+  font-weight: 760;
+  line-height: 1.1;
+}
+
+.live-chart-change {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-chart-change.positive { color: #34d69a; }
+.live-chart-change.negative { color: #ff6171; }
+.live-chart-change.neutral { color: #7f909d; }
+
+.live-chart-controls {
+  border-radius: 16px;
+  padding: 9px;
+  display: grid;
+  gap: 9px;
+}
+
+.live-chart-symbols,
+.live-chart-timeframes {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.live-chart-symbols::-webkit-scrollbar,
+.live-chart-timeframes::-webkit-scrollbar { display: none; }
+
+.live-chart-chip {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #82919d;
+  min-height: 34px;
+  padding: 0 11px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.live-chart-chip.active {
+  color: #e8f8ff;
+  border-color: rgba(64, 190, 255, .28);
+  background: rgba(34, 139, 198, .13);
+}
+
+.live-chart-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  min-height: 430px;
+}
+
+#nexusLiveChartCanvas {
+  width: 100%;
+  height: clamp(420px, 58dvh, 620px);
+  min-height: 420px;
+  touch-action: pan-y;
+}
+
+.live-chart-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(6, 10, 15, .88);
+  text-align: center;
+}
+
+.live-chart-overlay[hidden] { display: none; }
+
+.live-chart-overlay-card {
+  max-width: 330px;
+  display: grid;
+  gap: 8px;
+}
+
+.live-chart-overlay-card strong {
+  color: #eaf2f7;
+  font-size: 14px;
+}
+
+.live-chart-overlay-card span {
+  color: #7f909d;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.live-chart-statusbar {
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #72838f;
+  font-size: 10px;
+}
+
+.live-chart-statusbar b {
+  color: #a9bac5;
+  font-weight: 650;
+}
+
+.live-chart-tv-attribution {
+  color: #748896;
+  text-decoration: none;
+}
+
+@media (max-width: 430px) {
+  .nexus-live-charts-page {
+    margin-inline: -2px;
+  }
+
+  .live-chart-page-head {
+    padding: 15px;
+  }
+
+  .live-chart-header {
+    padding: 13px;
+  }
+
+  .live-chart-panel {
+    border-radius: 15px;
+  }
+
+  #nexusLiveChartCanvas {
+    height: min(58dvh, 520px);
+    min-height: 390px;
+  }
+}

@@ -1,0 +1,269 @@
+/* NEXUS Mini App V16 — Signal Form Color + Navigation Typography
+   Additive presentation-only layer. No execution, MT5, API or Telegram logic. */
+
+:root{
+  --nx-v16-bg:#f3f7fc;
+  --nx-v16-panel:#ffffff;
+  --nx-v16-panel-soft:#f7faff;
+  --nx-v16-input:#edf3fa;
+  --nx-v16-input-hover:#f4f8fd;
+  --nx-v16-line:#c9d8e8;
+  --nx-v16-line-strong:#9db9d8;
+  --nx-v16-text:#14263c;
+  --nx-v16-muted:#667c93;
+  --nx-v16-faint:#91a2b5;
+  --nx-v16-blue:#2563eb;
+  --nx-v16-cyan:#0891b2;
+  --nx-v16-cyan-soft:#e9f8fc;
+  --nx-v16-navy:#17365f;
+  --nx-v16-navy-2:#24568b;
+  --nx-v16-green:#087f5b;
+  --nx-v16-red:#bd3348;
+  --nx-v16-shadow:0 10px 28px rgba(28,57,91,.09),0 2px 7px rgba(28,57,91,.05);
+  --nx-v16-shadow-hover:0 14px 34px rgba(28,70,120,.13),0 3px 9px rgba(28,57,91,.06);
+}
+
+/* ------------------------------------------------------------------
+   Navigation typography — User + Admin
+   ------------------------------------------------------------------ */
+html body .bottom-nav .nav-item small{
+  font-size:13px!important;
+  line-height:1.25!important;
+  font-weight:700!important;
+  letter-spacing:0!important;
+}
+
+html body .bottom-nav .nav-item{
+  min-height:62px;
+}
+
+html body .bottom button{
+  font-size:12.5px!important;
+  line-height:1.25!important;
+  font-weight:700!important;
+  letter-spacing:0!important;
+}
+
+html body .bottom button b{
+  font-size:21px!important;
+  margin-bottom:4px!important;
+}
+
+/* ------------------------------------------------------------------
+   Admin signal issue page only — cleaner ice/slate palette
+   ------------------------------------------------------------------ */
+html body #create{
+  color:var(--nx-v16-text)!important;
+}
+
+html body #create #signalForm.panel{
+  background:linear-gradient(180deg,#ffffff 0%,#f9fbfe 100%)!important;
+  border:1px solid #cbd9e8!important;
+  box-shadow:0 14px 38px rgba(32,64,101,.10),0 3px 9px rgba(32,64,101,.05)!important;
+}
+
+html body #create :is(#manualSetupFields,#autoSetupFields).setup-fields{
+  background:linear-gradient(180deg,#fbfdff 0%,#f5f9fd 100%)!important;
+  border:1px solid #d1deeb!important;
+  box-shadow:0 8px 22px rgba(35,67,103,.065)!important;
+}
+
+html body #create :is(.form label,.auto-grid label){
+  color:#425a73!important;
+  font-size:12px!important;
+  font-weight:700!important;
+}
+
+html body #create :is(input,select,textarea){
+  min-height:48px!important;
+  background:linear-gradient(180deg,#f4f8fc 0%,#eaf1f8 100%)!important;
+  color:var(--nx-v16-text)!important;
+  border:1.5px solid var(--nx-v16-line)!important;
+  border-radius:14px!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.88),0 3px 9px rgba(26,54,85,.045)!important;
+  font-size:15px!important;
+  font-weight:700!important;
+}
+
+html body #create :is(input,select,textarea):hover{
+  background:var(--nx-v16-input-hover)!important;
+  border-color:#b4c8dd!important;
+}
+
+html body #create :is(input,select,textarea):focus{
+  background:#ffffff!important;
+  border-color:#4f8ff3!important;
+  box-shadow:0 0 0 3px rgba(37,99,235,.10),0 8px 20px rgba(37,99,235,.08)!important;
+}
+
+html body #create input::placeholder{
+  color:#8ba0b7!important;
+  opacity:1!important;
+}
+
+/* Segmented controls: calm slate inactive, clear selected state. */
+html body #create :is(.segments,.direction){
+  padding:4px!important;
+  gap:4px!important;
+  background:#e9f0f7!important;
+  border:1px solid #d3deea!important;
+  border-radius:15px!important;
+  box-shadow:inset 0 1px 2px rgba(41,68,96,.04)!important;
+}
+
+html body #create :is(.segments button,.direction button){
+  min-height:42px!important;
+  background:transparent!important;
+  color:#63788f!important;
+  border:0!important;
+  border-radius:11px!important;
+  box-shadow:none!important;
+  font-size:12.5px!important;
+  font-weight:800!important;
+}
+
+html body #create :is(.segments button,.direction button):hover{
+  background:rgba(255,255,255,.75)!important;
+  color:#2b4561!important;
+}
+
+html body #create :is(
+  .segments button.selected,
+  .setup-mode button.selected,
+  .volume-mode button.selected,
+  .auto-volume-mode button.selected,
+  .destination button.selected,
+  .auto-destination button.selected
+){
+  color:#ffffff!important;
+  background:linear-gradient(135deg,#2f80ed 0%,#2563eb 54%,#5b72f2 100%)!important;
+  box-shadow:0 7px 18px rgba(37,99,235,.19),inset 0 1px 0 rgba(255,255,255,.24)!important;
+}
+
+html body #create .direction :is([data-side="BUY"],[data-auto-side="BUY"]).selected{
+  color:#076748!important;
+  background:linear-gradient(180deg,#ecfbf5,#dff7ed)!important;
+  box-shadow:inset 0 0 0 1px #a8dec9!important;
+}
+
+html body #create .direction :is([data-side="SELL"],[data-auto-side="SELL"]).selected{
+  color:#a72c40!important;
+  background:linear-gradient(180deg,#fff5f6,#fde9ec)!important;
+  box-shadow:inset 0 0 0 1px #efbdc5!important;
+}
+
+/* Market-price action: replace heavy dark block with high-contrast blue glass. */
+html body #create .entry-source{
+  padding:12px!important;
+  gap:9px!important;
+  border-radius:16px!important;
+  border:1px solid #bed1e6!important;
+  background:linear-gradient(135deg,#eef6ff 0%,#f5faff 58%,#edf5fc 100%)!important;
+  box-shadow:0 7px 20px rgba(31,74,120,.075),inset 0 1px 0 rgba(255,255,255,.9)!important;
+}
+
+html body #create .entry-source #useMarketPrice{
+  min-height:42px!important;
+  padding:9px 14px!important;
+  color:#ffffff!important;
+  border:1px solid rgba(255,255,255,.22)!important;
+  border-radius:12px!important;
+  background:linear-gradient(135deg,var(--nx-v16-navy) 0%,var(--nx-v16-navy-2) 62%,#3273b6 100%)!important;
+  box-shadow:0 8px 20px rgba(23,54,95,.20),inset 0 1px 0 rgba(255,255,255,.20)!important;
+  font-size:13px!important;
+  font-weight:800!important;
+}
+
+html body #create .entry-source #useMarketPrice:hover{
+  transform:translateY(-1px)!important;
+  filter:brightness(1.04)!important;
+  box-shadow:0 11px 25px rgba(23,54,95,.25),inset 0 1px 0 rgba(255,255,255,.22)!important;
+}
+
+html body #create .entry-source #quoteStatus{
+  color:#657b92!important;
+  font-size:11.5px!important;
+  font-weight:650!important;
+  line-height:1.65!important;
+}
+
+html body #create .risk{
+  background:linear-gradient(135deg,#eef6ff 0%,#edfafd 100%)!important;
+  color:#315b84!important;
+  border:1px solid #c4dbef!important;
+  box-shadow:0 6px 18px rgba(43,88,132,.07)!important;
+}
+
+html body #create .risk span{color:#647d96!important;font-size:11px!important;font-weight:700!important}
+html body #create .risk b{color:#1f67d2!important}
+
+html body #create .targets article,
+html body #create .auto-setup-grid>div{
+  background:#f6f9fd!important;
+  color:#5d748c!important;
+  border:1px solid #d3e0ec!important;
+  box-shadow:0 4px 13px rgba(32,64,101,.045)!important;
+}
+
+html body #create .targets article b,
+html body #create .auto-setup-grid b{color:#1f4164!important}
+
+html body #create .submit-preview,
+html body #create #autoValidate{
+  min-height:50px!important;
+  color:#ffffff!important;
+  border:0!important;
+  border-radius:14px!important;
+  background:linear-gradient(135deg,#0f6fdc 0%,#2563eb 58%,#526cf0 100%)!important;
+  box-shadow:0 10px 24px rgba(37,99,235,.19)!important;
+  font-size:13.5px!important;
+  font-weight:850!important;
+}
+
+html body #create .submit-preview:hover,
+html body #create #autoValidate:hover{
+  transform:translateY(-1px)!important;
+  box-shadow:var(--nx-v16-shadow-hover)!important;
+}
+
+/* Stepper aligned with the lighter signal surface. */
+html body #create .steps span{
+  background:#f0f6fc!important;
+  color:#5c7893!important;
+  border:1.5px solid #b8cce1!important;
+  box-shadow:0 5px 14px rgba(42,74,108,.07)!important;
+}
+
+html body #create .steps span.on{
+  color:#ffffff!important;
+  border-color:#3f8df0!important;
+  background:linear-gradient(135deg,#67d5ef 0%,#2788e8 48%,#4367e8 100%)!important;
+  box-shadow:0 0 0 4px rgba(56,139,232,.10),0 9px 20px rgba(37,99,235,.16)!important;
+}
+
+html body #create .steps i{
+  background:linear-gradient(90deg,#d8e4ef,#7faee0,#d8e4ef)!important;
+}
+
+/* Disable V15 dark hover transform on nested signal form surfaces. */
+html body #create :is(#signalForm.panel,#manualSetupFields.setup-fields,#autoSetupFields.setup-fields):hover{
+  transform:none!important;
+  filter:none!important;
+}
+
+@media(max-width:430px){
+  html body .bottom-nav .nav-item small{font-size:12.5px!important}
+  html body .bottom button{font-size:12px!important}
+  html body #create :is(.form label,.auto-grid label){font-size:11.5px!important}
+  html body #create :is(input,select,textarea){font-size:14.5px!important}
+  html body #create .entry-source #quoteStatus{font-size:11px!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  html body #create *,
+  html body #create *::before,
+  html body #create *::after{
+    transition-duration:.01ms!important;
+    animation-duration:.01ms!important;
+  }
+}

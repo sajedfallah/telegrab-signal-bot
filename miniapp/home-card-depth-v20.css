@@ -1,0 +1,163 @@
+/* NEXUS Home V20 — card depth / contrast layer
+   Scope: user Home only. No Signals, Account, Admin, Landing or runtime behavior. */
+
+.app-shell{
+  --home-card-bg:linear-gradient(145deg,rgba(25,38,55,.97),rgba(13,21,33,.96));
+  --home-card-bg-soft:linear-gradient(145deg,rgba(30,44,62,.72),rgba(18,28,42,.68));
+  --home-card-border:rgba(255,255,255,.18);
+  --home-card-border-strong:rgba(255,255,255,.24);
+  --home-card-shadow:0 9px 16px -6px rgba(0,0,0,.62),0 2px 6px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035);
+  --home-card-shadow-soft:0 7px 14px -7px rgba(0,0,0,.56),0 2px 5px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.03);
+  --home-card-radius:20px;
+  --home-card-inner-radius:16px;
+}
+
+/* Main Home containers: stronger separation from the page background. */
+.app-shell .home-v2 > :is(.hero,.home-v2-section){
+  border:1px solid var(--home-card-border)!important;
+  border-radius:var(--home-card-radius)!important;
+  background:var(--home-card-bg)!important;
+  box-shadow:var(--home-card-shadow)!important;
+}
+
+.app-shell .home-v2 > .home-v2-section{
+  padding:18px!important;
+}
+
+/* Keep the hero identity while giving it the same depth language. */
+.app-shell .home-v2 > .home-v2-spotlight{
+  border-color:var(--home-card-border-strong)!important;
+  background:
+    radial-gradient(circle at 12% 0%,rgba(34,211,238,.12),transparent 44%),
+    radial-gradient(circle at 92% 12%,rgba(37,99,235,.11),transparent 38%),
+    linear-gradient(150deg,#19283b 0%,#101a29 52%,#0b121d 100%)!important;
+  box-shadow:0 11px 16px -7px rgba(0,0,0,.68),0 3px 8px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.045)!important;
+}
+
+/* Box-shaped content inside Home sections. */
+.app-shell .home-v2 :is(
+  .home-stat-grid>div,
+  .home-signal-card,
+  .home-why-grid>article,
+  .home-health-card,
+  .home-vip-summary>div,
+  .home-vip-locked-list>div,
+  .home-today-row>div,
+  .home-content-card,
+  .home-attention-card,
+  .home-offer-card,
+  .info-strip,
+  .nexus-empty-state
+){
+  border:1px solid var(--home-card-border)!important;
+  border-radius:var(--home-card-inner-radius)!important;
+  background:var(--home-card-bg-soft)!important;
+  box-shadow:var(--home-card-shadow-soft)!important;
+}
+
+/* Consistent breathing room for nested cards that previously had none. */
+.app-shell .home-v2 :is(.home-attention-card,.home-offer-card,.home-content-card,.info-strip){
+  padding:14px 15px!important;
+}
+
+.app-shell .home-v2 .home-attention-card + .home-attention-card{
+  margin-top:10px;
+}
+
+.app-shell .home-v2 .home-stat-grid>div{
+  padding:14px 8px!important;
+}
+
+.app-shell .home-v2 .home-signal-card,
+.app-shell .home-v2 .home-health-card,
+.app-shell .home-v2 .home-why-grid>article{
+  padding:14px!important;
+}
+
+.app-shell .home-v2 .home-vip-summary>div{
+  padding:12px 7px!important;
+}
+
+.app-shell .home-v2 .home-vip-locked-list>div{
+  padding:10px 11px!important;
+}
+
+/* Preserve semantic state colors while retaining the white translucent edge. */
+.app-shell .home-v2 .home-health-card.success{
+  border-color:rgba(94,224,173,.30)!important;
+  background:linear-gradient(145deg,rgba(19,61,53,.46),rgba(16,31,37,.78))!important;
+}
+
+.app-shell .home-v2 .home-health-card.warning,
+.app-shell .home-v2 .home-v2-priority{
+  border-color:rgba(251,191,36,.28)!important;
+}
+
+.app-shell .home-v2 .home-health-card.danger{
+  border-color:rgba(255,107,118,.30)!important;
+  background:linear-gradient(145deg,rgba(70,28,38,.46),rgba(31,20,28,.78))!important;
+}
+
+.app-shell .home-v2 .home-v066-vip,
+.app-shell .home-v2 .home-vip-preview{
+  border-color:rgba(251,191,36,.34)!important;
+}
+
+/* Subtle interaction only; no layout jump on touch devices. */
+@media (hover:hover) and (pointer:fine){
+  .app-shell .home-v2 :is(
+    .home-v2-section,
+    .home-signal-card,
+    .home-why-grid>article,
+    .home-health-card,
+    .home-content-card,
+    .home-offer-card,
+    .info-strip
+  ){
+    transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+  }
+
+  .app-shell .home-v2 :is(
+    .home-v2-section,
+    .home-signal-card,
+    .home-why-grid>article,
+    .home-health-card,
+    .home-content-card,
+    .home-offer-card,
+    .info-strip
+  ):hover{
+    border-color:var(--home-card-border-strong)!important;
+    box-shadow:0 11px 16px -7px rgba(0,0,0,.66),0 3px 8px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.045)!important;
+  }
+}
+
+/* Light mode is opt-in only. The current NEXUS user shell is dark-first,
+   so these tokens activate only when a future explicit light-theme flag exists. */
+html[data-theme="light"] .app-shell,
+body.theme-light .app-shell,
+.app-shell[data-theme="light"]{
+  --home-card-bg:linear-gradient(145deg,rgba(255,255,255,.99),rgba(243,247,252,.98));
+  --home-card-bg-soft:linear-gradient(145deg,rgba(255,255,255,.96),rgba(238,244,250,.94));
+  --home-card-border:rgba(26,52,82,.12);
+  --home-card-border-strong:rgba(26,52,82,.20);
+  --home-card-shadow:0 9px 16px -6px rgba(31,56,86,.18),0 2px 6px rgba(31,56,86,.08),inset 0 1px 0 rgba(255,255,255,.90);
+  --home-card-shadow-soft:0 7px 14px -7px rgba(31,56,86,.16),0 2px 5px rgba(31,56,86,.06),inset 0 1px 0 rgba(255,255,255,.84);
+}
+
+html[data-theme="light"] .app-shell .home-v2 > .home-v2-spotlight,
+body.theme-light .app-shell .home-v2 > .home-v2-spotlight,
+.app-shell[data-theme="light"] .home-v2 > .home-v2-spotlight{
+  background:
+    radial-gradient(circle at 12% 0%,rgba(34,211,238,.11),transparent 44%),
+    radial-gradient(circle at 92% 12%,rgba(37,99,235,.08),transparent 38%),
+    linear-gradient(150deg,#ffffff 0%,#f3f7fc 100%)!important;
+}
+
+@media (max-width:390px){
+  .app-shell .home-v2 > .home-v2-section{padding:16px!important}
+  .app-shell .home-v2 :is(.home-attention-card,.home-offer-card,.home-content-card,.info-strip){padding:13px!important}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .app-shell .home-v2 *{transition:none!important}
+}

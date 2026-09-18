@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NEXUS">
+  <defs>
+    <linearGradient id="nexusBlue" x1="14" y1="92" x2="76" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B4CFF"/>
+      <stop offset="1" stop-color="#17C8FF"/>
+    </linearGradient>
+    <linearGradient id="nexusTeal" x1="54" y1="98" x2="114" y2="28" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16D7C2"/>
+      <stop offset="1" stop-color="#52F5C8"/>
+    </linearGradient>
+  </defs>
+  <path d="M18 96V39c0-8 6-14 14-14h12l41 56-14 18-38-52v49H18Z" fill="url(#nexusBlue)"/>
+  <path d="M41 25h20l24 33 19-24H91l23-11-5 27-9-10-38 48H42l31-40L41 25Z" fill="url(#nexusTeal)"/>
+  <path d="M29 39 53 71 42 86 18 54V39c0-8 6-14 14-14h12L29 39Z" fill="#0A62FF" opacity=".72"/>
+</svg>
