@@ -149,3 +149,60 @@ def assess_fast_scalp(snapshot: MarketSnapshot) -> FastScalpAssessment:
         ev.append("M1 FVG retest active")
         return FastScalpAssessment("ICT_FAST_SCALP_M1",snapshot.symbol,snapshot.snapshot_id,FastScalpState.ENTRY_READY,bias,poi,anchor,entry_zone,tuple(ev),())
     return FastScalpAssessment("ICT_FAST_SCALP_M1",snapshot.symbol,snapshot.snapshot_id,FastScalpState.RETEST,bias,poi,anchor,entry_zone,tuple(ev),("waiting_m1_fvg_retest",))
+
+
+@dataclass(frozen=True)
+class FastScalpSignalPlan:
+    strategy_id: str
+    symbol: str
+    snapshot_id: str
+    direction: Direction
+    entry: float
+    entry_low: float
+    entry_high: float
+    stop_loss: float
+    take_profits: tuple[float, ...]
+    rr: float
+    evidence: tuple[str, ...]
+
+
+def build_fast_scalp_signal(snapshot: MarketSnapshot, setup: FastScalpAssessment) -> tuple[FastScalpSignalPlan | None, tuple[str, ...]]:
+    """Build a shadow-only M1 signal from an ENTRY_READY setup.
+
+    Entry uses the executable quote while price is inside the confirmed M1 FVG.
+    SL is the real M1 sweep anchor. Targets are existing M5 liquidity levels.
+    """
+    blocks=[]
+    if setup.state != FastScalpState.ENTRY_READY: blocks.append("fast_scalp_not_entry_ready")
+    if setup.snapshot_id != snapshot.snapshot_id: blocks.append("snapshot_mismatch")
+    if setup.direction not in {Direction.LONG,Direction.SHORT}: blocks.append("missing_direction")
+    if setup.entry_zone is None: blocks.append("missing_m1_entry_zone")
+    if setup.sweep_anchor is None: blocks.append("missing_m1_sweep_anchor")
+    if snapshot.bid is None or snapshot.ask is None: blocks.append("missing_quote")
+    if snapshot.data_freshness_ms>30000: blocks.append("stale_market_data")
+    if blocks: return None,tuple(dict.fromkeys(blocks))
+    direction=setup.direction
+    entry=float(snapshot.ask if direction==Direction.LONG else snapshot.bid)
+    low,high=setup.entry_zone
+    if not low<=entry<=high: return None,("executable_quote_outside_m1_fvg",)
+    stop=float(setup.sweep_anchor)
+    if direction==Direction.LONG and stop>=entry: return None,("invalid_long_stop_structure",)
+    if direction==Direction.SHORT and stop<=entry: return None,("invalid_short_stop_structure",)
+    risk=abs(entry-stop)
+    if risk<=0: return None,("zero_signal_risk",)
+    m5=_rows(snapshot,"M5")[-80:]
+    if direction==Direction.LONG:
+        candidates=sorted({float(x["high"]) for x in m5 if float(x["high"])>entry})
+    else:
+        candidates=sorted({float(x["low"]) for x in m5 if float(x["low"])<entry},reverse=True)
+    eligible=[p for p in candidates if abs(p-entry)>=risk]
+    if not eligible: return None,("no_valid_m5_liquidity_target",)
+    tps=[]
+    for p in eligible:
+        if not tps or abs(p-tps[-1])>=risk*0.5: tps.append(p)
+        if len(tps)==3: break
+    rr=abs(tps[0]-entry)/risk
+    return FastScalpSignalPlan(
+        "ICT_FAST_SCALP_M1",snapshot.symbol,snapshot.snapshot_id,direction,entry,low,high,
+        stop,tuple(tps),rr,tuple((*setup.evidence,"shadow signal; no AutoTrade execution"))
+    ),()
