@@ -42,17 +42,48 @@ def _latest_ob(rows):
         if displacement and float(cur["close"])<float(cur["open"]) and float(prev["close"])>float(prev["open"]): bear=(float(prev["low"]),float(prev["high"]))
     return bull,bear
 
-def _m5_trigger(rows):
-    prior=rows[-14:-2]; p,last=rows[-2],rows[-1]; ph=max(float(x["high"]) for x in prior); pl=min(float(x["low"]) for x in prior)
-    bs=float(p["low"])<pl and float(p["close"])>pl; ss=float(p["high"])>ph and float(p["close"])<ph
-    bm=float(last["close"])>max(float(x["high"]) for x in rows[-7:-1]); sm=float(last["close"])<min(float(x["low"]) for x in rows[-7:-1]); ev=[]
-    if bs: ev.append("5M sell-side liquidity sweep/reclaim")
-    if ss: ev.append("5M buy-side liquidity sweep/reclaim")
-    if bm: ev.append("5M bullish displacement/MSS")
-    if sm: ev.append("5M bearish displacement/MSS")
-    if bs and bm: return Direction.LONG,tuple(ev)
-    if ss and sm: return Direction.SHORT,tuple(ev)
-    return Direction.NEUTRAL,tuple(ev)
+def _m5_trigger(rows, sweep_window=4):
+    """Confirm a recent liquidity sweep with a later 5M MSS.
+
+    A valid sweep may precede the MSS by several closed 5M candles. The sweep
+    must still be inside the bounded confirmation window; older sweeps expire.
+    """
+    if len(rows) < 20:
+        return Direction.NEUTRAL, ()
+
+    last = rows[-1]
+    bm = float(last["close"]) > max(float(x["high"]) for x in rows[-7:-1])
+    sm = float(last["close"]) < min(float(x["low"]) for x in rows[-7:-1])
+
+    start = max(12, len(rows) - 1 - sweep_window)
+    sell_side = None
+    buy_side = None
+    for i in range(start, len(rows) - 1):
+        prior = rows[max(0, i - 12):i]
+        if len(prior) < 12:
+            continue
+        ph = max(float(x["high"]) for x in prior)
+        pl = min(float(x["low"]) for x in prior)
+        candle = rows[i]
+        if float(candle["low"]) < pl and float(candle["close"]) > pl:
+            sell_side = i
+        if float(candle["high"]) > ph and float(candle["close"]) < ph:
+            buy_side = i
+
+    ev = []
+    if sell_side is not None:
+        ev.append(f"5M sell-side liquidity sweep/reclaim ({len(rows)-1-sell_side} bars before MSS check)")
+    if buy_side is not None:
+        ev.append(f"5M buy-side liquidity sweep/reclaim ({len(rows)-1-buy_side} bars before MSS check)")
+    if bm:
+        ev.append("5M bullish displacement/MSS")
+    if sm:
+        ev.append("5M bearish displacement/MSS")
+    if sell_side is not None and bm:
+        return Direction.LONG, tuple(ev)
+    if buy_side is not None and sm:
+        return Direction.SHORT, tuple(ev)
+    return Direction.NEUTRAL, tuple(ev)
 
 def assess_ict(snapshot: MarketSnapshot) -> AgentAssessment:
     missing=list(snapshot.missing_data); d1,h1,m15,m5=(_rows(snapshot,tf) for tf in ("D1","H1","M15","M5"))
