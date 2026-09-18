@@ -1,5 +1,5 @@
 param(
-    [string]$Commit = "747ca946d556f79fb8c9a3184f27e9301869b6b2",
+    [string]$Commit = "3e33b699c118f7f765fa216eede2a5c6de5dd3f6",
     [string]$Prod = "C:\NEXUS_DEPLOY\v066-clean-20260912"
 )
 
@@ -11,7 +11,7 @@ $Repo = Join-Path $Work "repo"
 $Release = Join-Path $Work "release"
 $Backup = Join-Path $Prod "_backup\signal-pnl-motion-v25-$Stamp"
 $HealthUrl = "https://api.nexustrade.ir/miniapp/api/health"
-$CssUrl = "https://api.nexustrade.ir/miniapp/signal-pnl-motion-v25.css?v=20260918-pnlmotion1"
+$CssUrl = "https://api.nexustrade.ir/miniapp/signal-pnl-motion-v25.css?v=20260918-pnlmotion2"
 
 $Files = @(
     "miniapp\admin-signal-v13.js",
@@ -89,8 +89,8 @@ if(-not $UserJs.Contains("if (status !== 'LIVE') return '';")) { throw "User LIV
 if(-not $UserJs.Contains("IN_PROFIT") -or -not $UserJs.Contains("IN_LOSS")) { throw "User PnL state mapping missing" }
 if(-not $AdminJs.Contains("function adminSignalPnlClass")) { throw "Admin PnL class mapper missing" }
 if(-not $AdminJs.Contains("if (status !== 'LIVE') return '';")) { throw "Admin LIVE gate missing" }
-if(-not $IndexHtml.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion1")) { throw "User stylesheet link missing" }
-if(-not $AdminHtml.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion1")) { throw "Admin stylesheet link missing" }
+if(-not $IndexHtml.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion2")) { throw "User stylesheet link missing" }
+if(-not $AdminHtml.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion2")) { throw "Admin stylesheet link missing" }
 if(-not $Css.Contains("@keyframes nexusPnlBorderSpinV25")) { throw "PnL animation keyframes missing" }
 if(-not $Css.Contains(".signal-v2-card.pnl-profit") -or -not $Css.Contains(".signal-v2-card.pnl-loss")) { throw "User PnL selectors missing" }
 if(-not $Css.Contains("#signalList .card.pnl-profit") -or -not $Css.Contains("#signalList .card.pnl-loss")) { throw "Admin PnL selectors missing" }
@@ -129,8 +129,12 @@ try {
     $ProdAdmin = Get-Content (Join-Path $Prod "miniapp\admin.html") -Raw
 
     if(-not $ProdCss.Contains("nexusPnlBorderSpinV25")) { throw "Production CSS marker missing" }
-    if(-not $ProdIndex.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion1")) { throw "Production user HTML stylesheet marker missing" }
-    if(-not $ProdAdmin.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion1")) { throw "Production admin HTML stylesheet marker missing" }
+    if(-not $ProdIndex.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion2")) { throw "Production user HTML stylesheet marker missing" }
+    if(-not $ProdIndex.Contains("signals-v2.js?v=20260918-pnlmotion2")) { throw "Production user JS cache-buster missing" }
+    if(-not $ProdIndex.Contains("signal-pnl-motion-v25-20260918-2")) { throw "Production user build marker missing" }
+    if(-not $ProdAdmin.Contains("signal-pnl-motion-v25.css?v=20260918-pnlmotion2")) { throw "Production admin HTML stylesheet marker missing" }
+    if(-not $ProdAdmin.Contains("admin-signal-v13.js?v=20260918-pnlmotion2")) { throw "Production admin JS cache-buster missing" }
+    if(-not $ProdAdmin.Contains("signal-pnl-motion-v25-20260918-2")) { throw "Production admin build marker missing" }
 
     Assert-Health -Stage "POST-DEPLOY"
     Assert-LiveCss
