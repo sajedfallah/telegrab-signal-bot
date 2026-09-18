@@ -12,6 +12,8 @@ from typing import Callable, Iterable
 from .contracts import WorkflowState
 from .orchestrator import ShadowRunResult, run_shadow
 from .risk_gate import RiskPolicy
+from .snapshot_adapter import build_mt5_snapshot
+from .agents.ict import assess_ict
 from .telegram_reporter import TelegramShadowReporter, format_hourly_analysis, format_shadow_record
 
 DEFAULT_SYMBOLS = ("XAUUSD", "US30", "BTC", "SOL")
@@ -31,10 +33,21 @@ class ShadowRunnerConfig:
 def _journal_path(root: Path, symbol: str, now: datetime | None = None) -> Path:
     day=(now or datetime.now(timezone.utc)).strftime("%Y-%m-%d"); safe="".join(ch for ch in symbol.upper() if ch.isalnum() or ch in {"-","_"}); return root/safe/f"{day}.jsonl"
 
+def _assessment_summary(a):
+    return {"agent":a.agent,"direction":a.direction.value,"evidence":list(a.evidence),"invalidation":list(a.invalidation),"missing_data":list(a.missing_data)}
+
+def _hourly_ict_record(config: ShadowRunnerConfig, symbol: str) -> dict[str,object]:
+    try:
+        snapshot=build_mt5_snapshot(config.account,symbol)
+        ict=assess_ict(snapshot)
+        return {"symbol":snapshot.symbol,"snapshot_id":snapshot.snapshot_id,"final":"ANALYSIS","direction":ict.direction.value,"bid":snapshot.bid,"ask":snapshot.ask,"assessments":[_assessment_summary(ict)]}
+    except Exception as exc:
+        return {"symbol":symbol,"final":WorkflowState.NO_TRADE.value,"error":f"{type(exc).__name__}: {exc}"}
+
 def _summary(result: ShadowRunResult) -> dict[str, object]:
     out={"symbol":result.initial_snapshot.symbol,"snapshot_id":result.initial_snapshot.snapshot_id,"scan":result.scan.state.value,"supervisor":result.supervisor.state.value,"final":result.final_decision.state.value,"direction":result.final_decision.direction.value if result.final_decision.direction else None,"risk_allowed":result.risk.allowed if result.risk else None,"risk_blocks":list(result.risk.hard_blocks) if result.risk else [],"signal_blocks":list(result.signal_blocks)}
     if result.assessments:
-        out["assessments"]=[{"agent":a.agent,"direction":a.direction.value,"evidence":list(a.evidence),"invalidation":list(a.invalidation),"missing_data":list(a.missing_data)} for a in result.assessments]
+        out["assessments"]=[_assessment_summary(a) for a in result.assessments]
     if result.signal:
         s=result.signal; out.update({"entry":s.entry,"entry_low":s.entry_low,"entry_high":s.entry_high,"stop_loss":s.stop_loss,"take_profits":list(s.take_profits),"rr":s.rr,"signal_expires_at":s.expires_at.isoformat()})
     return out
@@ -63,13 +76,14 @@ def run_forever(config,reporter=None,*,change_only=False,hourly_analysis=False,h
     while True:
         records=run_cycle(config); now_mono=time.monotonic(); print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"records":records},ensure_ascii=False))
         if reporter is not None and hourly_analysis and (last_hourly_at == 0.0 or now_mono-last_hourly_at >= hourly_seconds):
-            for record in records:
+            for symbol in config.symbols:
+                record=_hourly_ict_record(config,symbol)
                 try: reporter.send_text(format_hourly_analysis(record))
                 except Exception as exc: print(json.dumps({"telegram_report_error":f"{type(exc).__name__}: {exc}","symbol":str(record.get("symbol") or "UNKNOWN"),"report":"hourly_analysis"},ensure_ascii=False))
             last_hourly_at=now_mono
         # Signals are time-sensitive: publish a new/changed plan immediately. Other
         # state changes remain optional through the existing change-only reporter.
-        signal_records=[r for r in records if r.get("entry") is not None]
+        signal_records=[r for r in records if r.get("entry") is not None and r.get("risk_allowed") is True]
         _report_records(signal_records,reporter,change_only=True,last_sent=last_sent)
         if change_only and not hourly_analysis: _report_records(records,reporter,change_only=True,last_sent=last_sent)
         time.sleep(config.interval_seconds)
