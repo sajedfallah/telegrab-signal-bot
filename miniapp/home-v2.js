@@ -276,7 +276,7 @@
 
   async function hydrateNexusHome() {
     if (state.route !== 'home') return;
-    if (!window.Telegram?.WebApp?.initData) {
+    if (!window.Telegram?.WebApp?.initData && !window.NexusPreviewMode?.active?.()) {
       console.warn('[NEXUS][HOME] missing Telegram initData');
       renderAuthUnavailable();
       return;
