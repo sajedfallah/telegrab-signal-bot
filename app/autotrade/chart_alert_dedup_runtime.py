@@ -26,15 +26,21 @@ def _incident_payload(account: str, health: dict[str, Any]) -> tuple[str, int | 
     # Incident identity deliberately excludes rolling health counters. A new
     # unrelated failure/fallback must not make the same exhausted NX signal
     # alert again. A changed signal/job/error/severity is a genuinely new event.
+    # A repair retry may create a new capture job id for the same unresolved
+    # signal/error. Treat that as the same incident so one broken NX signal
+    # cannot spam admins every repair/throttle cycle. The latest job id remains
+    # in the payload for diagnostics, but it is deliberately excluded from the
+    # durable incident identity. A clean health cycle clears the claim, allowing
+    # the same problem to alert once again if it genuinely returns later.
     identity = {
         "account": str(account),
         "severity": severity,
         "signal_id": signal_id,
-        "job_id": job_id,
         "error": error,
     }
     payload = {
         **identity,
+        "job_id": job_id,
         "code": code,
         "failed": int((health.get("counts") or {}).get("FAILED", 0)),
         "expired": int((health.get("counts") or {}).get("EXPIRED", 0)),
