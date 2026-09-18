@@ -119,7 +119,7 @@ def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, no
                 valid.append({"time": int(row["bar_time"]), "open": o, "high": h, "low": l, "close": c, "tick_volume": float(row["tick_volume"] or 0)})
             timeframes[timeframe] = tuple(valid)
             minimum = 10 if timeframe == "D1" else 20
-            if len(valid) < minimum:
+            if len(valid) < minimum and (timeframe == "D1" or timeframe in _REQUIRED_TIMEFRAMES):
                 missing.append(f"candles:{timeframe}")
             if rows:
                 capture_age = _age_ms(_parse_iso(str(rows[0]["captured_at"] or "")), now)
