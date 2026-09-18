@@ -141,7 +141,7 @@
   }
 
   async function loadExperience() {
-    if (!window.Telegram?.WebApp?.initData) return;
+    if (!window.Telegram?.WebApp?.initData && !window.NexusPreviewMode?.active?.()) return;
     try {
       const experience = await api('/experience');
       state.experience = experience;
