@@ -1,0 +1,16 @@
+{
+  "name": "nexus-launch-video",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "render": "remotion render src/index.jsx NexusLaunchV1 out/nexus-launch-v1.mp4 --codec=h264 --crf=18",
+    "still": "remotion still src/index.jsx NexusLaunchV1 out/nexus-launch-v1-poster.png --frame=610"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.346",
+    "@remotion/bundler": "4.0.346",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "remotion": "4.0.346"
+  }
+}

@@ -1,0 +1,56 @@
+name: NEXUS Video Render
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - feature/live-charts-v1
+    paths:
+      - 'video/**'
+      - 'brag-output/**'
+      - '.github/workflows/nexus-video-render.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/brag-video-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout PR source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: video
+        run: npm install --no-audit --no-fund
+
+      - name: Ensure Chromium
+        working-directory: video
+        run: npx remotion browser ensure
+
+      - name: Render MP4
+        working-directory: video
+        run: npm run render
+
+      - name: Render poster
+        working-directory: video
+        run: npm run still
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-launch-video-v1
+          path: |
+            video/out/nexus-launch-v1.mp4
+            video/out/nexus-launch-v1-poster.png
+          if-no-files-found: error
+          retention-days: 14
