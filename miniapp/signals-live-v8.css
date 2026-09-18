@@ -1,0 +1,35 @@
+/* NEXUS Signal Center v8 — root live-panel styling without generic .live collisions */
+.signal-v2-card{position:relative;isolation:isolate;overflow:hidden;border-radius:20px;background:linear-gradient(155deg,#151f2c,#101722)!important}
+.signal-v2-card.pnl-profit{border:2px solid rgba(49,214,164,.88)!important;box-shadow:0 16px 38px rgba(0,0,0,.34),0 0 24px rgba(49,214,164,.10)!important}
+.signal-v2-card.pnl-loss{border:2px solid rgba(255,107,118,.88)!important;box-shadow:0 16px 38px rgba(0,0,0,.34),0 0 24px rgba(255,107,118,.10)!important}
+.signal-v2-card.pnl-be{border:2px solid rgba(199,208,220,.42)!important}
+.signal-v2-card:not(.pnl-profit):not(.pnl-loss):not(.pnl-be){border:2px solid rgba(37,99,235,.58)!important}
+.signal-live-panel,
+.signal-live-panel.state-live,
+.signal-live-panel.state-pending,
+.signal-live-panel.state-stale,
+.signal-live-panel.state-unavailable{
+  margin-top:10px!important;
+  padding:12px!important;
+  border-radius:14px!important;
+  background:#0b1118!important;
+  background-color:#0b1118!important;
+  background-image:linear-gradient(155deg,#111821,#0b1017)!important;
+  border:1px solid rgba(96,165,250,.20)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+  color:#f5f8fc!important;
+}
+.signal-live-panel.state-live{border-color:rgba(6,182,212,.30)!important}
+.signal-live-panel.state-stale{background:#15130f!important;background-image:linear-gradient(155deg,#1d1911,#0d1015)!important;border-color:rgba(245,184,74,.32)!important}
+.signal-live-panel.state-unavailable{background:#0d1219!important;background-image:none!important;border-color:rgba(255,255,255,.08)!important}
+.signal-live-grid>div{background:#0f151d!important;background-color:#0f151d!important;border:1px solid rgba(96,165,250,.16)!important;box-shadow:none!important}
+.signal-live-grid span{color:#8995a7!important}
+.signal-live-grid b{color:#f4f7fb!important}
+.signal-live-grid .pnl.in_profit{color:#31d6a4!important}
+.signal-live-grid .pnl.in_loss{color:#ff6b76!important}
+.signal-live-grid .pnl.be{color:#c7d0dc!important}
+.nexus-live-pulse.state-live .pulse-back{stroke:rgba(6,182,212,.18)!important}
+.nexus-live-pulse.state-live .pulse-front{stroke:#06b6d4!important}
+.nexus-live-pulse.state-stale .pulse-back,.nexus-live-pulse.state-stale .pulse-front{stroke:#f5b84a!important}
+.signal-live-panel::before,.signal-live-panel::after{background:none!important;box-shadow:none!important}
+@media(max-width:420px){.signal-live-panel{padding:10px!important}}

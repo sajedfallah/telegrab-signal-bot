@@ -1,0 +1,51 @@
+/* NEXUS Signal runtime v4 — authoritative last-layer card styling for Telegram WebView */
+.signal-v2-card{
+  position:relative!important;
+  isolation:isolate!important;
+  overflow:hidden!important;
+  border:0!important;
+  border-radius:20px!important;
+  background:#0e141c!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.32)!important;
+}
+.signal-v2-card::before{
+  content:""!important;
+  position:absolute!important;
+  inset:-70%!important;
+  z-index:0!important;
+  background:conic-gradient(from 0deg,transparent 0 74%,rgba(57,215,196,.95) 80%,transparent 87%)!important;
+  animation:nexusSignalRuntimeSpin 3.8s linear infinite!important;
+  transform-origin:center!important;
+  pointer-events:none!important;
+}
+.signal-v2-card::after{
+  content:""!important;
+  position:absolute!important;
+  inset:2px!important;
+  z-index:1!important;
+  border-radius:18px!important;
+  background:linear-gradient(155deg,#141b24,#0b1017)!important;
+  border:1px solid rgba(255,255,255,.03)!important;
+  pointer-events:none!important;
+}
+.signal-v2-card>*{position:relative!important;z-index:2!important}
+.signal-v2-card:has(.pnl.in_profit)::before,.signal-v2-card:has(.signal-v2-result.win)::before,.signal-v2-card.closed-win::before{background:conic-gradient(from 0deg,transparent 0 72%,#45d693 79%,#77e5bd 82%,transparent 89%)!important}
+.signal-v2-card:has(.pnl.in_loss)::before,.signal-v2-card:has(.signal-v2-result.loss)::before,.signal-v2-card.closed-loss::before{background:conic-gradient(from 0deg,transparent 0 72%,#ff606f 79%,#ff8c96 82%,transparent 89%)!important}
+.signal-v2-card:has(.pnl.be)::before,.signal-v2-card:has(.signal-v2-result.be)::before,.signal-v2-card.closed-be::before{background:conic-gradient(from 0deg,transparent 0 74%,rgba(199,208,220,.72) 81%,transparent 88%)!important}
+.signal-live-panel,.signal-live-panel.live{
+  background:linear-gradient(155deg,#111821,#0b1017)!important;
+  border:1px solid rgba(57,215,196,.18)!important;
+  color:#f4f7fb!important;
+  box-shadow:none!important;
+}
+.signal-live-panel .signal-live-grid>div{background:rgba(255,255,255,.018)!important;border:1px solid rgba(255,255,255,.075)!important}
+.signal-live-panel .signal-live-grid span{color:#8995a7!important}
+.signal-live-panel .signal-live-grid b{color:#f4f7fb!important}
+.signal-live-panel .signal-live-grid .pnl.in_profit{color:#77e5bd!important}
+.signal-live-panel .signal-live-grid .pnl.in_loss{color:#ff8c96!important}
+.signal-live-panel .signal-live-grid .pnl.be{color:#c7d0dc!important}
+.signal-live-panel.stale{background:linear-gradient(155deg,#1d1911,#0d1015)!important;border-color:rgba(230,184,91,.28)!important}
+.signal-live-panel.unavailable{background:#0d1219!important;border-color:rgba(255,255,255,.08)!important}
+@keyframes nexusSignalRuntimeSpin{to{transform:rotate(360deg)}}
+@media(max-width:420px){.signal-v2-card{border-radius:18px!important}.signal-v2-card::after{border-radius:16px!important}.signal-live-panel{padding:10px!important}}
+@media(prefers-reduced-motion:reduce){.signal-v2-card::before{animation:none!important}}

@@ -3,126 +3,96 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0d12" />
+  <meta name="theme-color" content="#020b18" />
   <title>NEXUS Mini App</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="./styles.css" />
-  <link rel="stylesheet" href="./runtime.css" />
+  <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+  <link rel="stylesheet" href="./styles.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./runtime.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./home-v2.css?v=20260912-2105" />
+  <link rel="stylesheet" href="./signals-v2.css?v=20260914-next-ui" />
+  <link rel="stylesheet" href="./track-record.css?v=20260914-next-ui" />
+  <link rel="stylesheet" href="./trades-v2.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./pricing-v2.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./account-v2.css?v=20260914-v14-final" />
+  <link rel="stylesheet" href="./design-v2.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./polish-v3.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./ui-v4.css?v=20260910-1215" />
+  <link rel="stylesheet" href="./landing-v18.css?v=20260918-minimal-landing1" />
+  <link rel="stylesheet" href="./navigation-v7.css?v=20260910-1845" />
+  <link rel="stylesheet" href="./signals-live-v8.css?v=20260912-1405" />
+  <link rel="stylesheet" href="./user-v066-final.css?v=20260914-next-ui" />
+  <link rel="stylesheet" href="./home-card-depth-v20.css?v=20260915-home-depth1" />
+  <link rel="stylesheet" href="./signal-empty-radar-v21.css?v=20260915-radar1" />
+  <link rel="stylesheet" href="./symbol-visuals.css?v=20260914-next-ui" />
+  <link rel="stylesheet" href="./live-charts.css?v=20260914-livecharts-nav1" />
+  <link rel="stylesheet" href="./live-chart-tools-v23.css?v=20260915-actionfix1" />
+  <link rel="stylesheet" href="./vazirmatn.css?v=20260914-vazirmatn1" />
 </head>
-<body>
-  <div class="app-shell">
-    <header class="topbar">
-      <div class="brand-wrap">
-        <div class="brand-mark">N</div>
-        <div>
-          <div class="brand">NEXUS</div>
-          <div class="brand-sub">Trading Intelligence</div>
-        </div>
+<body class="landing-active">
+  <section class="nexus-landing" id="nexusLanding" aria-label="NEXUS Landing">
+    <div class="nexus-landing-stage">
+      <div class="nexus-landing-noise" aria-hidden="true"></div>
+
+      <svg class="nexus-landing-chart" viewBox="0 0 1200 620" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="nxLandingLine" x1="0" x2="1">
+            <stop offset="0" stop-color="#0d6fae" stop-opacity=".12"></stop>
+            <stop offset=".55" stop-color="#28a7ff" stop-opacity=".62"></stop>
+            <stop offset="1" stop-color="#58c4ff" stop-opacity=".22"></stop>
+          </linearGradient>
+          <linearGradient id="nxLandingCandle" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#4ec5ff"></stop>
+            <stop offset="1" stop-color="#0c5f98"></stop>
+          </linearGradient>
+        </defs>
+
+        <path class="nexus-chart-flow" d="M40 420 C150 386,215 292,330 330 S515 442,660 378 S842 275,925 322 S1054 290,1160 180" fill="none" stroke="url(#nxLandingLine)" stroke-width="2"></path>
+
+        <g class="nexus-chart-candles" opacity=".62">
+          <g class="nexus-chart-candle"><line x1="150" y1="355" x2="150" y2="458"></line><rect x="140" y="380" width="20" height="45" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="194" y1="306" x2="194" y2="408"></line><rect x="184" y="332" width="20" height="48" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="238" y1="270" x2="238" y2="368"></line><rect x="228" y="296" width="20" height="46" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="958" y1="273" x2="958" y2="366"></line><rect x="948" y="300" width="20" height="45" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="1008" y1="228" x2="1008" y2="327"></line><rect x="998" y="254" width="20" height="48" rx="1"></rect></g>
+          <g class="nexus-chart-candle"><line x1="1058" y1="184" x2="1058" y2="282"></line><rect x="1048" y="210" width="20" height="49" rx="1"></rect></g>
+        </g>
+      </svg>
+
+      <div class="nexus-landing-content">
+        <img class="nexus-landing-logo" src="./assets/brand/nexus-logo.svg?v=20260918-minimal-landing1" alt="NEXUS" decoding="async" />
+        <div class="nexus-landing-brand" aria-hidden="true">NEXUS</div>
+        <div class="nexus-landing-tagline">TRADING INTELLIGENCE</div>
       </div>
-      <button class="icon-btn" id="langBtn" aria-label="language">FA</button>
-    </header>
 
+      <div class="nexus-enter-wrap">
+        <button class="nexus-enter-button" id="enterNexus" type="button" aria-label="ورود به نکسوس">
+          <span class="nexus-enter-edge nexus-enter-edge-l" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-r" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-t" aria-hidden="true"></span>
+          <span class="nexus-enter-edge nexus-enter-edge-b" aria-hidden="true"></span>
+          <span class="nexus-enter-text"><span>ورود به نکسوس</span><span class="nexus-enter-arrow" aria-hidden="true">←</span></span>
+        </button>
+      </div>
+    </div>
+  </section>
+  <div class="app-shell">
+    <header class="topbar"><div class="brand-wrap"><img class="brand-logo" src="./assets/brand/nexus-mark.svg?v=20260910-1215" alt="NEXUS" decoding="async" /><div><div class="brand">NEXUS</div><div class="brand-sub">Trading Intelligence</div></div></div><div class="topbar-actions"><button class="nexus-page-back" id="nexusBackBtn" type="button" aria-label="بازگشت به صفحه قبلی"><span class="nexus-back-arrow" aria-hidden="true">←</span><span class="nexus-back-label">بازگشت</span></button><button class="icon-btn notification-btn" id="notificationsBtn" aria-label="اعلان‌ها"><span data-nexus-icon="bell"></span><i class="notification-badge" id="notificationBadge" hidden>0</i></button><button class="icon-btn" id="langBtn" aria-label="language">FA</button></div></header>
     <main id="view" class="view"></main>
-
     <nav class="bottom-nav" aria-label="main navigation">
-      <button data-route="home" class="nav-item active"><span>⌂</span><small>خانه</small></button>
-      <button data-route="signals" class="nav-item"><span>◈</span><small>سیگنال‌ها</small></button>
-      <button data-route="subscriptions" class="nav-item"><span>◆</span><small>اشتراک</small></button>
-      <button data-route="account" class="nav-item"><span>◎</span><small>حساب من</small></button>
+      <button data-route="home" class="nav-item active"><span class="nav-icon-wrap" data-nexus-icon="home"></span><small>خانه</small></button>
+      <button data-route="signals" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="signals"></span><small>سیگنال‌ها</small></button>
+      <button data-route="charts" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="chart"></span><small>چارت</small></button>
+      <button data-route="subscriptions" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="plans"></span><small>پلن‌ها</small></button>
+      <button data-route="account" class="nav-item"><span class="nav-icon-wrap" data-nexus-icon="account"></span><small>حساب من</small></button>
     </nav>
   </div>
-
-  <template id="homeTpl">
-    <section class="hero card-glow">
-      <div class="eyebrow">WELCOME TO NEXUS</div>
-      <h1>مرکز هوشمند سیگنال و ابزارهای معاملاتی</h1>
-      <p>دسترسی سریع به کانال‌ها، اشتراک VIP، راهنما و پشتیبانی؛ ساده، شفاف و بدون شلوغی.</p>
-      <div class="hero-actions">
-        <button class="btn primary" data-go="subscriptions">خرید اشتراک VIP</button>
-        <button class="btn ghost" data-action="public-channel">کانال عمومی NEXUS</button>
-      </div>
-    </section>
-
-    <section class="section">
-      <div class="section-head"><h2>دسترسی سریع</h2></div>
-      <div class="quick-grid">
-        <button class="quick-card" data-go="signals"><span class="qicon">◈</span><b>سیگنال‌ها</b><small>Free و VIP</small></button>
-        <button class="quick-card" data-go="subscriptions"><span class="qicon">◆</span><b>اشتراک‌ها</b><small>پلن‌ها و پرداخت</small></button>
-        <button class="quick-card" data-go="guide"><span class="qicon">▣</span><b>راهنما</b><small>معرفی و نصب</small></button>
-        <button class="quick-card" data-go="support"><span class="qicon">?</span><b>پشتیبانی</b><small>ارتباط با تیم</small></button>
-      </div>
-    </section>
-
-    <section class="info-strip">
-      <div><span class="dot live"></span><b>NEXUS Community</b></div>
-      <button class="text-btn" data-action="public-channel">عضویت</button>
-    </section>
-  </template>
-
-  <template id="signalsTpl">
-    <section class="page-head"><div><div class="eyebrow">SIGNALS</div><h1>سیگنال‌ها</h1></div></section>
-    <div class="stack">
-      <article class="signal-card free">
-        <div class="signal-top"><span class="badge">FREE</span><span class="status-dot"></span></div>
-        <h3>Free Signal Channel</h3>
-        <p>دسترسی به سیگنال‌های عمومی منتخب NEXUS.</p>
-        <button class="btn ghost full" data-action="free-signals">ورود به کانال</button>
-      </article>
-      <article class="signal-card vip">
-        <div class="signal-top"><span class="badge vip-badge">VIP</span><span class="lock">◆</span></div>
-        <h3>VIP Signal Channel</h3>
-        <p>دسترسی به سیگنال‌های ویژه، مدیریت دقیق‌تر و محتوای اختصاصی اعضا.</p>
-        <button class="btn primary full" id="vipSignalBtn">فعال‌سازی VIP</button>
-      </article>
-    </div>
-  </template>
-
-  <template id="subscriptionsTpl">
-    <section class="page-head"><div><div class="eyebrow">SUBSCRIPTIONS</div><h1>اشتراک‌ها</h1></div></section>
-    <div class="plan-tabs">
-      <button class="tab active">VIP</button><button class="tab">AutoTrade</button><button class="tab">Bundle</button>
-    </div>
-    <div class="pricing-card featured">
-      <div class="pricing-kicker">در حال دریافت</div>
-      <h3>پلن‌های NEXUS</h3>
-      <div class="price"><span>—</span><small>USDT</small></div>
-      <p class="modal-muted">قیمت‌ها از backend خوانده می‌شوند.</p>
-    </div>
-    <div class="note-card">قیمت، مدت، نوع دسترسی و فاکتور از backend پروژه خوانده می‌شود و در UI هاردکد نمی‌شود.</div>
-  </template>
-
-  <template id="accountTpl">
-    <section class="profile-card">
-      <div class="avatar">N</div>
-      <div><h2 id="userName">کاربر NEXUS</h2><p id="userHandle">Telegram User</p></div>
-      <span class="badge muted">MEMBER</span>
-    </section>
-    <div class="account-grid">
-      <button class="menu-card"><span>◆</span><div><b>وضعیت VIP</b><small>مشاهده دسترسی</small></div></button>
-      <button class="menu-card"><span>◉</span><div><b>وضعیت AutoTrade</b><small>اتصال و لایسنس</small></div></button>
-      <button class="menu-card"><span>▤</span><div><b>پرداخت‌های من</b><small>تاریخچه تراکنش‌ها</small></div></button>
-      <button class="menu-card"><span>↗</span><div><b>دعوت دوستان</b><small>Referral</small></div></button>
-    </div>
-  </template>
-
-  <template id="guideTpl">
-    <section class="page-head"><div><div class="eyebrow">GUIDE</div><h1>راهنما</h1></div></section>
-    <div class="stack">
-      <button class="list-card"><span>▶</span><div><b>معرفی NEXUS</b><small>آشنایی سریع با سرویس</small></div><i>‹</i></button>
-      <button class="list-card"><span>▣</span><div><b>راهنمای نصب اکسپرت</b><small>MetaTrader 5 / License</small></div><i>‹</i></button>
-    </div>
-  </template>
-
-  <template id="supportTpl">
-    <section class="page-head"><div><div class="eyebrow">SUPPORT</div><h1>پشتیبانی</h1></div></section>
-    <div class="support-card">
-      <div class="support-icon">?</div>
-      <h3>نیاز به کمک داری؟</h3>
-      <p>برای مسائل پرداخت، اشتراک، دسترسی کانال یا AutoTrade با تیم پشتیبانی در ارتباط باش.</p>
-      <button class="btn primary full" data-action="support">ارتباط با پشتیبانی</button>
-    </div>
-  </template>
-
-  <script src="./app.js"></script>
+  <template id="homeTpl"><section class="hero card-glow"><div class="eyebrow">WELCOME TO NEXUS</div><h1>مرکز هوشمند سیگنال و ابزارهای معاملاتی</h1><p>داشبورد NEXUS در حال دریافت اطلاعات واقعی حساب شماست.</p></section></template>
+  <template id="signalsTpl"><section class="page-head"><div><div class="eyebrow">SIGNALS</div><h1>سیگنال‌ها</h1></div></section><div class="empty-state">در حال دریافت Signal Center...</div></template>
+  <template id="subscriptionsTpl"><section class="page-head"><div><div class="eyebrow">SUBSCRIPTIONS</div><h1>اشتراک‌ها</h1></div></section><div class="empty-state">در حال دریافت پلن‌های NEXUS...</div></template>
+  <template id="accountTpl"><section class="profile-card"><img class="account-brand-avatar" src="./assets/brand/nexus-mark.svg?v=20260910-1215" alt="NEXUS" decoding="async" /><div><h2 id="userName" class="bidi-safe" dir="rtl">کاربر NEXUS</h2><p id="userHandle">Telegram User</p></div><span class="badge muted">MEMBER</span></section><div class="empty-state">در حال دریافت Status Center...</div></template>
+  <template id="guideTpl"><section class="page-head"><div><div class="eyebrow">GUIDE</div><h1>راهنما</h1></div></section><div class="stack"><button class="list-card"><span data-nexus-icon="chart"></span><div><b>معرفی NEXUS</b><small>آشنایی سریع با سرویس</small></div></button><button class="list-card"><span data-nexus-icon="trades"></span><div><b>راهنمای نصب اکسپرت</b><small>MetaTrader 5 / License</small></div></button></div></template>
+  <template id="supportTpl"><section class="page-head"><div><div class="eyebrow">SUPPORT</div><h1>پشتیبانی</h1></div></section><div class="support-card"><div class="support-icon" data-nexus-icon="support"></div><h3>نیاز به کمک داری؟</h3><p>برای مسائل پرداخت، اشتراک، دسترسی کانال یا AutoTrade با تیم پشتیبانی در ارتباط باش.</p><button class="btn primary full" data-action="support">ارتباط با پشتیبانی</button></div></template>
+  <script src="./icons.js?v=20260910-1215"></script><script src="./symbol-visuals.js?v=20260914-next-ui"></script><script src="./app.js?v=20260913-hydration"></script><script src="./locale-v4.js?v=20260910-1215"></script><script src="./product-intelligence.js?v=20260910-1215"></script><script src="./experience.js?v=20260914-livecharts-nav2"></script><script src="./home-v2.js?v=20260913-final-user-ui"></script><script src="./vip-preview-v1.js?v=20260913-final-user-ui"></script><script src="./home-v2-nav.js?v=20260910-1215"></script><script src="./signals-v2.js?v=20260914-v14-final"></script><script src="./track-record.js?v=20260914-next-ui"></script><script src="./trades-v2.js?v=20260910-1215"></script><script src="./pricing-v2.js?v=20260910-1215"></script><script src="./account-v2.js?v=20260914-v14-final" data-nexus-account-v2="1"></script><script src="./ui-fixes.js?v=20260910-1215"></script><script src="./purchase-flow-v4.js?v=20260914-v14-final"></script><script src="./compat-v4.js?v=20260910-1215"></script><script src="./landing-v5.js?v=20260918-starlanding1"></script><script src="./navigation-v7.js?v=20260914-livecharts-nav1"></script><script async src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script><script src="./live-chart-tools-v23.js?v=20260915-actionfix1"></script><script src="./live-charts.js?v=20260914-livecharts-nav1"></script><script src="./live-charts-forex.js?v=20260914-mt5feed1"></script>
 </body>
 </html>

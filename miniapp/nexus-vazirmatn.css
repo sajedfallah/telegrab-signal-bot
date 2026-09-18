@@ -1,0 +1,62 @@
+@import url("https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css");
+
+/* NEXUS global typography contract.
+   Source: rastikerdar/vazirmatn v33.003 (SIL OFL 1.1).
+   Loaded last by both user and admin Mini App shells so legacy component styles
+   cannot silently fall back to Segoe UI / Arial / system fonts. */
+
+:root {
+  --nexus-font-family: "Vazirmatn", sans-serif;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+option,
+table,
+th,
+td,
+.app,
+.app-shell,
+.modal,
+.sheet,
+.toast {
+  font-family: var(--nexus-font-family) !important;
+}
+
+/* Dynamic Mini App views inherit from the shell; keep common generated
+   components explicit because several legacy CSS layers set their own fonts. */
+body :is(
+  .view,
+  .card,
+  .panel,
+  .hero,
+  .topbar,
+  .top,
+  .bottom-nav,
+  .bottom,
+  .list-card,
+  .profile-card,
+  .support-card,
+  .metrics,
+  .admin-live,
+  .segments,
+  .direction,
+  .steps,
+  .empty-state,
+  .operational-note,
+  .nexus-landing,
+  [role="dialog"],
+  [role="table"]
+) {
+  font-family: var(--nexus-font-family) !important;
+}
+
+/* Preserve native icon/SVG rendering; text labels next to them inherit Vazirmatn. */
+svg,
+svg * {
+  font-family: inherit;
+}

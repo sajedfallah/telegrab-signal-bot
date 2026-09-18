@@ -1,0 +1,350 @@
+/* NEXUS Landing — approved minimal chart/candlestick composition */
+
+:root{
+  --nx-landing-bg:#03070d;
+  --nx-landing-blue:#28a7ff;
+  --nx-landing-blue-soft:#8bdcff;
+  --nx-landing-text:#f5f9ff;
+  --nx-landing-muted:#9fb1c5;
+}
+
+html,body{background:var(--nx-landing-bg)!important}
+
+body.landing-active{
+  overflow:hidden!important;
+  overscroll-behavior:none;
+}
+
+body.landing-active>.app-shell{
+  visibility:hidden;
+  pointer-events:none;
+}
+
+.nexus-landing{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  width:100vw;
+  height:100dvh;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  background:#050a12;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+.nexus-landing[hidden]{display:none!important}
+
+.nexus-landing-stage{
+  position:relative;
+  width:100%;
+  height:100dvh;
+  min-height:100dvh;
+  overflow:hidden;
+  isolation:isolate;
+  background:#03070d;
+}
+
+.nexus-landing-stage::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 42%,rgba(20,129,204,.08),transparent 35%),
+    linear-gradient(180deg,#03070d 0%,#040911 100%);
+}
+
+.nexus-landing-noise{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  opacity:.045;
+  background-image:radial-gradient(circle,rgba(255,255,255,.16) 1px,transparent 1.15px);
+  background-size:38px 38px;
+}
+
+.nexus-landing-chart{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  opacity:.78;
+}
+
+.nexus-chart-flow{
+  stroke-dasharray:10 18;
+  animation:nexusChartDash 8s linear infinite;
+}
+
+.nexus-chart-candle line{
+  stroke:#49bfff;
+  stroke-width:2;
+}
+
+.nexus-chart-candle rect{
+  fill:url(#nxLandingCandle);
+}
+
+.nexus-chart-candle{
+  opacity:.42;
+  animation:nexusCandlePulse 2.4s ease-in-out infinite;
+  transform-box:fill-box;
+  transform-origin:center;
+}
+
+.nexus-chart-candle:nth-child(2){animation-delay:.25s}
+.nexus-chart-candle:nth-child(3){animation-delay:.5s}
+.nexus-chart-candle:nth-child(4){animation-delay:.75s}
+.nexus-chart-candle:nth-child(5){animation-delay:1s}
+.nexus-chart-candle:nth-child(6){animation-delay:1.25s}
+
+.nexus-landing-content{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  gap:13px;
+  padding:
+    calc(28px + env(safe-area-inset-top))
+    22px
+    calc(112px + env(safe-area-inset-bottom));
+}
+
+.nexus-landing-logo{
+  width:clamp(106px,31vw,150px);
+  height:auto;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 0 20px rgba(0,163,255,.18));
+}
+
+.nexus-landing-brand{
+  margin-left:.18em;
+  color:var(--nx-landing-text);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(46px,14vw,76px);
+  font-weight:700;
+  letter-spacing:.18em;
+  line-height:1;
+  text-shadow:0 0 16px rgba(95,184,255,.12);
+}
+
+.nexus-landing-tagline{
+  margin-left:.34em;
+  color:var(--nx-landing-muted);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(9px,2.8vw,12px);
+  font-weight:400;
+  letter-spacing:.34em;
+  line-height:1.4;
+  white-space:nowrap;
+}
+
+.nexus-enter-wrap{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  bottom:max(30px,calc(22px + env(safe-area-inset-bottom)));
+  transform:translateX(-50%);
+}
+
+.nexus-enter-button{
+  position:relative;
+  width:min(290px,72vw);
+  height:52px;
+  padding:0;
+  overflow:visible;
+  cursor:pointer;
+  border:0;
+  border-radius:12px;
+  background:#0b0f15;
+  color:#fff;
+  appearance:none;
+  -webkit-appearance:none;
+  transition:transform .2s ease;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+.nexus-enter-button::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:12px;
+  opacity:.12;
+  background:
+    radial-gradient(circle at 50% 50%,transparent 0,transparent 20%,#111111aa 50%),
+    radial-gradient(ellipse 100% 100%,#fff,#fff0);
+  background-size:3px 3px,auto auto;
+  transition:opacity .3s ease;
+}
+
+.nexus-enter-text{
+  position:relative;
+  z-index:3;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  color:#fff;
+  font-family:Vazirmatn,Arial,sans-serif;
+  font-size:15px;
+  font-weight:700;
+}
+
+.nexus-enter-arrow{
+  color:#bfe8ff;
+  font:700 18px/1 Arial,sans-serif;
+  direction:ltr;
+}
+
+.nexus-enter-edge{
+  pointer-events:none;
+  position:absolute;
+  --w:2px;
+  --t:-26px;
+  --s:calc(var(--t) * -1);
+  --e:calc(100% + var(--t));
+  --g:#fff0,#6dc5ff33 var(--s),#82d8ffaa var(--s),#fff,#82d8ffaa var(--e),#6dc5ff33 var(--e),#fff0;
+}
+
+.nexus-enter-edge::before,
+.nexus-enter-edge::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:inherit;
+  z-index:-2;
+}
+
+.nexus-enter-edge::before{filter:blur(4px)}
+.nexus-enter-edge::after{
+  filter:blur(11px);
+  opacity:.72;
+  transition:opacity .3s ease;
+}
+
+.nexus-enter-edge-l{left:-2px}
+.nexus-enter-edge-r{right:-2px}
+
+.nexus-enter-edge-l,
+.nexus-enter-edge-r{
+  top:var(--t);
+  bottom:var(--t);
+  width:var(--w);
+  background:linear-gradient(var(--g));
+}
+
+.nexus-enter-edge-t{top:-2px}
+.nexus-enter-edge-b{bottom:-2px}
+
+.nexus-enter-edge-t,
+.nexus-enter-edge-b{
+  left:var(--t);
+  right:var(--t);
+  height:var(--w);
+  background:linear-gradient(90deg,var(--g));
+}
+
+@media(hover:hover) and (pointer:fine){
+  .nexus-enter-button:hover{transform:translateY(-1px)}
+  .nexus-enter-button:hover::before{opacity:.28}
+  .nexus-enter-button:hover .nexus-enter-edge::after{opacity:1}
+}
+
+.nexus-enter-button:active{transform:scale(.985)}
+
+.nexus-enter-button:focus-visible{
+  outline:2px solid var(--nx-landing-blue-soft);
+  outline-offset:4px;
+}
+
+.nexus-enter-button:disabled{cursor:default}
+
+.nexus-landing.is-leaving{
+  opacity:0;
+  transform:scale(.988);
+  pointer-events:none;
+  transition:opacity 340ms ease,transform 340ms ease;
+}
+
+.app-shell.nexus-app-entering{
+  animation:nexusAppArrive 340ms ease both;
+}
+
+@keyframes nexusCandlePulse{
+  0%,100%{
+    opacity:.30;
+    filter:drop-shadow(0 0 0 rgba(0,160,255,0));
+  }
+  50%{
+    opacity:.92;
+    filter:drop-shadow(0 0 8px rgba(0,176,255,.48));
+  }
+}
+
+@keyframes nexusChartDash{
+  to{stroke-dashoffset:-220}
+}
+
+@keyframes nexusAppArrive{
+  from{opacity:0;transform:translateY(9px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* Telegram/mobile */
+@media(max-width:430px){
+  .nexus-landing-content{
+    padding:
+      calc(24px + env(safe-area-inset-top))
+      20px
+      calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .nexus-landing-logo{width:clamp(100px,30vw,128px)}
+  .nexus-landing-brand{font-size:clamp(46px,15vw,62px)}
+  .nexus-landing-tagline{font-size:9px;letter-spacing:.30em;margin-left:.30em}
+  .nexus-enter-wrap{bottom:max(27px,calc(18px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{width:min(280px,74vw);height:50px}
+}
+
+/* Desktop browser preview remains a mobile Mini App frame. */
+@media(min-width:700px){
+  .nexus-landing-stage{
+    width:430px;
+    max-width:430px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.035),
+      0 0 70px rgba(0,0,0,.55);
+  }
+}
+
+@media(orientation:landscape) and (max-height:520px){
+  .nexus-landing-logo{width:82px}
+  .nexus-landing-brand{font-size:42px}
+  .nexus-landing-tagline{font-size:8px}
+  .nexus-enter-wrap{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{height:46px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .nexus-chart-flow,
+  .nexus-chart-candle,
+  .nexus-landing,
+  .app-shell.nexus-app-entering{
+    animation:none!important;
+    transition:none!important;
+  }
+}

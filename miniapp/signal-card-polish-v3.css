@@ -1,0 +1,97 @@
+/* NEXUS Signal Card polish v3 — dark live panel + animated P/L frame */
+.signal-v2-card{
+  position:relative!important;
+  isolation:isolate!important;
+  overflow:hidden!important;
+  background:#111721!important;
+  border:1px solid rgba(57,215,196,.24)!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+.signal-v2-card::before{
+  content:""!important;
+  position:absolute!important;
+  z-index:-2!important;
+  width:160%!important;
+  height:160%!important;
+  top:50%!important;
+  left:50%!important;
+  border-radius:50%!important;
+  background:conic-gradient(from 0deg,transparent 0 73%,rgba(57,215,196,.95) 79%,transparent 86%)!important;
+  filter:none!important;
+  opacity:.95!important;
+  transform:translate(-50%,-50%) rotate(0deg)!important;
+  animation:nexusSignalFrameSpin 4.2s linear infinite!important;
+  pointer-events:none!important;
+}
+.signal-v2-card::after{
+  content:""!important;
+  position:absolute!important;
+  inset:2px!important;
+  z-index:-1!important;
+  border-radius:16px!important;
+  background:linear-gradient(155deg,rgba(19,25,34,.985),rgba(10,14,20,.99))!important;
+  border:1px solid rgba(255,255,255,.025)!important;
+  backdrop-filter:blur(18px)!important;
+  pointer-events:none!important;
+}
+.signal-v2-card:has(.signal-live-grid .pnl.in_profit),
+.signal-v2-card:has(.signal-v2-result.win),
+.signal-v2-card.closed-win{
+  border-color:rgba(69,214,147,.74)!important;
+  box-shadow:0 0 0 1px rgba(69,214,147,.12),0 14px 34px rgba(0,0,0,.34),0 0 24px rgba(69,214,147,.10)!important;
+}
+.signal-v2-card:has(.signal-live-grid .pnl.in_profit)::before,
+.signal-v2-card:has(.signal-v2-result.win)::before,
+.signal-v2-card.closed-win::before{
+  background:conic-gradient(from 0deg,transparent 0 72%,rgba(69,214,147,1) 79%,rgba(119,229,189,.72) 82%,transparent 88%)!important;
+}
+.signal-v2-card:has(.signal-live-grid .pnl.in_loss),
+.signal-v2-card:has(.signal-v2-result.loss),
+.signal-v2-card.closed-loss{
+  border-color:rgba(255,96,111,.76)!important;
+  box-shadow:0 0 0 1px rgba(255,96,111,.12),0 14px 34px rgba(0,0,0,.34),0 0 24px rgba(255,96,111,.10)!important;
+}
+.signal-v2-card:has(.signal-live-grid .pnl.in_loss)::before,
+.signal-v2-card:has(.signal-v2-result.loss)::before,
+.signal-v2-card.closed-loss::before{
+  background:conic-gradient(from 0deg,transparent 0 72%,rgba(255,96,111,1) 79%,rgba(255,140,150,.72) 82%,transparent 88%)!important;
+}
+.signal-v2-card:has(.signal-live-grid .pnl.be)::before,
+.signal-v2-card:has(.signal-v2-result.be)::before,
+.signal-v2-card.closed-be::before{
+  background:conic-gradient(from 0deg,transparent 0 73%,rgba(199,208,220,.62) 80%,transparent 87%)!important;
+}
+.signal-live-panel,
+.signal-live-panel.live{
+  margin-top:10px!important;
+  padding:12px!important;
+  border:1px solid rgba(57,215,196,.18)!important;
+  border-radius:14px!important;
+  background:linear-gradient(155deg,rgba(15,21,29,.96),rgba(10,14,20,.98))!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02)!important;
+  color:var(--text)!important;
+}
+.signal-live-panel.stale{
+  border-color:rgba(230,184,91,.28)!important;
+  background:linear-gradient(155deg,rgba(27,24,17,.90),rgba(12,14,17,.98))!important;
+}
+.signal-live-panel.unavailable{
+  border-color:rgba(255,255,255,.09)!important;
+  background:rgba(255,255,255,.015)!important;
+}
+.signal-live-head>b{color:#dce8ef!important}.signal-live-head>small{color:#8392a3!important}.signal-live-grid>div{
+  border:1px solid rgba(255,255,255,.075)!important;
+  background:rgba(255,255,255,.018)!important;
+}
+.signal-live-grid span{color:#7f8b9a!important}.signal-live-grid b{color:#eef4f8!important}
+.signal-live-grid .pnl.in_profit{color:#77e5bd!important;text-shadow:0 0 12px rgba(69,214,147,.18)}
+.signal-live-grid .pnl.in_loss{color:#ff8c96!important;text-shadow:0 0 12px rgba(255,96,111,.16)}
+.signal-live-grid .pnl.be{color:#c7d0dc!important}
+@keyframes nexusSignalFrameSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@media(max-width:420px){
+  .signal-v2-card{border-radius:18px!important;padding:13px!important}
+  .signal-v2-card::after{border-radius:15px!important}
+  .signal-live-panel{padding:10px!important}
+  .signal-live-grid{gap:6px!important}
+}
+@media(prefers-reduced-motion:reduce){.signal-v2-card::before{animation:none!important}}

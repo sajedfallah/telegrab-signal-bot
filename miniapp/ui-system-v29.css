@@ -1,0 +1,287 @@
+/* NEXUS UI System V29
+   Minimal, readable, spacing-consistent UI layer. Loaded after legacy styles so
+   it can normalize typography, color, spacing, icons and controls without a
+   structural rewrite. */
+
+:root {
+  --ui-bg: #07111d;
+  --ui-surface: #0d1723;
+  --ui-surface-2: #111d2a;
+  --ui-border: rgba(255,255,255,.09);
+  --ui-text: #edf3f8;
+  --ui-muted: #8fa0b2;
+  --ui-subtle: #718295;
+  --ui-accent: #27cdb9;
+  --ui-blue: #2196f3;
+  --ui-danger: #ff525f;
+  --ui-radius-sm: 10px;
+  --ui-radius: 12px;
+  --ui-radius-lg: 16px;
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-transition: 150ms ease;
+}
+
+/* Typography */
+.app-shell,
+.app-shell button,
+.app-shell input,
+.app-shell select,
+.app-shell textarea {
+  color: var(--ui-text);
+  font-family: var(--nexus-font-family, "Vazirmatn", "Segoe UI", Tahoma, sans-serif) !important;
+  font-weight: 400;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.app-shell h1,
+.app-shell h2,
+.app-shell h3,
+.app-shell h4,
+.app-shell b,
+.app-shell strong {
+  font-weight: 650;
+}
+
+.app-shell h1,
+.app-shell .page-head h1,
+.app-shell .hero h1 {
+  font-size: clamp(21px, 5.3vw, 25px);
+  line-height: 1.45;
+  letter-spacing: -.015em;
+}
+
+.app-shell h2 { font-size: 17px; line-height: 1.5; }
+.app-shell h3 { font-size: 15px; line-height: 1.55; }
+.app-shell p { font-size: 12px; line-height: 1.85; }
+.app-shell small,
+.app-shell .modal-muted,
+.app-shell .brand-sub { line-height: 1.7; }
+.app-shell .eyebrow { font-size: 9px; font-weight: 650; letter-spacing: .12em; }
+
+/* Flat, limited palette. Remove decorative gradients inside the application. */
+.app-shell {
+  background: var(--ui-bg);
+}
+
+.app-shell .hero,
+.app-shell .quick-card,
+.app-shell .signal-card,
+.app-shell .pricing-card,
+.app-shell .support-card,
+.app-shell .profile-card,
+.app-shell .note-card,
+.app-shell .price-v2-card,
+.app-shell .price-v2-comparison,
+.app-shell .menu-card,
+.app-shell .list-card,
+.app-shell .info-strip,
+.app-shell .status-panel,
+.app-shell .modal-card,
+.app-shell .sheet,
+.app-shell .card,
+.app-shell .panel {
+  background: var(--ui-surface) !important;
+  background-image: none !important;
+  border-color: var(--ui-border) !important;
+  border-radius: var(--ui-radius-lg) !important;
+  box-shadow: none;
+}
+
+.app-shell .price-v2-card.recommended,
+.app-shell .featured {
+  border-color: rgba(39,205,185,.34) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+
+/* Spacing rhythm */
+.app-shell .view { padding: var(--ui-space-3) var(--ui-space-4) var(--ui-space-6); }
+.app-shell .page-head { padding: var(--ui-space-5) 2px var(--ui-space-3); }
+.app-shell .section { margin-top: var(--ui-space-6); }
+.app-shell .section-head { margin-bottom: var(--ui-space-3); }
+.app-shell .stack,
+.app-shell .account-grid,
+.app-shell .price-v2-grid { gap: var(--ui-space-3); }
+.app-shell .hero,
+.app-shell .signal-card,
+.app-shell .pricing-card,
+.app-shell .support-card,
+.app-shell .profile-card,
+.app-shell .note-card,
+.app-shell .price-v2-card,
+.app-shell .price-v2-comparison { padding: var(--ui-space-4); }
+
+.app-shell .menu-card,
+.app-shell .list-card,
+.app-shell .info-strip { padding: 13px 14px; gap: var(--ui-space-3); }
+
+/* Icons: one visual language and one stroke weight. */
+.app-shell svg.nexus-icon,
+.app-shell svg.nexus-inline-icon,
+.app-shell [data-nexus-icon] svg,
+.app-shell .nav-icon-wrap svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75 !important;
+  vector-effect: non-scaling-stroke;
+}
+
+.app-shell .menu-card > span,
+.app-shell .list-card > span,
+.app-shell .quick-card .qicon,
+.app-shell .support-icon {
+  background: transparent !important;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-sm) !important;
+  color: var(--ui-accent);
+}
+
+/* Controls */
+.app-shell button,
+.app-shell .btn,
+.app-shell .tab,
+.app-shell .icon-btn,
+.app-shell .text-btn {
+  border-radius: var(--ui-radius) !important;
+  transition: background-color var(--ui-transition), border-color var(--ui-transition), color var(--ui-transition), transform var(--ui-transition), opacity var(--ui-transition);
+}
+
+.app-shell .btn,
+.app-shell .tab {
+  min-height: 42px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-shell .primary,
+.app-shell .tab.active {
+  background: var(--ui-accent) !important;
+  background-image: none !important;
+  color: #041411 !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+.app-shell .ghost,
+.app-shell .tab,
+.app-shell .icon-btn {
+  background: var(--ui-surface-2) !important;
+  background-image: none !important;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border) !important;
+}
+
+@media (hover:hover) {
+  .app-shell button:hover,
+  .app-shell .btn:hover,
+  .app-shell .tab:hover {
+    border-color: rgba(39,205,185,.32) !important;
+    opacity: .94;
+  }
+}
+
+.app-shell button:active,
+.app-shell .btn:active,
+.app-shell .tab:active {
+  transform: translateY(1px) scale(.99);
+  opacity: .88;
+}
+
+.app-shell button:focus-visible,
+.app-shell .btn:focus-visible,
+.app-shell .tab:focus-visible,
+.app-shell a:focus-visible {
+  outline: 2px solid rgba(39,205,185,.72);
+  outline-offset: 2px;
+}
+
+/* Price hierarchy: visible at a glance, never visually dominant. */
+.app-shell .price-v2-price {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 12px 0 16px;
+  direction: ltr;
+  text-align: right;
+}
+
+.app-shell .price-v2-price b,
+.app-shell .order-v2-head > b,
+.app-shell .order-v2-total b,
+.app-shell .purchase-head > span,
+.app-shell .price span,
+.app-shell [data-price],
+.app-shell [data-amount] {
+  display: inline !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--ui-muted) !important;
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.app-shell .price-v2-price span,
+.app-shell .price small {
+  color: var(--ui-subtle) !important;
+  font-size: 10px !important;
+  font-weight: 400 !important;
+}
+
+/* Checkout/value rows keep the value predictable on the trailing edge. */
+.app-shell .kv,
+.app-shell .order-v2-total,
+.app-shell .purchase-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-3);
+}
+
+.app-shell .kv {
+  min-height: 36px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.app-shell .kv > span { color: var(--ui-muted); font-size: 11px; }
+.app-shell .kv > b { font-size: 11px; font-weight: 500; }
+
+.app-shell .order-v2-total {
+  margin: 12px 0;
+  padding: 12px 0;
+  background: transparent !important;
+  border: 0 !important;
+  border-top: 1px solid var(--ui-border) !important;
+  border-radius: 0 !important;
+}
+
+/* Navigation */
+.app-shell .bottom-nav {
+  background: rgba(7,17,29,.96);
+  border-top-color: var(--ui-border);
+  padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+}
+
+.app-shell .nav-item { gap: 4px; padding: 5px 4px; }
+.app-shell .nav-item small { font-size: 9px; font-weight: 500; }
+.app-shell .nav-item.active { color: var(--ui-accent); }
+
+@media (max-width: 420px) {
+  .app-shell .view { padding-inline: 14px; }
+  .app-shell .price-v2-card { min-width: 86%; }
+}
