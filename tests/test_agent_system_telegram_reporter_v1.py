@@ -36,7 +36,7 @@ def test_reporter_disabled_never_requires_secrets(monkeypatch):
 def test_hourly_analysis_includes_agent_evidence_and_wait_state():
     record={"symbol":"XAUUSD","scan":"WATCH","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","assessments":[{"agent":"nexus-ict-v1","direction":"NEUTRAL","evidence":["1H structure HH/HL","5M bullish MSS"],"missing_data":[]} ]}
     text=format_hourly_analysis(record)
-    assert "NEXUS HOURLY ANALYSIS | XAUUSD" in text
+    assert "NEXUS ICT HOURLY | XAUUSD" in text
     assert "nexus-ict-v1: NEUTRAL" in text
     assert "1H structure HH/HL" in text
     assert "Signal: WAIT" in text
