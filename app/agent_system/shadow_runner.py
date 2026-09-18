@@ -34,7 +34,7 @@ def _journal_path(root: Path, symbol: str, now: datetime | None = None) -> Path:
     day=(now or datetime.now(timezone.utc)).strftime("%Y-%m-%d"); safe="".join(ch for ch in symbol.upper() if ch.isalnum() or ch in {"-","_"}); return root/safe/f"{day}.jsonl"
 
 def _assessment_summary(a):
-    return {"agent":a.agent,"direction":a.direction.value,"evidence":list(a.evidence),"invalidation":list(a.invalidation),"missing_data":list(a.missing_data)}
+    return {"agent":a.agent_id,"direction":a.direction.value,"evidence":list(a.evidence),"invalidation":list(a.invalidations),"missing_data":list(a.missing_data)}
 
 def _hourly_ict_record(config: ShadowRunnerConfig, symbol: str) -> dict[str,object]:
     try:
