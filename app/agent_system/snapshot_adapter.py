@@ -14,7 +14,7 @@ from ..market_candles import init_market_candle_schema
 from .contracts import MarketSnapshot
 
 
-_TIMEFRAMES = ("D1", "H1", "M15", "M5")
+_TIMEFRAMES = ("D1", "H1", "M15", "M5", "M1")
 _REQUIRED_TIMEFRAMES = ("H1", "M15", "M5")
 _QUOTE_MAX_AGE_MS = 15_000
 _CANDLE_CAPTURE_MAX_AGE_MS = 30_000
