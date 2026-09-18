@@ -1,0 +1,48 @@
+from __future__ import annotations
+
+import os
+from datetime import date
+
+from aiogram import Bot
+
+from app.config import settings
+from .storage import StickerStore, get_store
+
+
+def enabled() -> bool:
+    return os.getenv("DAILY_STICKERS_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def target_chat() -> int | str:
+    raw = os.getenv("DAILY_STICKER_CHANNEL_ID", "").strip()
+    if not raw:
+        return settings.public_channel_id
+    try:
+        return int(raw)
+    except ValueError:
+        return raw
+
+
+async def send_for_date(
+    bot: Bot,
+    day: date,
+    *,
+    force: bool = False,
+    store: StickerStore | None = None,
+) -> tuple[bool, str, int | None]:
+    store = store or get_store()
+    target = target_chat()
+    if not force and store.was_delivered(day, target):
+        return False, "already_sent", None
+
+    row = store.get_sticker(day)
+    if row is None:
+        return False, "missing_sticker", None
+
+    msg = await bot.send_sticker(
+        chat_id=target,
+        sticker=str(row["file_id"]),
+        disable_notification=os.getenv("DAILY_STICKER_SILENT", "false").strip().lower() in {"1", "true", "yes", "on"},
+    )
+    store.mark_delivered(day, target, int(msg.message_id))
+    return True, "sent", int(msg.message_id)
