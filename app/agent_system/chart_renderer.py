@@ -36,6 +36,8 @@ def _zones(evidence):
 
 
 def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], *, timeframe: str="M15", candle_count: int=180) -> bytes:
+    # One fixed visual scale policy for every timeframe: same candle count, plot box,
+    # horizontal spacing ratio, candle body ratio and vertical padding.
     rows=list(snapshot.timeframes.get(timeframe, ()))[-candle_count:]
     if len(rows)<20: raise ValueError(f"not enough {timeframe} candles for chart")
     evidence=list(assessment.get("evidence") or [])
@@ -44,7 +46,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     zvals=[v for _,lo,hi,_ in zones for v in (lo,hi)]
     visible_z=[v for v in zvals if min(lows)*0.97 <= v <= max(highs)*1.03]
     pmin=min(lows+visible_z); pmax=max(highs+visible_z); pad=max((pmax-pmin)*0.18,0.01); pmin-=pad; pmax+=pad
-    W,H=1600,900; left,right,top,bottom=42,1480,105,735
+    W,H=1600,900; left,right,top,bottom=72,1425,105,735
     im=Image.new("RGB",(W,H),(15,18,24)); d=ImageDraw.Draw(im, "RGB")
     title=_font(38); normal=_font(22); small=_font(18); tiny=_font(15)
     d.text((left,25),f"NEXUS ICT • {snapshot.symbol} • {timeframe}",font=title,fill=(235,238,244))
@@ -52,7 +54,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     def y(v): return bottom-(v-pmin)/(pmax-pmin)*(bottom-top)
     for i in range(6):
         yy=top+i*(bottom-top)/5; price=pmax-i*(pmax-pmin)/5
-        d.line((left,yy,right,yy),fill=(45,50,60),width=1); d.text((right+12,yy-10),f"{price:.2f}",font=small,fill=(160,166,178))
+        d.line((left,yy,right,yy),fill=(45,50,60),width=1); d.text((right+18,yy-10),f"{price:.2f}",font=small,fill=(160,166,178))
     zone_styles = {
         "QUADRANT": ((170, 135, 255), (70, 55, 105)),
         "FVG BULLISH": ((70, 205, 150), (28, 82, 62)),
@@ -102,7 +104,8 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
         if label in level_styles:
             col=level_styles[label]
             d.line((x1,y1,right,y1),fill=col,width=2)
-            d.text((right+12,y1-10),f"{label} {lo:.2f}",font=small,fill=col)
+            d.rounded_rectangle((right+12,y1-14,right+150,y1+14),radius=6,fill=(15,18,24),outline=col,width=1)
+            d.text((right+20,y1-10),f"{label} {lo:.2f}",font=small,fill=col)
             continue
         outline,fill=zone_styles.get(label,((125,130,145),(50,54,64)))
         top_y,bottom_y=min(y1,y2),max(y1,y2)
@@ -114,8 +117,6 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
                 while xx<right:
                     d.line((xx,yy,min(xx+dash,right),yy),fill=(150,125,205),width=1)
                     xx+=dash+gap
-            tag=f"Daily Quadrant  {lo:.2f}-{hi:.2f}"
-            d.text((x1+8,top_y+6),tag,font=small,fill=(180,155,225))
             continue
         if bottom_y-top_y<5: bottom_y=top_y+5
         # Approved minimal template: FVG/OB zones are visual only.
@@ -130,7 +131,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     if snapshot.bid and snapshot.ask:
         mid=(snapshot.bid+snapshot.ask)/2
         if pmin<=mid<=pmax:
-            yy=y(mid); d.line((left,yy,right,yy),fill=(235,200,90),width=2); d.text((right+12,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
+            yy=y(mid); d.line((left,yy,right,yy),fill=(235,200,90),width=2); d.rounded_rectangle((right+12,yy-14,right+150,yy+14),radius=6,fill=(15,18,24),outline=(235,200,90),width=1); d.text((right+20,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
     guide_y=785
     d.rounded_rectangle((left,guide_y,right,855),radius=12,outline=(48,58,72),width=2)
     guide=[("Daily Quadrant",(170,135,255)),("Bullish FVG",(70,205,150)),("Bearish FVG",(235,95,110)),("Bullish OB",(70,150,235)),("Bearish OB",(240,155,65)),("Current Price",(235,200,90))]
