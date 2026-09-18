@@ -44,9 +44,9 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     zvals=[v for _,lo,hi,_ in zones for v in (lo,hi)]
     visible_z=[v for v in zvals if min(lows)*0.97 <= v <= max(highs)*1.03]
     pmin=min(lows+visible_z); pmax=max(highs+visible_z); pad=max((pmax-pmin)*0.08,0.01); pmin-=pad; pmax+=pad
-    W,H=1400,850; left,right,top,bottom=80,1250,85,760
+    W,H=1600,900; left,right,top,bottom=42,1480,105,735
     im=Image.new("RGB",(W,H),(15,18,24)); d=ImageDraw.Draw(im, "RGB")
-    title=_font(34); normal=_font(22); small=_font(18)
+    title=_font(38); normal=_font(22); small=_font(18); tiny=_font(15)
     d.text((left,25),f"NEXUS ICT • {snapshot.symbol} • {timeframe}",font=title,fill=(235,238,244))
     d.text((right-260,35),f"Bid {snapshot.bid or '-'}  Ask {snapshot.ask or '-'}",font=small,fill=(190,196,207))
     def y(v): return bottom-(v-pmin)/(pmax-pmin)*(bottom-top)
@@ -123,5 +123,16 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
         mid=(snapshot.bid+snapshot.ask)/2
         if pmin<=mid<=pmax:
             yy=y(mid); d.line((left,yy,right,yy),fill=(235,200,90),width=2); d.text((right+12,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
-    d.text((left,H-55),"Source: NEXUS MT5 Market Feed • zones derived from the same ICT snapshot",font=small,fill=(145,150,162))
+    guide_y=785
+    d.rounded_rectangle((left,guide_y,right,855),radius=12,outline=(48,58,72),width=2)
+    guide=[("Daily Quadrant",(170,135,255)),("Bullish FVG",(70,205,150)),("Bearish FVG",(235,95,110)),("Bullish OB",(70,150,235)),("Bearish OB",(240,155,65)),("Current Price",(235,200,90))]
+    gx=left+18
+    for name,col in guide:
+        d.rounded_rectangle((gx,guide_y+18,gx+24,guide_y+42),radius=4,fill=col)
+        d.text((gx+34,guide_y+18),name,font=tiny,fill=(210,216,226))
+        gx+=205
+    d.text((left,H-28),"SAME DATA  •  CLEANER PICTURE  •  RIGHT-EXTENSION ZONES",font=tiny,fill=(145,150,162))
+    footer="Source: NEXUS MT5 Market Feed  •  Zones derived from the same ICT snapshot"
+    fw=d.textbbox((0,0),footer,font=tiny)[2]
+    d.text((right-fw,H-28),footer,font=tiny,fill=(145,150,162))
     buf=io.BytesIO(); im.save(buf,format="PNG",optimize=True); return buf.getvalue()
