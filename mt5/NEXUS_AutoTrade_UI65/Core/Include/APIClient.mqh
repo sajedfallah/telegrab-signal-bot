@@ -147,14 +147,15 @@ public:
                          const string timeframe,const double entry,const double sl,const string targets_json,
                          const double risk_percent,const string volume_mode,const double lot_size,
                          const string trailing_code,const double max_dev_pct,const double max_dev_abs,
-                         const string destination,const string request_id,string &response,const string chart_base64="")
+                         const string destination,const string request_id,string &response)
      {
-      string body=StringFormat("{\"market_type\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"order_type\":\"%s\",\"timeframe\":\"%s\",\"entry_price\":%s,\"stop_loss\":%s,\"targets\":[%s],\"risk_percent\":%s,\"volume_mode\":\"%s\",\"lot_size\":%s,\"trailing_code\":%s,\"max_entry_deviation_pct\":%s,\"max_entry_deviation_abs\":%s,\"destination\":\"%s\",\"request_id\":\"%s\",\"chart_base64\":%s}",
+      // V46 TEXT_ONLY: signal issuance has no chart screenshot field and the
+      // current MT5 client uploads no signal image payload.
+      string body=StringFormat("{\"market_type\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"order_type\":\"%s\",\"timeframe\":\"%s\",\"entry_price\":%s,\"stop_loss\":%s,\"targets\":[%s],\"risk_percent\":%s,\"volume_mode\":\"%s\",\"lot_size\":%s,\"trailing_code\":%s,\"max_entry_deviation_pct\":%s,\"max_entry_deviation_abs\":%s,\"destination\":\"%s\",\"request_id\":\"%s\"}",
          NexusJsonEscape(market_type),NexusJsonEscape(symbol),NexusJsonEscape(direction),NexusJsonEscape(order_type),NexusJsonEscape(timeframe),
          DoubleToString(entry,8),DoubleToString(sl,8),targets_json,DoubleToString(risk_percent,8),NexusJsonEscape(volume_mode),
          lot_size<=0?"null":DoubleToString(lot_size,8),trailing_code==""?"null":"\""+NexusJsonEscape(trailing_code)+"\"",
-         max_dev_pct<0?"null":DoubleToString(max_dev_pct,8),max_dev_abs<0?"null":DoubleToString(max_dev_abs,8),NexusJsonEscape(destination),NexusJsonEscape(request_id),
-         chart_base64==""?"null":"\""+NexusJsonEscape(chart_base64)+"\"");
+         max_dev_pct<0?"null":DoubleToString(max_dev_pct,8),max_dev_abs<0?"null":DoubleToString(max_dev_abs,8),NexusJsonEscape(destination),NexusJsonEscape(request_id));
       return Request("POST","/api/v1/admin/mt5/signals",body,true,response);
      }
 

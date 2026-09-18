@@ -3094,23 +3094,16 @@ async def signal_market(cb: CallbackQuery, bot: Bot, state: FSMContext):
     if not is_admin(cb.from_user.id): return
     market=cb.data.split(":",1)[1]
     if market not in {"FOREX","CRYPTO"}: return
-    await state.update_data(signal_market=market); await state.set_state(Flow.signal_chart); lang=get_lang(cb.from_user.id); await cb.answer()
-    await screen(bot,cb.from_user.id,cb.message.chat.id,tr(lang,"<b>۲/۱۳ — تصویر چارت</b>\n\nاسکرین‌شات تحلیل چارت را ارسال کنید. تصویر کامل و بدون Crop در قاب NEXUS قرار می‌گیرد.","<b>2/13 — Chart Image</b>\n\nSend the chart screenshot. It will be framed without cropping."),kb(nav(lang,"admin_signals")))
-
-
-@router.message(Flow.signal_chart, F.photo)
-async def signal_chart(message: Message, bot: Bot, state: FSMContext):
-    if not is_admin(message.from_user.id): return
-    file_id=message.photo[-1].file_id; await state.update_data(signal_chart_file_id=file_id); await clean_user_message(message)
-    data=await state.get_data(); await state.set_state(None); lang=get_lang(message.from_user.id)
-    await screen(bot,message.from_user.id,message.chat.id,tr(lang,"<b>۳/۱۳ — نماد</b>\n\nنماد را از لیست انتخاب کنید یا ورود دستی را بزنید.","<b>3/13 — Symbol</b>\n\nChoose a symbol or use manual entry."),signal_symbol_menu(lang,str(data.get("signal_market"))))
-
-
-@router.message(Flow.signal_chart)
-async def signal_chart_invalid(message: Message, bot: Bot):
-    if not is_admin(message.from_user.id): return
-    await clean_user_message(message); lang=get_lang(message.from_user.id)
-    await screen(bot,message.from_user.id,message.chat.id,tr(lang,"لطفاً تصویر چارت را به‌صورت Photo ارسال کنید.","Please send the chart as a photo."),kb(nav(lang,"admin_signals")))
+    await state.update_data(signal_market=market, signal_chart_file_id=None)
+    await state.set_state(None)
+    lang=get_lang(cb.from_user.id); await cb.answer()
+    await screen(
+        bot,cb.from_user.id,cb.message.chat.id,
+        tr(lang,
+           "<b>۲/۱۲ — نماد</b>\n\nنماد را از لیست انتخاب کنید یا ورود دستی را بزنید.",
+           "<b>2/12 — Symbol</b>\n\nChoose a symbol or use manual entry."),
+        signal_symbol_menu(lang,market),
+    )
 
 
 async def _show_signal_direction(bot: Bot, user_id: int, chat_id: int, state: FSMContext) -> None:
@@ -3472,7 +3465,7 @@ async def signal_publish(cb: CallbackQuery, bot: Bot, state: FSMContext):
                 market_type=data["signal_market"],symbol=data["signal_symbol"],direction=data["signal_direction"],
                 entry_price=float(data["signal_entry"]),stop_loss=float(data["signal_sl"]),targets=[float(v) for v in data["signal_targets"]],
                 risk_percent=float(data["signal_risk"]),
-                rr_ratio=data.get("signal_rr"),destination=data["signal_destination"],chart_file_id=data.get("signal_chart_file_id"),
+                rr_ratio=data.get("signal_rr"),destination=data["signal_destination"],chart_file_id=None,
                 created_by=cb.from_user.id,lot_size=data.get("signal_lot"),leverage=None,
                 timeframe=str(data.get("signal_timeframe") or "M5"),
                 trailing_code=data.get("signal_trailing_code"),trailing_name=data.get("signal_trailing_name"),

@@ -263,3 +263,23 @@ def test_v45_miniapp_signal_creation_does_not_create_chart_capture_job():
     block = runtime[start:end]
     assert "create_chart_capture_job" not in block
     assert "WAITING_EXECUTION" in block
+
+
+def test_v46_legacy_bot_signal_flow_has_no_chart_upload_step():
+    src = _text("app/main.py")
+    start = src.index('@router.callback_query(F.data.startswith("sigmarket:"))')
+    end = src.index("async def _show_signal_direction", start)
+    block = src[start:end]
+    assert "Flow.signal_chart" not in block
+    assert "Chart Image" not in block
+    assert "تصویر چارت" not in block
+    assert "signal_chart_file_id=None" in block
+
+
+def test_v46_current_mt5_signal_client_sends_no_chart_payload():
+    src = _text("mt5/NEXUS_AutoTrade_UI65/Core/Include/APIClient.mqh")
+    start = src.index("bool IssueAdminSignal(")
+    end = src.index("bool IssueAdminCommand(", start)
+    block = src[start:end]
+    assert "chart_base64" not in block
+    assert "TEXT_ONLY" in block
