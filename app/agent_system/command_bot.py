@@ -23,7 +23,7 @@ _allowed_user_id = ""
 
 def _analysis_record(config: ShadowRunnerConfig, symbol: str, timeframe: str = "M5"):
     snapshot = build_mt5_snapshot(config.account, symbol)
-    ict = assess_ict(snapshot)
+    ict = assess_ict(snapshot, trigger_timeframe=timeframe)
     assessment = _assessment_summary(ict)
     trigger_rows = snapshot.timeframes.get(timeframe, ())
     recent = trigger_rows[-24:] if trigger_rows else ()
