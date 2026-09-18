@@ -1,23 +1,18 @@
-/* NEXUS Landing V18 — poster-first landing with animated glowing CTA.
-   Presentation only. Existing landing-v5.js keeps the same enter/reveal lifecycle. */
+/* NEXUS Landing — approved minimal chart/candlestick composition */
 
 :root{
-  --nx-landing-bg:#020b18;
-  --nx-landing-bg-2:#041426;
-  --nx-landing-blue:#169cff;
-  --nx-landing-blue-2:#4f7dff;
-  --nx-landing-violet:#8d6cff;
-  --nx-landing-text:#f7fbff;
+  --nx-landing-bg:#03070d;
+  --nx-landing-blue:#28a7ff;
+  --nx-landing-blue-soft:#8bdcff;
+  --nx-landing-text:#f5f9ff;
+  --nx-landing-muted:#9fb1c5;
 }
 
-html,body{
-  background:var(--nx-landing-bg)!important;
-}
+html,body{background:var(--nx-landing-bg)!important}
 
 body.landing-active{
   overflow:hidden!important;
   overscroll-behavior:none;
-  background:var(--nx-landing-bg)!important;
 }
 
 body.landing-active>.app-shell{
@@ -31,14 +26,10 @@ body.landing-active>.app-shell{
   z-index:10000;
   width:100vw;
   height:100dvh;
-  overflow:hidden;
   display:grid;
   place-items:center;
-  isolation:isolate;
-  background:
-    radial-gradient(circle at 50% 18%,rgba(0,155,255,.13),transparent 34%),
-    radial-gradient(circle at 50% 82%,rgba(23,95,184,.14),transparent 32%),
-    linear-gradient(180deg,var(--nx-landing-bg) 0%,var(--nx-landing-bg-2) 56%,#020912 100%);
+  overflow:hidden;
+  background:#050a12;
   -webkit-user-select:none;
   user-select:none;
   -webkit-touch-callout:none;
@@ -46,301 +37,241 @@ body.landing-active>.app-shell{
 
 .nexus-landing[hidden]{display:none!important}
 
-.nexus-landing::before{
+.nexus-landing-stage{
+  position:relative;
+  width:100%;
+  height:100dvh;
+  min-height:100dvh;
+  overflow:hidden;
+  isolation:isolate;
+  background:#03070d;
+}
+
+.nexus-landing-stage::before{
   content:"";
   position:absolute;
   inset:0;
   z-index:0;
   pointer-events:none;
-  opacity:.13;
-  background-image:
-    radial-gradient(rgba(255,255,255,.16) .5px,transparent .65px),
-    radial-gradient(rgba(31,156,255,.13) .45px,transparent .6px);
-  background-size:20px 20px,27px 27px;
-  background-position:0 0,8px 10px;
-  mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),rgba(0,0,0,.16));
+  background:
+    radial-gradient(circle at 50% 42%,rgba(20,129,204,.08),transparent 35%),
+    linear-gradient(180deg,#03070d 0%,#040911 100%);
 }
 
-.nexus-landing-poster-frame{
-  position:relative;
-  z-index:1;
-  width:min(100vw,640px);
-  height:100dvh;
-  display:flex;
-  align-items:flex-start;
-  justify-content:center;
-  overflow:hidden;
-  background:transparent;
-}
-
-.nexus-landing-poster{
+.nexus-landing-noise{
   position:absolute;
   inset:0;
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  object-position:center top;
-  display:block;
+  z-index:1;
   pointer-events:none;
-  -webkit-user-drag:none;
-  filter:drop-shadow(0 26px 55px rgba(0,0,0,.28));
+  opacity:.045;
+  background-image:radial-gradient(circle,rgba(255,255,255,.16) 1px,transparent 1.15px);
+  background-size:38px 38px;
 }
 
-/* ------------------------------------------------------------------
-   CTA — cleaned adaptation of the supplied Uiverse glow button.
-   ------------------------------------------------------------------ */
-.nexus-landing-enter{
+.nexus-landing-chart{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  opacity:.78;
+}
+
+.nexus-chart-flow{
+  stroke-dasharray:10 18;
+  animation:nexusChartDash 8s linear infinite;
+}
+
+.nexus-chart-candle line{
+  stroke:#49bfff;
+  stroke-width:2;
+}
+
+.nexus-chart-candle rect{
+  fill:url(#nxLandingCandle);
+}
+
+.nexus-chart-candle{
+  opacity:.42;
+  animation:nexusCandlePulse 2.4s ease-in-out infinite;
+  transform-box:fill-box;
+  transform-origin:center;
+}
+
+.nexus-chart-candle:nth-child(2){animation-delay:.25s}
+.nexus-chart-candle:nth-child(3){animation-delay:.5s}
+.nexus-chart-candle:nth-child(4){animation-delay:.75s}
+.nexus-chart-candle:nth-child(5){animation-delay:1s}
+.nexus-chart-candle:nth-child(6){animation-delay:1.25s}
+
+.nexus-landing-content{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  gap:13px;
+  padding:
+    calc(28px + env(safe-area-inset-top))
+    22px
+    calc(112px + env(safe-area-inset-bottom));
+}
+
+.nexus-landing-logo{
+  width:clamp(106px,31vw,150px);
+  height:auto;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 0 20px rgba(0,163,255,.18));
+}
+
+.nexus-landing-brand{
+  margin-left:.18em;
+  color:var(--nx-landing-text);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(46px,14vw,76px);
+  font-weight:700;
+  letter-spacing:.18em;
+  line-height:1;
+  text-shadow:0 0 16px rgba(95,184,255,.12);
+}
+
+.nexus-landing-tagline{
+  margin-left:.34em;
+  color:var(--nx-landing-muted);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(9px,2.8vw,12px);
+  font-weight:400;
+  letter-spacing:.34em;
+  line-height:1.4;
+  white-space:nowrap;
+}
+
+.nexus-enter-wrap{
   position:absolute;
   z-index:3;
   left:50%;
   bottom:max(30px,calc(22px + env(safe-area-inset-bottom)));
   transform:translateX(-50%);
-  width:auto;
-  min-width:0;
-  height:auto;
-  min-height:0;
-  max-height:none;
+}
+
+.nexus-enter-button{
+  position:relative;
+  width:min(290px,72vw);
+  height:52px;
   padding:0;
+  overflow:visible;
+  cursor:pointer;
   border:0;
-  border-radius:999px;
+  border-radius:12px;
+  background:#0b0f15;
+  color:#fff;
   appearance:none;
   -webkit-appearance:none;
-  background:transparent!important;
-  box-shadow:none!important;
-  outline:none;
-  cursor:pointer;
+  transition:transform .2s ease;
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
 }
 
-.glowing-box{
-  --animation-speed:2s;
-  isolation:isolate;
-  overflow:hidden;
-  border-radius:999px;
-  display:inline-block;
-  position:relative;
-  transition:
-    transform .26s cubic-bezier(.22,1,.36,1),
-    box-shadow .34s cubic-bezier(.22,1,.36,1);
-}
-
-.glowing-box:hover{
-  transform:scale(1.035);
-  box-shadow:0 12px 34px rgba(45,137,255,.18),0 0 28px rgba(89,184,255,.10);
-}
-
-.glowing-box:active{transform:scale(.985)}
-
-.glowing-box-active .glowing-box-animations,
-.glowing-box-active .glowing-box-borders-masker{opacity:1}
-
-.glowing-box-animations,
-.glowing-box-borders{
-  left:50%;
-  position:absolute;
-  top:50%;
-  transform:translate(-50%,-50%);
-  width:100%;
-}
-
-.glowing-box-animations{
-  opacity:0;
-  pointer-events:none;
-  transition:1s ease opacity;
-}
-
-.glowing-box-animations::before,
-.glowing-box-borders::before{
+.nexus-enter-button::before{
   content:"";
-  float:left;
-  padding-top:100%;
-}
-
-.glowing-box-animations::after,
-.glowing-box-borders::after{
-  clear:both;
-  content:"";
-  display:block;
-}
-
-.glowing-box-animations *{
-  height:100%;
-  left:0;
   position:absolute;
-  top:0;
-  width:100%;
-}
-
-.glowing-box-glow{
-  filter:blur(12px);
-  opacity:.16;
-}
-
-.glowing-box-stars-masker{
-  -webkit-mask-image:radial-gradient(circle,#000 1.1px,transparent 1.4px);
-  mask-image:radial-gradient(circle,#000 1.1px,transparent 1.4px);
-  -webkit-mask-repeat:repeat;
-  mask-repeat:repeat;
-  -webkit-mask-size:15px 15px;
-  mask-size:15px 15px;
-}
-
-.glowing-box-borders,
-.glowing-box-glow,
-.glowing-box-stars{
-  animation:borderTurn var(--animation-speed) infinite linear;
-  background-image:conic-gradient(
-    from 0deg at 50% 50%,
-    rgba(255,255,255,.72) 0deg,
-    rgba(53,188,255,.84) 34deg,
-    rgba(72,110,255,.08) 94deg,
-    rgba(255,255,255,0) 176deg,
-    rgba(141,108,255,.20) 258deg,
-    rgba(255,255,255,.70) 360deg
-  );
-  background-position:center;
-  background-repeat:no-repeat;
-  background-size:cover;
-}
-
-.glowing-box-borders{animation-name:borderTurnWithTranslate}
-
-.glowing-box-borders-masker{
-  border-radius:999px;
   inset:0;
-  left:0;
-  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
-  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
-  -webkit-mask-composite:xor;
-  mask-composite:exclude;
-  opacity:0;
-  padding:1px;
-  pointer-events:none;
-  position:absolute;
-  top:0;
-  transition:1s ease opacity;
-}
-
-.glowing-box-button{
-  position:relative;
-  z-index:1;
-  min-width:min(78vw,320px);
-  min-height:54px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:9px;
-  padding:13px 30px;
-  overflow:visible;
-  border:1px solid rgba(255,255,255,.13);
-  border-radius:999px;
-  cursor:pointer;
-  color:#fff;
+  border-radius:12px;
+  opacity:.12;
   background:
-    radial-gradient(107.5% 107.5% at 50% 215%,rgba(255,255,255,.25) 0%,rgba(255,255,255,0) 100%),
-    linear-gradient(115deg,rgba(7,25,49,.94),rgba(9,34,69,.96));
-  box-shadow:
-    0 12px 34px rgba(0,0,0,.34),
-    0 0 26px rgba(0,154,255,.13),
-    inset 0 1px 0 rgba(255,255,255,.10);
-  font-family:Vazirmatn,sans-serif;
-  font-size:16px;
-  font-weight:800;
-  letter-spacing:0;
-  line-height:1.35;
-  white-space:nowrap;
-  transition:box-shadow .3s ease,background .3s ease;
+    radial-gradient(circle at 50% 50%,transparent 0,transparent 20%,#111111aa 50%),
+    radial-gradient(ellipse 100% 100%,#fff,#fff0);
+  background-size:3px 3px,auto auto;
+  transition:opacity .3s ease;
 }
 
-.glowing-box-button::after{
-  background:radial-gradient(73% 117% at 50% 126%,rgba(29,91,200,.58) 0%,rgba(255,255,255,0) 100%);
-  border-radius:999px;
-  content:"";
-  height:calc(100% + 4px);
-  left:-2px;
-  opacity:0;
-  position:absolute;
-  top:-2px;
-  transition:.7s opacity ease;
-  width:calc(100% + 4px);
-  pointer-events:none;
-}
-
-.glowing-box-button:hover::after{opacity:.8}
-
-.glowing-box-button:focus-visible{
-  outline:none;
-  box-shadow:
-    0 0 0 3px rgba(37,149,255,.20),
-    0 0 0 6px rgba(37,149,255,.08),
-    0 14px 38px rgba(0,0,0,.34),
-    0 0 30px rgba(0,154,255,.18);
-}
-
-.glowing-span{
-  background:linear-gradient(180deg,rgba(255,255,255,.55) 0%,#fff 92%);
-  -webkit-background-clip:text;
-  background-clip:text;
-  color:transparent;
-  -webkit-text-fill-color:transparent;
-  display:block;
+.nexus-enter-text{
   position:relative;
-  z-index:1;
-}
-
-.nexus-enter-arrow{
-  position:relative;
-  z-index:1;
-  display:inline-grid;
-  place-items:center;
-  width:23px;
-  height:23px;
-  border-radius:50%;
-  color:#bfe8ff;
-  background:rgba(51,165,255,.12);
-  border:1px solid rgba(105,202,255,.20);
-  font:900 17px/1 Arial,sans-serif;
-  direction:ltr;
-}
-
-.nexus-visually-hidden{
-  position:absolute!important;
-  width:1px!important;
-  height:1px!important;
-  padding:0!important;
-  margin:-1px!important;
-  overflow:hidden!important;
-  clip:rect(0,0,0,0)!important;
-  white-space:nowrap!important;
-  border:0!important;
-}
-
-/* Existing JS fallback remains fail-safe if the poster asset is missing. */
-.nexus-fallback-cta{display:none}
-.nexus-landing.landing-fallback .nexus-landing-poster{display:none}
-.nexus-landing.landing-fallback .glowing-box{display:none}
-.nexus-landing.landing-fallback .nexus-landing-enter{
-  bottom:auto;
-  top:50%;
-  left:8%;
-  right:8%;
-  width:auto;
-  transform:translateY(-50%);
+  z-index:3;
+  height:100%;
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:24px;
-  border:1px solid rgba(59,179,255,.28)!important;
-  border-radius:28px;
-  background:linear-gradient(155deg,rgba(10,28,50,.98),rgba(4,14,28,.99))!important;
-  color:#f4f7fb;
-  box-shadow:0 22px 60px rgba(0,0,0,.45),0 0 34px rgba(38,153,255,.10)!important;
+  gap:14px;
+  color:#fff;
+  font-family:Vazirmatn,Arial,sans-serif;
+  font-size:15px;
+  font-weight:700;
 }
-.nexus-landing.landing-fallback .nexus-fallback-cta{display:grid;gap:8px;text-align:center}
-.nexus-fallback-cta b{font-size:34px;letter-spacing:.14em;color:#fff}
-.nexus-fallback-cta small{font-size:10px;letter-spacing:.18em;color:#51bdff}
-.nexus-fallback-cta em{margin-top:12px;font-style:normal;font-size:15px;font-weight:900;color:#fff;background:linear-gradient(135deg,#168fff,#4f7dff);padding:13px 24px;border-radius:999px}
+
+.nexus-enter-arrow{
+  color:#bfe8ff;
+  font:700 18px/1 Arial,sans-serif;
+  direction:ltr;
+}
+
+.nexus-enter-edge{
+  pointer-events:none;
+  position:absolute;
+  --w:2px;
+  --t:-26px;
+  --s:calc(var(--t) * -1);
+  --e:calc(100% + var(--t));
+  --g:#fff0,#6dc5ff33 var(--s),#82d8ffaa var(--s),#fff,#82d8ffaa var(--e),#6dc5ff33 var(--e),#fff0;
+}
+
+.nexus-enter-edge::before,
+.nexus-enter-edge::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:inherit;
+  z-index:-2;
+}
+
+.nexus-enter-edge::before{filter:blur(4px)}
+.nexus-enter-edge::after{
+  filter:blur(11px);
+  opacity:.72;
+  transition:opacity .3s ease;
+}
+
+.nexus-enter-edge-l{left:-2px}
+.nexus-enter-edge-r{right:-2px}
+
+.nexus-enter-edge-l,
+.nexus-enter-edge-r{
+  top:var(--t);
+  bottom:var(--t);
+  width:var(--w);
+  background:linear-gradient(var(--g));
+}
+
+.nexus-enter-edge-t{top:-2px}
+.nexus-enter-edge-b{bottom:-2px}
+
+.nexus-enter-edge-t,
+.nexus-enter-edge-b{
+  left:var(--t);
+  right:var(--t);
+  height:var(--w);
+  background:linear-gradient(90deg,var(--g));
+}
+
+@media(hover:hover) and (pointer:fine){
+  .nexus-enter-button:hover{transform:translateY(-1px)}
+  .nexus-enter-button:hover::before{opacity:.28}
+  .nexus-enter-button:hover .nexus-enter-edge::after{opacity:1}
+}
+
+.nexus-enter-button:active{transform:scale(.985)}
+
+.nexus-enter-button:focus-visible{
+  outline:2px solid var(--nx-landing-blue-soft);
+  outline-offset:4px;
+}
+
+.nexus-enter-button:disabled{cursor:default}
 
 .nexus-landing.is-leaving{
   opacity:0;
@@ -349,32 +280,71 @@ body.landing-active>.app-shell{
   transition:opacity 340ms ease,transform 340ms ease;
 }
 
-.app-shell.nexus-app-entering{animation:nexus-app-arrive 340ms ease both}
-@keyframes nexus-app-arrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
-
-@keyframes borderTurnWithTranslate{
-  0%{transform:translate(-50%,-50%) rotate(0deg)}
-  100%{transform:translate(-50%,-50%) rotate(360deg)}
-}
-@keyframes borderTurn{
-  0%{transform:rotate(0deg)}
-  100%{transform:rotate(360deg)}
+.app-shell.nexus-app-entering{
+  animation:nexusAppArrive 340ms ease both;
 }
 
+@keyframes nexusCandlePulse{
+  0%,100%{
+    opacity:.30;
+    filter:drop-shadow(0 0 0 rgba(0,160,255,0));
+  }
+  50%{
+    opacity:.92;
+    filter:drop-shadow(0 0 8px rgba(0,176,255,.48));
+  }
+}
+
+@keyframes nexusChartDash{
+  to{stroke-dashoffset:-220}
+}
+
+@keyframes nexusAppArrive{
+  from{opacity:0;transform:translateY(9px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* Telegram/mobile */
 @media(max-width:430px){
-  .nexus-landing-poster-frame{width:100vw}
-  .nexus-landing-enter{bottom:max(24px,calc(18px + env(safe-area-inset-bottom)))}
-  .glowing-box-button{min-width:min(82vw,310px);min-height:52px;font-size:15px;padding:12px 24px}
+  .nexus-landing-content{
+    padding:
+      calc(24px + env(safe-area-inset-top))
+      20px
+      calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .nexus-landing-logo{width:clamp(100px,30vw,128px)}
+  .nexus-landing-brand{font-size:clamp(46px,15vw,62px)}
+  .nexus-landing-tagline{font-size:9px;letter-spacing:.30em;margin-left:.30em}
+  .nexus-enter-wrap{bottom:max(27px,calc(18px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{width:min(280px,74vw);height:50px}
 }
 
-@media(orientation:landscape){
-  .nexus-landing-poster-frame{width:min(100vw,720px)}
-  .nexus-landing-poster{object-fit:contain;object-position:center center}
-  .nexus-landing-enter{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)))}
-  .glowing-box-button{min-width:240px;min-height:46px;padding:10px 24px;font-size:14px}
+/* Desktop browser preview remains a mobile Mini App frame. */
+@media(min-width:700px){
+  .nexus-landing-stage{
+    width:430px;
+    max-width:430px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.035),
+      0 0 70px rgba(0,0,0,.55);
+  }
+}
+
+@media(orientation:landscape) and (max-height:520px){
+  .nexus-landing-logo{width:82px}
+  .nexus-landing-brand{font-size:42px}
+  .nexus-landing-tagline{font-size:8px}
+  .nexus-enter-wrap{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{height:46px}
 }
 
 @media(prefers-reduced-motion:reduce){
-  .glowing-box-borders,.glowing-box-glow,.glowing-box-stars{animation:none!important}
-  .glowing-box,.nexus-landing,.app-shell.nexus-app-entering{transition:none!important;animation:none!important}
+  .nexus-chart-flow,
+  .nexus-chart-candle,
+  .nexus-landing,
+  .app-shell.nexus-app-entering{
+    animation:none!important;
+    transition:none!important;
+  }
 }
