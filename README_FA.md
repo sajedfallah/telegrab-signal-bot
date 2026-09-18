@@ -1,8 +1,8 @@
 # NEXUS
 
-## NEXUS ICT Expert V22.42 — Observability Data Lake
+## NEXUS ICT Expert V22.46 — Deep Research Telemetry + Analytics Viewer
 
-نسخه فعلی Companion Expert track: **V22.42**.
+نسخه فعلی Companion Expert track: **V22.46**.
 
 تمرکز فعلی:
 - Daily CE / Quadrant-aware signal quality.
@@ -13,11 +13,18 @@
 - CE vs No-CE و CE50 vs CE75 attribution.
 - Deep Signal Snapshot + Lifecycle + Telegram Delivery datasets.
 - ثبت ستاپ‌های Armed / Invalidated / Expired برای جلوگیری از Survivorship Bias.
+- Deep Research برای CE25/50/75، کیفیت Wick، Touch count و Sequence timing.
+- Post-signal horizons در 1/3/5/10/20 کندل با Return R و path MFE/MAE.
+- Counterfactual management برای مقایسه Trail07 با TP/BE جایگزین.
+- Analytics Viewer با UI مبتنی بر Mosaic Lite / Cruip.
 
-**V22.42 هیچ فیلتر جدیدی برای صدور Signal اضافه نمی‌کند.** داده‌ها فقط برای تحلیل آینده جمع می‌شوند.
+**V22.46 هیچ فیلتر جدیدی برای صدور Signal اضافه نمی‌کند.** داده‌ها فقط برای تحلیل آینده جمع می‌شوند.
 
 مستندات جدید:
 - [Evolution V22.32 → V22.42](docs/releases/NEXUS_ICT_V22_32_TO_V22_42_FA.md)
+- [V22.44 → V22.46 Release](docs/releases/NEXUS_ICT_V22_44_TO_V22_46_FA.md)
+- [V22.46 Deep Research Schema](docs/analytics/NEXUS_ICT_V22_46_DEEP_RESEARCH_SCHEMA_FA.md)
+- [V22.46 Analytics Viewer / Mosaic UI](docs/analytics/NEXUS_ICT_V22_46_VIEWER_MOSAIC_UI_FA.md)
 - [V22.42 Telemetry Schema](docs/analytics/NEXUS_ICT_V22_42_TELEMETRY_SCHEMA_FA.md)
 - [V22.31 Trail07 Release](docs/releases/NEXUS_ICT_V22_31_FA.md)
 - [V22.31 Runbook](docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md)
