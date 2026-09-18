@@ -543,32 +543,61 @@ def retry(request_id: str, background_tasks: BackgroundTasks,
     user = _admin(x_telegram_init_data)
     init_miniapp_admin_schema()
     with db.conn() as con:
-        row = con.execute("SELECT * FROM miniapp_admin_signal_requests WHERE request_id=? AND admin_telegram_id=?", (request_id, int(user["id"]))).fetchone()
+        row = con.execute(
+            "SELECT * FROM miniapp_admin_signal_requests WHERE request_id=? AND admin_telegram_id=?",
+            (request_id, int(user["id"])),
+        ).fetchone()
     if not row or not row["signal_id"]:
         raise HTTPException(404, "signal request not found")
-    try:
-        signal = db.get_signal(int(row["signal_id"]))
-        existing_job = db.get_signal_chart_capture_job(int(row["signal_id"]))
-        already_published = bool(signal and str(signal["publication_stage"] or "").upper() == "PUBLISHED")
-        if (signal and existing_job and not already_published
-                and str(existing_job["status"] or "").upper() in {"UPLOADED", "COMPLETED"}):
-            from .autotrade.api import _publish_mt5_admin_signal_async
-            with db.conn() as con:
-                con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(row["signal_id"]),))
-                con.execute("UPDATE miniapp_admin_signal_requests SET status='SCREENSHOT_READY',error_message=NULL,updated_at=? WHERE id=?",
-                            (db.now_iso(), int(row["id"])))
-            background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None)
-            return {"ok": True, "status": "SCREENSHOT_READY", "chart_job": dict(existing_job),
-                    "publication": "RETRY_QUEUED"}
-        job = db.retry_chart_capture_job(int(row["signal_id"]))
-        status = "READY" if _admin_mt5_status()["online"] else "WAITING_FOR_MT5"
+
+    signal_id = int(row["signal_id"])
+    signal = db.get_signal(signal_id)
+    if not signal:
+        raise HTTPException(404, "signal not found")
+    if str(signal["publication_stage"] or "").upper() == "PUBLISHED":
+        return {"ok": True, "status": "PUBLISHED", "publication": "ALREADY_PUBLISHED"}
+
+    receipt = db.mt5_signal_live_state(signal_id) or {}
+    execution_status = str(receipt.get("receipt_status") or "NOT_RECEIVED").upper()
+    accepted = {"EXECUTED", "PENDING", "ACTIVATED"}
+
+    if execution_status in accepted:
+        from .autotrade.api import _publish_mt5_admin_signal_async
         with db.conn() as con:
-            con.execute("UPDATE signals SET publication_stage='WAITING_FOR_CHART' WHERE id=?", (int(row["signal_id"]),))
-            con.execute("UPDATE miniapp_admin_signal_requests SET status=?,error_message=NULL,updated_at=? WHERE id=?",
-                        (status, db.now_iso(), int(row["id"])))
-        return {"ok": True, "status": status, "chart_job": dict(job)}
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
+            con.execute(
+                "UPDATE signals SET publication_stage='WAITING_FOR_VISUAL' WHERE id=?",
+                (signal_id,),
+            )
+            con.execute(
+                "UPDATE miniapp_admin_signal_requests "
+                "SET status='WAITING_VISUAL',error_message=NULL,updated_at=? WHERE id=?",
+                (db.now_iso(), int(row["id"])),
+            )
+        background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None, allow_without_chart=True)
+        return {
+            "ok": True,
+            "status": "WAITING_VISUAL",
+            "execution_status": execution_status,
+            "publication": "RETRY_QUEUED",
+        }
+
+    mt5 = _admin_mt5_status()
+    status = "WAITING_EXECUTION" if mt5["online"] else "WAITING_FOR_MT5"
+    with db.conn() as con:
+        con.execute(
+            "UPDATE signals SET publication_stage='WAITING_EXECUTION' WHERE id=?",
+            (signal_id,),
+        )
+        con.execute(
+            "UPDATE miniapp_admin_signal_requests SET status=?,error_message=NULL,updated_at=? WHERE id=?",
+            (status, db.now_iso(), int(row["id"])),
+        )
+    return {
+        "ok": True,
+        "status": status,
+        "execution_status": execution_status,
+        "publication": "WAITING_EXECUTION",
+    }
 
 
 @router.get("/positions")
