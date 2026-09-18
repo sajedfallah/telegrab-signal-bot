@@ -29,7 +29,28 @@ def _bull_trigger_rows():
     return rows
 
 
-def _snapshot(d1=None, h1=None, m15=None, m5=None, **overrides):
+
+
+
+def _bull_delayed_trigger_rows():
+    rows = _trend_rows("up")
+    sweep_index = len(rows) - 4
+    prior_low = min(x["low"] for x in rows[sweep_index - 12:sweep_index])
+    rows[sweep_index] = {**rows[sweep_index], "low": prior_low - 1.0, "close": prior_low + 0.1}
+    breakout = max(x["high"] for x in rows[-7:-1]) + 0.5
+    rows[-1] = {**rows[-1], "high": breakout + 0.2, "close": breakout}
+    return rows
+
+
+def _bull_expired_sweep_rows():
+    rows = _trend_rows("up")
+    sweep_index = len(rows) - 7
+    prior_low = min(x["low"] for x in rows[sweep_index - 12:sweep_index])
+    rows[sweep_index] = {**rows[sweep_index], "low": prior_low - 1.0, "close": prior_low + 0.1}
+    breakout = max(x["high"] for x in rows[-7:-1]) + 0.5
+    rows[-1] = {**rows[-1], "high": breakout + 0.2, "close": breakout}
+    return rows
+\ndef _snapshot(d1=None, h1=None, m15=None, m5=None, **overrides):
     d1 = d1 or _daily_rows()
     h1 = h1 or _trend_rows("up")
     m15 = m15 or _trend_rows("up")
@@ -76,3 +97,18 @@ def test_quadrant_context_alone_does_not_create_entry():
     result = assess_ict(_snapshot(m5=_trend_rows("up")))
     assert any("Daily Quadrant" in x for x in result.evidence)
     assert result.direction == Direction.NEUTRAL
+
+
+
+def test_ict_accepts_recent_sweep_followed_by_delayed_mss():
+    result = assess_ict(_snapshot(m5=_bull_delayed_trigger_rows()))
+    assert result.direction == Direction.LONG
+    assert any("sell-side liquidity sweep/reclaim (3 bars before MSS check)" in x for x in result.evidence)
+    assert any("bullish displacement/MSS" in x for x in result.evidence)
+
+
+def test_ict_does_not_reuse_expired_sweep_for_new_mss():
+    result = assess_ict(_snapshot(m5=_bull_expired_sweep_rows()))
+    assert result.direction == Direction.NEUTRAL
+    assert not any("sell-side liquidity sweep/reclaim" in x for x in result.evidence)
+    assert any("bullish displacement/MSS" in x for x in result.evidence)
