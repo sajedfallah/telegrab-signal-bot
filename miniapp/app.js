@@ -7,6 +7,7 @@ if (tg) {
 }
 
 const API = '/miniapp/api';
+const previewModeActive = () => window.NexusPreviewMode?.active?.() === true;
 const state = { bootstrap: null, route: 'home', planCategory: 'vip' };
 let bootstrapUnavailable = false;
 const routes = {
@@ -21,6 +22,9 @@ function authHeaders(extra = {}) {
 }
 
 async function api(path, options = {}) {
+  if (previewModeActive() && window.NexusPreviewApi?.resolve) {
+    return window.NexusPreviewApi.resolve(path, options);
+  }
   const headers = authHeaders(options.body ? { 'Content-Type': 'application/json' } : {});
   const res = await fetch(`${API}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) } });
   let data = {};
@@ -32,7 +36,7 @@ async function api(path, options = {}) {
 async function bootstrap(allowDeferred = true) {
   const webApp = telegramWebApp();
   webApp?.ready?.();
-  if (!webApp?.initData) {
+  if (!webApp?.initData && !previewModeActive()) {
     if (allowDeferred) {
       window.setTimeout(() => bootstrap(false), 250);
       return;
