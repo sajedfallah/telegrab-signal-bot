@@ -1,3 +1,28 @@
+# NEXUS — وضعیت فعلی پروژه
+
+## NEXUS ICT Expert V22.46 — Forward Test Candidate
+
+مسیر ICT Expert تا **V22.46** مستندسازی و برای یک هفته Demo Forward Test فریز شده است.
+
+قانون فعلی:
+- هیچ Signal Filter / Hard Gate جدیدی در هفته تست اضافه نمی‌شود.
+- Weightها، Daily CE scoring و Trail07 تا پایان Review تغییر نمی‌کنند.
+- فقط Bug fix، Data Integrity، Performance، Telegram و Analytics Viewer fix مجاز است.
+- آخرین Viewer کاملاً فارسی و RTL است.
+- Private MQ5 Server Build به‌دلیل runtime credential در public GitHub قرار نمی‌گیرد.
+
+مستندات مرجع:
+- [وضعیت کامل V22.46](docs/nexus-ict/CURRENT_STATUS_FA.md)
+- [برنامه تست یک‌هفته‌ای](docs/nexus-ict/ONE_WEEK_FORWARD_TEST_V22_46_FA.md)
+- [قدم بعدی V22.47](docs/nexus-ict/NEXT_V22_47_INSIGHT_ENGINE_FA.md)
+- [Handoff و Branch Governance](docs/nexus-ict/DEVELOPMENT_HANDOFF_FA.md)
+- [Index مستندات ICT](docs/nexus-ict/README_FA.md)
+- [Changelog](CHANGELOG.md)
+
+**بازه Review فعلی:** 2026-09-18 → 2026-09-25
+
+---
+
 ## v7.1.0 — Current Release
 
 - قیمت سرویس‌ها فقط بر اساس USDT: VIP SIGNAL و AUTO TRADE VIP
