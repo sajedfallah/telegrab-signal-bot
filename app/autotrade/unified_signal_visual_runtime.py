@@ -12,7 +12,7 @@ from .broker_chart_fallback import ensure_broker_chart_asset
 
 log = logging.getLogger("nexus.unified_signal_visual")
 
-_STYLE_VERSION = "nexus-clean-signal-v3"
+_STYLE_VERSION = "nexus-signal-canonical-v4"
 _SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}
 
 
@@ -56,11 +56,7 @@ def _authoritative_staged_chart(row: Any) -> str | None:
     """
     signal_id = _signal_id(row)
     issuer = _issuer_type(row)
-    if signal_id <= 0 or issuer not in _SUPPORTED_ISSUERS:
-        return None
-
-    stage = str(_row_value(row, "publication_stage", "") or "").strip().upper()
-    if issuer == "WEB_ADMIN" and stage != "CHART_RECEIVED":
+    if signal_id <= 0 or issuer != "MT5_ADMIN":
         return None
 
     asset = db.get_mt5_signal_publication_asset(signal_id)
@@ -135,11 +131,59 @@ def install_unified_signal_visual(app) -> None:
 
         broker_result: dict[str, Any] | None = None
         visual_source = "EXISTING_PIPELINE"
-        authoritative_path = _authoritative_staged_chart(canonical)
 
-        if authoritative_path:
-            visual_source = "MT5_CHART_AGENT" if issuer == "WEB_ADMIN" else "MT5_SOURCE_SCREENSHOT"
+        # Mini App / WEB_ADMIN has one publication authority: a deterministic
+        # broker-truth render generated from the canonical DB signal snapshot.
+        # ChartAgent screenshots are diagnostics only and can never override it.
+        if issuer == "WEB_ADMIN" and signal_id > 0:
+            broker_result = ensure_broker_chart_asset(canonical)
+            if not broker_result.get("ok"):
+                reason = str(broker_result.get("reason") or "canonical broker visual unavailable")
+                try:
+                    with db.conn() as con:
+                        con.execute(
+                            "UPDATE signals SET publication_stage='WAITING_FOR_VISUAL' "
+                            "WHERE id=? AND UPPER(COALESCE(publication_stage,''))!='PUBLISHED'",
+                            (signal_id,),
+                        )
+                    db.add_signal_event(
+                        signal_id,
+                        "SIGNAL_VISUAL_CANONICALIZE_FAILED",
+                        actor_type="BACKEND",
+                        actor_id=_row_value(canonical, "created_by"),
+                        account_number=str(_row_value(canonical, "issuer_account", "") or ""),
+                        correlation_id=str(_row_value(canonical, "code", "") or ""),
+                        result="FAILED",
+                        reason=reason[:1000],
+                        payload={
+                            "style_version": _STYLE_VERSION,
+                            "issuer_type": issuer,
+                            "source": "MT5_MARKET_FEED_CANONICAL",
+                            "broker_result": broker_result,
+                        },
+                    )
+                except Exception:
+                    log.exception("failed recording WEB_ADMIN canonical visual failure signal_id=%s", signal_id)
+                return {
+                    "free_message_id": None,
+                    "vip_message_id": None,
+                    "errors": [f"VISUAL_GATE: {reason}"],
+                    "published": False,
+                    "complete": False,
+                    "visual_style_version": _STYLE_VERSION,
+                    "visual_source": "MT5_MARKET_FEED_CANONICAL",
+                    "visual_retryable": True,
+                }
+
+            visual_source = "MT5_MARKET_FEED_CANONICAL"
+            chart_base64 = None
             try:
+                with db.conn() as con:
+                    con.execute(
+                        "UPDATE signals SET publication_stage='CANONICAL_VISUAL_READY' "
+                        "WHERE id=? AND UPPER(COALESCE(publication_stage,''))!='PUBLISHED'",
+                        (signal_id,),
+                    )
                 db.add_signal_event(
                     signal_id,
                     "SIGNAL_VISUAL_CANONICALIZED",
@@ -151,20 +195,22 @@ def install_unified_signal_visual(app) -> None:
                         "style_version": _STYLE_VERSION,
                         "issuer_type": issuer,
                         "source": visual_source,
-                        "file_path": authoritative_path,
-                        "authoritative_mt5_screenshot": True,
+                        "file_path": broker_result.get("file_path"),
+                        "signal_visual_fingerprint": broker_result.get("fingerprint"),
+                        "image_sha256": broker_result.get("image_sha256"),
+                        "age_seconds": broker_result.get("age_seconds"),
+                        "anchor_applied": broker_result.get("anchor_applied"),
+                        "anchor_bar_time": broker_result.get("anchor_bar_time"),
+                        "anchor_field": broker_result.get("anchor_field"),
                     },
                 )
             except Exception:
-                log.exception("failed recording authoritative visual event signal_id=%s", signal_id)
+                log.exception("failed recording WEB_ADMIN canonical visual event signal_id=%s", signal_id)
 
-        elif issuer in _SUPPORTED_ISSUERS and signal_id > 0:
-            broker_result = ensure_broker_chart_asset(canonical)
-            if broker_result.get("ok"):
-                # There is no real staged MT5 screenshot. MarketFeed rendering is
-                # fallback-only and may stage the final PNG in the DB asset slot.
-                chart_base64 = None
-                visual_source = "MT5_MARKET_FEED_FALLBACK"
+        else:
+            authoritative_path = _authoritative_staged_chart(canonical)
+            if authoritative_path:
+                visual_source = "MT5_SOURCE_SCREENSHOT"
                 try:
                     db.add_signal_event(
                         signal_id,
@@ -177,37 +223,36 @@ def install_unified_signal_visual(app) -> None:
                             "style_version": _STYLE_VERSION,
                             "issuer_type": issuer,
                             "source": visual_source,
-                            "file_path": broker_result.get("file_path"),
-                            "age_seconds": broker_result.get("age_seconds"),
-                            "anchor_applied": broker_result.get("anchor_applied"),
-                            "anchor_bar_time": broker_result.get("anchor_bar_time"),
-                            "anchor_field": broker_result.get("anchor_field"),
+                            "file_path": authoritative_path,
+                            "authoritative_mt5_screenshot": True,
                         },
                     )
                 except Exception:
-                    log.exception("failed recording fallback visual event signal_id=%s", signal_id)
-            else:
-                # Reliability stays fail-open for the visual layer only: if the
-                # feed is temporarily unavailable, the existing chart pipeline
-                # may still publish. Execution/trading gates remain untouched.
-                try:
-                    db.add_signal_event(
-                        signal_id,
-                        "SIGNAL_VISUAL_CANONICALIZE_FAILED",
-                        actor_type="BACKEND",
-                        actor_id=_row_value(canonical, "created_by"),
-                        account_number=str(_row_value(canonical, "issuer_account", "") or ""),
-                        correlation_id=str(_row_value(canonical, "code", "") or ""),
-                        result="FAILED",
-                        reason=str(broker_result.get("reason") or "canonical renderer unavailable")[:1000],
-                        payload={
-                            "style_version": _STYLE_VERSION,
-                            "issuer_type": issuer,
-                            "source": "MT5_MARKET_FEED_FALLBACK",
-                        },
-                    )
-                except Exception:
-                    log.exception("failed recording canonical visual failure signal_id=%s", signal_id)
+                    log.exception("failed recording MT5 source visual event signal_id=%s", signal_id)
+            elif issuer in _SUPPORTED_ISSUERS and signal_id > 0:
+                broker_result = ensure_broker_chart_asset(canonical)
+                if broker_result.get("ok"):
+                    chart_base64 = None
+                    visual_source = "MT5_MARKET_FEED_FALLBACK"
+                else:
+                    try:
+                        db.add_signal_event(
+                            signal_id,
+                            "SIGNAL_VISUAL_CANONICALIZE_FAILED",
+                            actor_type="BACKEND",
+                            actor_id=_row_value(canonical, "created_by"),
+                            account_number=str(_row_value(canonical, "issuer_account", "") or ""),
+                            correlation_id=str(_row_value(canonical, "code", "") or ""),
+                            result="FAILED",
+                            reason=str(broker_result.get("reason") or "canonical renderer unavailable")[:1000],
+                            payload={
+                                "style_version": _STYLE_VERSION,
+                                "issuer_type": issuer,
+                                "source": "MT5_MARKET_FEED_FALLBACK",
+                            },
+                        )
+                    except Exception:
+                        log.exception("failed recording fallback visual failure signal_id=%s", signal_id)
 
         result = await original_publish(
             canonical,
@@ -217,6 +262,8 @@ def install_unified_signal_visual(app) -> None:
         if isinstance(result, dict):
             result["visual_style_version"] = _STYLE_VERSION
             result["visual_source"] = visual_source
+            if broker_result:
+                result["visual_fingerprint"] = broker_result.get("fingerprint")
         return result
 
     api_mod._publish_mt5_admin_signal_async = unified_publish
