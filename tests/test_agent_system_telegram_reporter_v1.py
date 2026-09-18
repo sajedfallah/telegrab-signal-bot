@@ -1,3 +1,4 @@
+from app.agent_system.telegram_reporter import format_hourly_analysis
 import os
 
 import pytest
@@ -30,3 +31,12 @@ def test_reporter_disabled_never_requires_secrets(monkeypatch):
     monkeypatch.delenv("NEXUS_AGENT_TEST_BOT_TOKEN",raising=False)
     monkeypatch.delenv("NEXUS_AGENT_TEST_CHAT_ID",raising=False)
     assert _reporter_from_env(False) is None
+
+
+def test_hourly_analysis_includes_agent_evidence_and_wait_state():
+    record={"symbol":"XAUUSD","scan":"WATCH","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","assessments":[{"agent":"nexus-ict-v1","direction":"NEUTRAL","evidence":["1H structure HH/HL","5M bullish MSS"],"missing_data":[]} ]}
+    text=format_hourly_analysis(record)
+    assert "NEXUS HOURLY ANALYSIS | XAUUSD" in text
+    assert "nexus-ict-v1: NEUTRAL" in text
+    assert "1H structure HH/HL" in text
+    assert "Signal: WAIT" in text
