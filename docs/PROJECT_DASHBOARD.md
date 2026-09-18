@@ -1,0 +1,31 @@
+# NEXUS Repository / Deployment Dashboard
+
+Snapshot: **2026-09-18**
+
+| Control | State | Action |
+| --- | --- | --- |
+| Canonical Git branch | `main` | Use for all new baselines |
+| Main branch protected | **No** (`protected:false`; no rulesets) | Enable PR/review/check protection in GitHub Settings |
+| Vercel production | **READY** | Canonical URL active |
+| Telegram Main Mini App | **Production Vercel URL configured** | No action |
+| Vercel PR Preview | **Enabled** | `vercel[bot]` posts Preview on PR |
+| Vercel project duplication | **None for NEXUS** | Keep single project |
+| Vercel frontend secrets required | **None** | Keep secrets on VPS |
+| API rewrite | **Healthy design** | `/miniapp/api/*` -> VPS |
+| Branch count at audit | **67** | Triage historical branches |
+| Fully merged branch deletion candidates | **5** | Delete after owner/stack check |
+| Open PRs at audit | **20** | Triage/close superseded PRs |
+| README | Added by governance update | Canonical entry point |
+| CONTRIBUTING | Added by governance update | Canonical developer flow |
+| LICENSE | Added by governance update | Proprietary/all rights reserved |
+| CODE_OF_CONDUCT | Not currently required | Add if public community contribution opens |
+| Branching model | Trunk-Based | Short-lived branches |
+| Auto branch cleanup | Added | Deletes merged head only if no open PR depends on it |
+
+## Immediate governance priorities
+
+1. Enable GitHub branch protection/rules for `main`.
+2. Close superseded PRs and delete branches listed as safe candidates.
+3. Retarget or close long-lived stacked PRs so future work starts from `main`.
+4. Keep the Vercel project count at one for NEXUS.
+5. Keep Telegram on the canonical Vercel production domain, not ephemeral deployment URLs.

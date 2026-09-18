@@ -1,0 +1,43 @@
+name: Repository Governance CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  repository-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify canonical repository files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in README.md CONTRIBUTING.md LICENSE .gitignore miniapp/vercel.json; do
+            test -f "$file" || { echo "Missing required file: $file"; exit 1; }
+          done
+
+      - name: Validate Vercel configuration JSON
+        run: python -m json.tool miniapp/vercel.json >/dev/null
+
+      - name: Block tracked runtime secrets and databases
+        shell: bash
+        run: |
+          set -euo pipefail
+          bad="$(git ls-files | grep -E '(^|/).env($|.(local|production|development|staging)$)|.(db|sqlite|sqlite3)$' || true)"
+          bad="$(printf '%s
+' "$bad" | grep -v '^.env.example$' || true)"
+          if [ -n "$bad" ]; then
+            echo "Forbidden tracked runtime files:"
+            printf '%s
+' "$bad"
+            exit 1
+          fi
