@@ -18,6 +18,7 @@ from .telegram_reporter import format_hourly_analysis
 router = Router()
 _config: ShadowRunnerConfig | None = None
 _allowed_chat_id = ""
+_allowed_user_id = ""
 
 
 def _analysis_record(config: ShadowRunnerConfig, symbol: str):
@@ -39,11 +40,19 @@ def _analysis_record(config: ShadowRunnerConfig, symbol: str):
     }
 
 
+@router.message(Command("whoami"))
+async def whoami_command(message: Message):
+    user_id = message.from_user.id if message.from_user else "-"
+    await message.answer(f"User ID: {user_id}\nChat ID: {message.chat.id}")
+
+
 @router.message(Command("analysis"))
 async def analysis_command(message: Message):
     if _config is None:
         return
-    if _allowed_chat_id and str(message.chat.id) != _allowed_chat_id:
+    sender_id = str(message.from_user.id) if message.from_user else ""
+    if not _allowed_user_id or sender_id != _allowed_user_id:
+        await message.answer("این دستور فقط برای ادمین NEXUS فعال است. /whoami را ارسال کنید.")
         return
     parts = (message.text or "").split()
     symbol = parts[1].upper() if len(parts) > 1 else "XAUUSD"
@@ -62,9 +71,10 @@ async def analysis_command(message: Message):
 
 
 async def run(account: str, symbols: tuple[str, ...]):
-    global _config, _allowed_chat_id
+    global _config, _allowed_chat_id, _allowed_user_id
     token = os.getenv("NEXUS_AGENT_TEST_BOT_TOKEN", "").strip()
     _allowed_chat_id = os.getenv("NEXUS_AGENT_TEST_CHAT_ID", "").strip()
+    _allowed_user_id = os.getenv("NEXUS_AGENT_COMMAND_USER_ID", "").strip()
     if not token:
         raise RuntimeError("NEXUS_AGENT_TEST_BOT_TOKEN is required")
     _config = ShadowRunnerConfig(account=account, symbols=symbols, journal_dir=Path("data/agent_shadow"))
