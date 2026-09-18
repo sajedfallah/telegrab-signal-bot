@@ -18,12 +18,12 @@ log = logging.getLogger("nexus.broker_chart_fallback")
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _OUTPUT_DIR = _PROJECT_ROOT / "artifacts" / "signal_charts"
 _LOGO_PATH = _PROJECT_ROOT / "assets" / "branding" / "NEXUS_logo_2026.jpg"
-_SUPPORTED_TF = {"M1", "M5", "M15", "H1", "D1"}
-_TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "H1": 3600, "D1": 86400}
+_SUPPORTED_TF = {"M1", "M5", "M15", "M30", "H1", "H4", "D1"}
+_TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-signal-canonical-v4"
+_STYLE_VERSION = "nexus-signal-canonical-v5"
 
 # Approved minimal chart palette. Keep the number of semantic colors small:
 # neutral navy, cyan/teal candles, blue entry, green targets, red stop.
@@ -301,22 +301,22 @@ def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]
 
 
 def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, Any], targets: list[float]) -> bytes:
-    """Render the canonical NEXUS Mini App signal visual from broker-truth OHLC.
+    """Render the canonical NEXUS Mini App publication visual.
 
-    The image is deterministic from the stored signal snapshot + fresh MT5
-    MarketFeed candles. Uploaded/ChartAgent screenshots are never used as
-    publication artwork for WEB_ADMIN signals, so stale chart objects cannot
-    change ENTRY/SL/TP values shown to channel users.
+    V5 is intentionally generated only from broker-truth OHLC plus the immutable
+    signal snapshot stored in the database. Uploaded screenshots and ChartAgent
+    pixels are never used for WEB_ADMIN Telegram publication.
     """
-    width, height = 1280, 720
+    width, height = 1600, 900
     image = Image.new("RGB", (width, height), _BG)
     draw = ImageDraw.Draw(image)
 
-    header_h = 62
-    footer_h = 30
-    chart_left, chart_right = 28, 920
-    chart_top, chart_bottom = 82, height - footer_h - 14
-    rail_left, rail_right = 944, 1254
+    # Layout: large chart first, compact information rail second.
+    header_h = 78
+    footer_h = 34
+    chart_left, chart_right = 34, 1176
+    chart_top, chart_bottom = 100, height - footer_h - 20
+    rail_left, rail_right = 1204, 1566
     chart_w = chart_right - chart_left
     chart_h = chart_bottom - chart_top
 
@@ -330,27 +330,25 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     digits = meta.get("digits")
     direction_color = _UP if direction in {"BUY", "LONG"} else _DOWN
 
-    # Header: compact brand + signal identity. No marketing copy.
     _paste_small_logo(image)
-    draw.text((28, 20), "NEXUS SIGNAL", font=_font(18, True), fill=(236, 243, 250))
-    draw.text((174, 22), code, font=_font(15, True), fill=_PRICE_TEXT)
+    draw.text((34, 24), "NEXUS SIGNAL", font=_font(22, True), fill=(236, 243, 250))
+    draw.text((220, 27), code, font=_font(18, True), fill=_PRICE_TEXT)
     identity = f"{symbol}  •  {direction}  •  {timeframe}  •  {order_type.replace('_', ' ')}"
-    draw.text((1254, 22), identity, font=_font(14, True), fill=direction_color, anchor="ra")
-    draw.line((28, header_h, 1254, header_h), fill=(25, 48, 68), width=1)
+    draw.text((1566, 26), identity, font=_font(18, True), fill=direction_color, anchor="ra")
+    draw.line((34, header_h, 1566, header_h), fill=(25, 48, 68), width=1)
 
-    # Chart surface.
     draw.rounded_rectangle(
         (chart_left, chart_top, chart_right, chart_bottom),
-        radius=16,
+        radius=18,
         fill=(5, 15, 27),
         outline=(28, 52, 72),
         width=1,
     )
-    for i in range(1, 8):
-        x = int(chart_left + chart_w * i / 8)
+    for i in range(1, 10):
+        x = int(chart_left + chart_w * i / 10)
         draw.line((x, chart_top + 1, x, chart_bottom - 1), fill=_GRID, width=1)
-    for i in range(1, 6):
-        y = int(chart_top + chart_h * i / 6)
+    for i in range(1, 7):
+        y = int(chart_top + chart_h * i / 7)
         draw.line((chart_left + 1, y, chart_right - 1, y), fill=_GRID, width=1)
 
     level_values = [value for value in [entry, sl, *targets] if isinstance(value, (int, float)) and value > 0]
@@ -359,8 +357,8 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
     y_min = min(lows + level_values) if level_values else min(lows)
     y_max = max(highs + level_values) if level_values else max(highs)
     span = max(y_max - y_min, max(abs(y_max), 1.0) * 0.0005)
-    y_min -= span * 0.09
-    y_max += span * 0.09
+    y_min -= span * 0.10
+    y_max += span * 0.10
     span = y_max - y_min
 
     def y_of(price: float) -> int:
@@ -369,16 +367,16 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
 
     count = len(candles)
     step = chart_w / max(count, 1)
-    body_w = max(3, min(9, int(step * 0.56)))
+    body_w = max(4, min(12, int(step * 0.56)))
     for idx, candle in enumerate(candles):
         x = int(chart_left + (idx + 0.5) * step)
         o, h, l, close = map(float, (candle["open"], candle["high"], candle["low"], candle["close"]))
         color = _UP if close >= o else _DOWN
         y_h, y_l, y_o, y_c = y_of(h), y_of(l), y_of(o), y_of(close)
-        draw.line((x, y_h, x, y_l), fill=color, width=1)
+        draw.line((x, y_h, x, y_l), fill=color, width=2)
         body_top, body_bottom = sorted((y_o, y_c))
-        if body_bottom - body_top < 2:
-            body_bottom = body_top + 2
+        if body_bottom - body_top < 3:
+            body_bottom = body_top + 3
         draw.rounded_rectangle(
             (x - body_w // 2, body_top, x + body_w // 2, body_bottom),
             radius=1,
@@ -394,58 +392,79 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
         if float(value) > 0:
             level_specs.append((f"TP{idx}", float(value), _TP))
 
-    # Exact canonical levels across the broker chart.
-    for label, price, color in level_specs:
-        y = max(chart_top + 2, min(chart_bottom - 2, y_of(price)))
-        _draw_dashed(draw, (chart_left + 8, y, chart_right - 8, y), color, width=2, dash=7, gap=6)
-        draw.text((chart_left + 16, y - 16), label, font=_font(11, True), fill=color)
+    label_positions = _resolve_label_positions(
+        [(label, max(chart_top + 3, min(chart_bottom - 3, y_of(price))), color) for label, price, color in level_specs]
+    )
 
-    # Right rail. Values come from the exact stored signal snapshot used by the caption.
+    for label, price, color in level_specs:
+        y = max(chart_top + 3, min(chart_bottom - 3, y_of(price)))
+        _draw_dashed(draw, (chart_left + 10, y, chart_right - 12, y), color, width=2, dash=9, gap=7)
+        ly = label_positions.get(label, y)
+        label_box = (chart_right - 168, ly - 14, chart_right - 14, ly + 15)
+        draw.rounded_rectangle(label_box, radius=8, fill=(7, 22, 35), outline=color, width=1)
+        draw.text((chart_right - 154, ly - 9), label, font=_font(11, True), fill=color)
+        draw.text(
+            (chart_right - 22, ly - 10),
+            _format_level_price(price, digits),
+            font=_font(13, True),
+            fill=(241, 246, 250),
+            anchor="ra",
+        )
+
     draw.rounded_rectangle(
         (rail_left, chart_top, rail_right, chart_bottom),
-        radius=16,
+        radius=18,
         fill=(8, 21, 35),
         outline=(29, 55, 76),
         width=1,
     )
-    draw.text((rail_left + 20, chart_top + 18), "TRADE LEVELS", font=_font(14, True), fill=(178, 194, 208))
-    chip_w = 88
+    draw.text((rail_left + 22, chart_top + 20), "TRADE LEVELS", font=_font(16, True), fill=(188, 204, 218))
+    chip_w = 106
     draw.rounded_rectangle(
-        (rail_right - chip_w - 18, chart_top + 12, rail_right - 18, chart_top + 40),
-        radius=8,
+        (rail_right - chip_w - 20, chart_top + 14, rail_right - 20, chart_top + 47),
+        radius=9,
         fill=(11, 39, 48) if direction_color == _UP else (51, 20, 28),
         outline=direction_color,
         width=1,
     )
-    draw.text((rail_right - 18 - chip_w / 2, chart_top + 18), direction or "—",
-              font=_font(12, True), fill=direction_color, anchor="ma")
+    draw.text((rail_right - 20 - chip_w / 2, chart_top + 21), direction or "—",
+              font=_font(13, True), fill=direction_color, anchor="ma")
 
-    rail_y = chart_top + 60
-    rail_gap = 54
+    rail_y = chart_top + 78
+    rail_gap = 64
     for label, price, color in level_specs:
-        draw.text((rail_left + 20, rail_y), label, font=_font(11, True), fill=color)
-        draw.text((rail_right - 20, rail_y - 2), _format_level_price(price, digits),
-                  font=_font(17, True), fill=(240, 244, 248), anchor="ra")
-        draw.line((rail_left + 20, rail_y + 28, rail_right - 20, rail_y + 28), fill=(25, 47, 64), width=1)
+        draw.text((rail_left + 22, rail_y), label, font=_font(12, True), fill=color)
+        draw.text((rail_right - 22, rail_y - 3), _format_level_price(price, digits),
+                  font=_font(20, True), fill=(240, 244, 248), anchor="ra")
+        draw.line((rail_left + 22, rail_y + 34, rail_right - 22, rail_y + 34), fill=(25, 47, 64), width=1)
         rail_y += rail_gap
 
     risk = float(_signal_value(signal, "risk_percent", 0) or 0)
     rr = float(_signal_value(signal, "rr_ratio", 0) or 0)
-    meta_y = max(rail_y + 4, chart_bottom - 112)
-    draw.text((rail_left + 20, meta_y), "RISK", font=_font(10, True), fill=(132, 151, 169))
-    draw.text((rail_left + 20, meta_y + 18), f"{risk:g}%" if risk > 0 else "—", font=_font(14, True), fill=(228, 235, 242))
-    draw.text((rail_left + 124, meta_y), "R:R", font=_font(10, True), fill=(132, 151, 169))
-    draw.text((rail_left + 124, meta_y + 18), f"1:{rr:g}" if rr > 0 else "—", font=_font(14, True), fill=(228, 235, 242))
-    draw.text((rail_left + 206, meta_y), "SOURCE", font=_font(10, True), fill=(132, 151, 169))
-    draw.text((rail_left + 206, meta_y + 18), "MT5", font=_font(14, True), fill=_PRICE_TEXT)
+    trailing = str(_signal_value(signal, "trailing_code", "") or "—")
+    meta_y = max(rail_y + 8, chart_bottom - 144)
+
+    meta_cells = [
+        ("RISK", f"{risk:g}%" if risk > 0 else "—", 0),
+        ("R:R", f"1:{rr:g}" if rr > 0 else "—", 118),
+        ("TF", timeframe, 220),
+    ]
+    for label, value, offset in meta_cells:
+        draw.text((rail_left + 22 + offset, meta_y), label, font=_font(10, True), fill=(132, 151, 169))
+        draw.text((rail_left + 22 + offset, meta_y + 21), value, font=_font(15, True), fill=(228, 235, 242))
+
+    draw.text((rail_left + 22, meta_y + 58), "TRAILING", font=_font(10, True), fill=(132, 151, 169))
+    draw.text((rail_left + 22, meta_y + 79), trailing, font=_font(14, True), fill=_PRICE_TEXT)
+    draw.text((rail_right - 22, meta_y + 58), "SOURCE", font=_font(10, True), fill=(132, 151, 169), anchor="ra")
+    draw.text((rail_right - 22, meta_y + 79), "MT5 BROKER", font=_font(14, True), fill=_PRICE_TEXT, anchor="ra")
 
     broker_symbol = str(meta.get("broker_symbol") or symbol)
     captured = str(meta.get("captured_at") or "")
     footer = f"BROKER TRUTH  •  {broker_symbol}  •  {timeframe}"
     if captured:
         footer += f"  •  {captured[:19].replace('T', ' ')} UTC"
-    draw.text((28, height - 22), footer, font=_font(10, False), fill=(107, 126, 143))
-    draw.text((1254, height - 22), _STYLE_VERSION, font=_font(9, False), fill=(71, 91, 108), anchor="ra")
+    draw.text((34, height - 25), footer, font=_font(11, False), fill=(107, 126, 143))
+    draw.text((1566, height - 25), _STYLE_VERSION, font=_font(10, False), fill=(71, 91, 108), anchor="ra")
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
