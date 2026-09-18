@@ -15,6 +15,7 @@ from .risk_gate import RiskPolicy
 from .snapshot_adapter import build_mt5_snapshot
 from .agents.ict import assess_ict
 from .telegram_reporter import TelegramShadowReporter, format_hourly_analysis, format_shadow_record
+from .chart_renderer import render_ict_chart
 
 DEFAULT_SYMBOLS = ("XAUUSD", "US30", "BTC", "SOL")
 
@@ -44,7 +45,9 @@ def _hourly_ict_record(config: ShadowRunnerConfig, symbol: str) -> dict[str,obje
         recent=m5[-24:] if m5 else ()
         m5_high=max((float(x["high"]) for x in recent), default=None)
         m5_low=min((float(x["low"]) for x in recent), default=None)
-        return {"symbol":snapshot.symbol,"snapshot_id":snapshot.snapshot_id,"final":"ANALYSIS","direction":ict.direction.value,"bid":snapshot.bid,"ask":snapshot.ask,"m5_recent_high":m5_high,"m5_recent_low":m5_low,"assessments":[_assessment_summary(ict)]}
+        assessment=_assessment_summary(ict)
+        chart_png=render_ict_chart(snapshot,assessment)
+        return {"symbol":snapshot.symbol,"snapshot_id":snapshot.snapshot_id,"final":"ANALYSIS","direction":ict.direction.value,"bid":snapshot.bid,"ask":snapshot.ask,"m5_recent_high":m5_high,"m5_recent_low":m5_low,"assessments":[assessment],"chart_png":chart_png}
     except Exception as exc:
         return {"symbol":symbol,"final":WorkflowState.NO_TRADE.value,"error":f"{type(exc).__name__}: {exc}"}
 
