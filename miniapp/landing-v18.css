@@ -38,3 +38,39 @@ body.landing-active>.app-shell{visibility:hidden;pointer-events:none}
 @media(max-width:430px){.nexus-landing-logo{width:42vw;max-width:190px}.nexus-space-enter{bottom:max(26px,calc(18px + env(safe-area-inset-bottom)));width:min(13rem,76vw)}}
 @media(orientation:landscape){.nexus-landing-logo{width:min(24vw,170px);transform:none}.nexus-space-enter{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)));height:2.8rem}}
 @media(prefers-reduced-motion:reduce){.nexus-bg-stars,.nexus-btn-stars-layer::before,.nexus-btn-stars-layer::after,.nexus-space-enter,.nexus-btn-circle,.nexus-landing,.app-shell.nexus-app-entering{animation:none!important;transition:none!important}}
+
+/* Desktop preview: preserve Telegram Mini App mobile viewport proportions. */
+@media (min-width:700px){
+  .nexus-landing{
+    place-items:center;
+    background:#050a12;
+  }
+  .nexus-landing::after{
+    content:"";
+    position:absolute;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+    background:radial-gradient(circle at 50% 50%,rgba(20,91,150,.12),transparent 42%);
+  }
+  .nexus-landing-content,
+  .nexus-starfield{
+    width:min(100vw,430px);
+    left:50%;
+    right:auto;
+    transform:translateX(-50%);
+  }
+  .nexus-starfield{
+    top:0;
+    bottom:0;
+    height:100dvh;
+    box-shadow:0 0 0 1px rgba(255,255,255,.035),0 0 70px rgba(0,0,0,.55);
+    background:radial-gradient(ellipse at bottom,#1b2735 0%,#090a0f 100%);
+  }
+  .nexus-landing-content{
+    position:absolute;
+    top:0;
+    bottom:0;
+    height:100dvh;
+  }
+}
