@@ -67,8 +67,11 @@ $Resolved = (git -C $Repo rev-parse $Commit).Trim()
 if($Resolved -ne $Commit) { throw "Exact commit verification failed: expected $Commit got $Resolved" }
 
 Write-Host "=== ARCHIVE TARGET FILES ONLY ==="
-git -C $Repo archive $Commit miniapp/admin-signal-v13.js miniapp/admin.html miniapp/index.html miniapp/signal-pnl-motion-v25.css miniapp/signals-v2.js | tar -xf - -C $Release
-if($LASTEXITCODE -ne 0) { throw "git archive failed" }
+$Archive = Join-Path $Work "release.zip"
+git -C $Repo archive --format=zip --output=$Archive $Commit miniapp/admin-signal-v13.js miniapp/admin.html miniapp/index.html miniapp/signal-pnl-motion-v25.css miniapp/signals-v2.js
+if($LASTEXITCODE -ne 0 -or -not (Test-Path $Archive)) { throw "git archive zip failed" }
+
+Expand-Archive -Path $Archive -DestinationPath $Release -Force
 
 foreach($Rel in $Files) {
     $StageFile = Join-Path $Release $Rel
