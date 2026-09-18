@@ -139,15 +139,14 @@ def test_v37_publication_normalizer_preserves_final_render_dimensions():
     assert '_STYLE_VERSION = "nexus-signal-minimal-v7"' in src
 
 
-def test_v37_web_admin_uses_broker_renderer_as_sole_publication_authority():
+def test_v45_authority_signals_use_text_only_publication_wrapper():
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert 'if issuer == "WEB_ADMIN"' in src
-    assert "ensure_broker_chart_asset(canonical)" in src
-    assert '"MT5_MARKET_FEED_CANONICAL"' in src
-    assert "VISUAL_GATE" in src
-    assert "authoritative_mt5_screenshot" in src  # MT5_ADMIN compatibility only
-    authority_fn = src[src.index("def _authoritative_staged_chart"):src.index("def _clean_publication_image")]
-    assert 'issuer != "MT5_ADMIN"' in authority_fn
+    install = src[src.index("def install_unified_signal_visual"):]
+    assert '"TEXT_ONLY"' in install
+    assert "ensure_broker_chart_asset(canonical)" not in install
+    assert "VISUAL_GATE" not in install
+    assert "chart_base64" in install  # accepted for compatibility
+    assert "None," in install  # legacy image input is deliberately discarded
 
 
 def test_v37_install_order_keeps_consistency_outermost():
@@ -180,12 +179,17 @@ def test_v43_publication_normalizer_never_generates_blank_fallback():
         _clean_publication_image(b"not-a-png", {})
 
 
-def test_v38_web_admin_publication_is_fingerprint_bound_and_chartagent_is_diagnostic_only():
+def test_v45_signal_publisher_has_no_image_or_visual_gate():
     api = _text("app/autotrade/api.py")
-    assert "expected_fingerprint = signal_visual_fingerprint(row, expected_targets)" in api
-    assert "staged artwork does not match canonical signal fingerprint" in api
-    assert 'if str(signal["issuer_type"] or "").upper() != "WEB_ADMIN":' in api
-    assert '"DIAGNOSTIC_CHART_RECEIVED"' in api
+    start = api.index("async def _publish_mt5_admin_signal_async")
+    end = api.index("def _publish_mt5_admin_signal(", start)
+    publisher = api[start:end]
+    assert "send_message(" in publisher
+    assert "send_photo(" not in publisher
+    assert "build_publication_signal_image" not in publisher
+    assert "signal_visual_fingerprint" not in publisher
+    assert "VISUAL_GATE" not in publisher
+    assert '"publication_mode": "TEXT_ONLY"' in publisher
 
 
 def test_v43_distant_levels_do_not_flatten_broker_candles():
@@ -216,3 +220,30 @@ def test_v44_fingerprint_is_bound_to_renderer_style_version():
     src = _text("app/autotrade/broker_chart_fallback.py")
     assert '"style_version": _STYLE_VERSION' in src
     assert '_STYLE_VERSION = "nexus-signal-minimal-v7"' in src
+
+
+def test_v45_mt5_issue_does_not_stage_signal_screenshot():
+    api = _text("app/autotrade/api.py")
+    start = api.index('async def issue_mt5_admin_signal(')
+    end = api.index('@app.post("/api/v1/admin/mt5/signals/{signal_id}/command")', start)
+    block = api[start:end]
+    assert "save_mt5_signal_publication_asset" not in block
+    assert "pending_signal_charts" not in block
+    assert "legacy chart_base64 is accepted" in block
+
+
+def test_v45_mt5_core_does_not_capture_signal_screenshot():
+    src = _text("mt5/NEXUS_AutoTrade_UI65/Core/NEXUS_AutoTrade_Core.mq5")
+    anchor = src.index("NEXUS ADMIN SIGNAL: submit start")
+    block = src[max(0, anchor - 700):anchor + 1200]
+    assert 'CaptureChartBase64(symbol,"SIGNAL")' not in block
+    assert "publication=TEXT_ONLY" in block
+
+
+def test_v45_legacy_channel_root_is_text_only():
+    src = _text("app/main.py")
+    start = src.index("async def _publish_one_channel")
+    end = src.index("async def _publish_signal", start)
+    block = src[start:end]
+    assert "send_message(" in block
+    assert "send_photo(" not in block
