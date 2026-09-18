@@ -67,6 +67,15 @@
     return Number.isFinite(number) ? `${number > 0 ? '+' : ''}${number.toFixed(digits)}` : '—';
   }
 
+  function adminSignalPnlClass(live) {
+    const status = String(live?.status || '').toUpperCase();
+    if (status !== 'LIVE') return '';
+    const pnlState = String(live?.pnl_state || '').toUpperCase();
+    if (pnlState === 'IN_PROFIT') return 'pnl-profit';
+    if (pnlState === 'IN_LOSS') return 'pnl-loss';
+    return '';
+  }
+
   function pulse(status) {
     const current = String(status || 'UNAVAILABLE').toLowerCase();
     return `<span class="admin-live-pulse ${esc(current)}" aria-hidden="true"><svg viewBox="0 0 64 48"><polyline class="pulse-back" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline><polyline class="pulse-front" points="0.157 23.954, 14 23.954, 21.843 48, 43 0, 50 24, 64 24"></polyline></svg></span>`;
@@ -231,9 +240,10 @@
     const job = String(item.chart_job?.status || '').toUpperCase();
     const stage = String(item.signal?.publication_stage || '').toUpperCase();
     const entry = payload.entry ?? item.signal?.entry_price ?? '—';
+    const pnlClass = adminSignalPnlClass(item.live);
     const retryable = ['FAILED', 'PUBLISH_FAILED', 'EXPIRED'].includes(status) || (['UPLOADED', 'COMPLETED'].includes(job) && status !== 'PUBLISHED' && stage !== 'PUBLISHED');
     const retry = allowRetry && retryable ? `<button class="outline retry-signal" data-request-id="${esc(item.request_id)}">تلاش مجدد</button>` : '';
-    return `<article class="card"><div class="card-head"><strong>${item.signal?.code ? esc(item.signal.code) + ' · ' : ''}${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
+    return `<article class="card ${esc(pnlClass)}"><div class="card-head"><strong>${item.signal?.code ? esc(item.signal.code) + ' · ' : ''}${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
   }
 
   async function retrySignal(button) {

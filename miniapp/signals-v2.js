@@ -46,6 +46,8 @@
   }
 
   function pnlCardClass(live) {
+    const status = String(live?.status || '').toUpperCase();
+    if (status !== 'LIVE') return '';
     const state = String(live?.pnl_state || '').toUpperCase();
     if (state === 'IN_PROFIT') return 'pnl-profit';
     if (state === 'IN_LOSS') return 'pnl-loss';
