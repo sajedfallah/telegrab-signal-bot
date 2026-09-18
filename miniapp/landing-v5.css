@@ -22,8 +22,9 @@ body.landing-active > .app-shell {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100vw;
   height: 100dvh;
   overflow: hidden;
@@ -38,11 +39,15 @@ body.landing-active > .app-shell {
   display: none !important;
 }
 
+/* Keep the approved 480x852 artwork fully visible on every Telegram viewport. */
 .nexus-landing-poster-frame {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 0 0 auto;
+  width: min(100vw, 56.338dvh);
+  height: min(100dvh, 177.5vw);
+  aspect-ratio: 480 / 852;
   overflow: hidden;
-  background: radial-gradient(circle at 50% 28%,rgba(57,215,196,.10),transparent 32%),var(--landing-bg);
+  background: var(--landing-bg);
 }
 
 .nexus-landing-poster {
@@ -51,58 +56,49 @@ body.landing-active > .app-shell {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: 50% 50%;
+  opacity: 0;
   pointer-events: none;
   -webkit-user-drag: none;
+  transform: translateZ(0);
+  transition: opacity 120ms ease;
 }
 
-/*
- * The approved poster already contains the visible Enter button artwork.
- * This element is intentionally an INVISIBLE hit target only.
- * Do not draw a second border, fill, glow, pill or animation over the poster CTA.
- */
+.nexus-landing-poster.is-ready,
+.nexus-landing-poster.is-fallback {
+  opacity: 1;
+}
+
+/* The visible CTA is part of the approved artwork. This is only its native hit target. */
 .nexus-landing-enter {
   position: absolute;
   z-index: 2;
-  top: 77.45%;
-  left: 50%;
-  right: auto;
-  width: 42%;
-  height: 5.35%;
-  min-height: 42px;
-  max-height: 54px;
+  top: 75.2%;
+  left: 31.5%;
+  right: 31.5%;
+  height: 5.8%;
+  min-height: 44px;
   padding: 0;
   border: 0;
-  border-radius: 14px;
+  border-radius: 999px;
   appearance: none;
   -webkit-appearance: none;
-  background: transparent !important;
+  background: transparent;
   color: transparent;
-  box-shadow: none !important;
   cursor: pointer;
   outline: none;
-  transform: translateX(-50%);
-  opacity: 1;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
-/* Never render a second visual CTA on top of the baked-in poster button. */
-.nexus-landing:not(.landing-fallback) .nexus-landing-enter::before,
-.nexus-landing:not(.landing-fallback) .nexus-landing-enter::after {
-  content: none !important;
-  display: none !important;
+.nexus-landing-enter:active {
+  background: rgba(255, 255, 255, 0.035);
 }
 
-.nexus-landing-enter:active,
-.nexus-landing-enter:hover,
-.nexus-landing-enter:focus,
 .nexus-landing-enter:focus-visible {
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  outline: none !important;
+  outline: 2px solid rgba(77, 239, 224, 0.9);
+  outline-offset: -3px;
 }
 
 .nexus-landing-enter:disabled {
@@ -121,49 +117,22 @@ body.landing-active > .app-shell {
   border: 0 !important;
 }
 
-.nexus-fallback-cta{display:none}
-.nexus-landing.landing-fallback .nexus-landing-poster{display:none}
-.nexus-landing.landing-fallback .nexus-landing-enter{
-  top:50%;left:8%;right:8%;width:auto;height:auto;min-height:180px;max-height:none;transform:translateY(-50%);
-  display:flex;align-items:center;justify-content:center;padding:22px;border:1px solid rgba(57,215,196,.28)!important;
-  border-radius:28px;background:linear-gradient(155deg,rgba(21,27,36,.96),rgba(12,16,22,.98))!important;
-  color:#f4f7fb;box-shadow:0 22px 60px rgba(0,0,0,.45),0 0 34px rgba(57,215,196,.08)!important
-}
-.nexus-landing.landing-fallback .nexus-fallback-cta{display:grid;gap:8px;text-align:center}
-.nexus-fallback-cta b{font-size:34px;letter-spacing:.14em;color:#fff}
-.nexus-fallback-cta small{font-size:10px;letter-spacing:.18em;color:#39d7c4}
-.nexus-fallback-cta em{margin-top:12px;font-style:normal;font-size:14px;font-weight:900;color:#151006;background:linear-gradient(135deg,#ffc13d,#f5b84a);padding:13px 24px;border-radius:999px}
-
 .nexus-landing.is-leaving {
   opacity: 0;
-  transform: scale(.985);
+  transform: scale(1.003);
   pointer-events: none;
-  transition: opacity 340ms ease, transform 340ms ease;
-}
-.app-shell.nexus-app-entering { animation: nexus-app-arrive 340ms ease both; }
-@keyframes nexus-app-arrive { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
-
-@media (max-aspect-ratio: 1 / 2) {
-  .nexus-landing-enter {
-    width: 45%;
-    top: 77.35%;
-  }
+  transition: opacity 220ms ease, transform 220ms ease;
 }
 
 @media (orientation: landscape) {
-  .nexus-landing-poster {
-    object-fit: contain;
-  }
-
   .nexus-landing-enter {
-    width: 28%;
-    top: 77.2%;
+    min-height: 36px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nexus-landing {
+  .nexus-landing,
+  .nexus-landing-poster {
     transition: none !important;
   }
-  .app-shell.nexus-app-entering { animation: none; }
 }
