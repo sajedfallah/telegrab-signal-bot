@@ -97,18 +97,17 @@ def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps()
     assert "COALESCE(free_message_id,0)=0 OR COALESCE(vip_message_id,0)=0" in src
 
 
-def test_broker_confirmed_web_admin_signal_uses_canonical_marketfeed_without_chartagent_grace():
+def test_broker_confirmed_web_admin_signal_recovers_as_text_only_without_visual_gate():
     src = _text("app/autotrade/publication_recovery_runtime.py")
     start = src.index('if issuer_type == "WEB_ADMIN"')
     end = src.index("job = db.get_signal_chart_capture_job", start)
     block = src[start:end]
-    assert "_stage_broker_chart(row)" in block
-    assert '"PUBLICATION_CANONICAL_VISUAL_QUEUED"' in block
-    assert '"PUBLICATION_CANONICAL_VISUAL_WAIT"' in block
-    assert '"MT5_MARKET_FEED_CANONICAL"' in block
+    assert "_stage_broker_chart(row)" not in block
+    assert '"PUBLICATION_TEXT_QUEUED"' in block
+    assert '"publication_mode": "TEXT_ONLY"' in block
     assert "allow_without_chart=True" in block
-    assert "CHART_PLACEHOLDER" not in block
-    assert "_PUBLICATION_CHART_GRACE_SECONDS" not in block
+    assert "MT5_MARKET_FEED_CANONICAL" not in block
+    assert "CANONICAL_VISUAL" not in block
 
 
 def test_forex_frontend_uses_mt5_market_candle_endpoint_without_fake_fallback():

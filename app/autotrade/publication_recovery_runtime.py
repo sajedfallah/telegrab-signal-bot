@@ -150,17 +150,11 @@ def _stage_broker_chart(signal: Any) -> dict[str, Any]:
 
 
 def install_publication_recovery(app) -> None:
-    """Make Telegram publication self-healing after broker execution.
+    """Make text-only Telegram publication self-healing after broker execution.
 
-    WEB_ADMIN publication uses one canonical source:
-      1) broker-confirmed execution truth;
-      2) server-rendered chart from fresh MT5 MarketFeed OHLC;
-      3) canonical stored Entry/SL/TP values overlaid by the renderer.
-
-    ChartAgent screenshots remain diagnostic-only and never become Telegram
-    publication artwork. Missing/stale broker candles fail closed for the image
-    layer and are retried on later live-state heartbeats; no blank placeholder
-    is published.
+    V45 removes every visual dependency from signal publication. Broker receipt
+    truth remains mandatory, while chart jobs, MarketFeed candles and image
+    assets are irrelevant to the Telegram root message.
     """
     if getattr(app.state, "nexus_publication_recovery_v1", False):
         return
@@ -212,48 +206,27 @@ def install_publication_recovery(app) -> None:
                 )
                 continue
 
-            # V37 WEB_ADMIN rule: render the final publication image immediately
-            # from fresh MT5 MarketFeed + canonical DB signal values. Do not wait
-            # for or publish ChartAgent screenshot pixels.
+            # V45 WEB_ADMIN rule: publication is text-only and has no chart,
+            # MarketFeed, ChartAgent, image asset, or visual-fingerprint gate.
             if issuer_type == "WEB_ADMIN":
-                broker = _stage_broker_chart(row)
-                broker_ok = bool(broker.get("ok"))
-                if broker_ok:
-                    broker_chart.append(signal_id)
-                    background_tasks.add_task(
-                        api_mod._publish_mt5_admin_signal_async,
-                        row,
-                        None,
-                        allow_without_chart=True,
-                    )
-                    queued.append(signal_id)
-                    db.add_signal_event(
-                        signal_id,
-                        "PUBLICATION_CANONICAL_VISUAL_QUEUED",
-                        actor_type="BACKEND",
-                        account_number=account,
-                        correlation_id=str(row["code"]),
-                        payload={
-                            "publication_stage": stage,
-                            "source": "MT5_MARKET_FEED_CANONICAL",
-                            "broker_chart": broker,
-                        },
-                    )
-                else:
-                    db.add_signal_event(
-                        signal_id,
-                        "PUBLICATION_CANONICAL_VISUAL_WAIT",
-                        actor_type="BACKEND",
-                        account_number=account,
-                        correlation_id=str(row["code"]),
-                        result="FAILED",
-                        reason=str(broker.get("reason") or "fresh broker candles unavailable")[:1000],
-                        payload={
-                            "publication_stage": stage,
-                            "source": "MT5_MARKET_FEED_CANONICAL",
-                            "broker_chart": broker,
-                        },
-                    )
+                background_tasks.add_task(
+                    api_mod._publish_mt5_admin_signal_async,
+                    row,
+                    None,
+                    allow_without_chart=True,
+                )
+                queued.append(signal_id)
+                db.add_signal_event(
+                    signal_id,
+                    "PUBLICATION_TEXT_QUEUED",
+                    actor_type="BACKEND",
+                    account_number=account,
+                    correlation_id=str(row["code"]),
+                    payload={
+                        "publication_stage": stage,
+                        "publication_mode": "TEXT_ONLY",
+                    },
+                )
                 continue
 
             job = db.get_signal_chart_capture_job(signal_id)

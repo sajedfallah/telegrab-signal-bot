@@ -674,16 +674,15 @@ void IssueAdminSignal()
    g_admin_issue_nonce++;
    string reqid="MT5-"+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"-"+(string)GetTickCount()+"-"+(string)g_admin_issue_nonce;
 
-   // Capture before POST; the screenshot routine hides all NEXUS UI objects.
-   string chart_base64=CaptureChartBase64(symbol,"SIGNAL");
-   if(chart_base64=="") Print("NEXUS ADMIN SIGNAL: chart screenshot unavailable; fallback card will be used");
-
+   // V45: signal publication is text-only. Do not capture or upload a chart
+   // screenshot when issuing an MT5 Admin signal.
    Print("NEXUS ADMIN SIGNAL: submit start symbol=",symbol," direction=",g_admin_signal_direction,
-         " order=",g_admin_signal_order," destination=",g_manual_destination," tp_count=",tp_count);
+         " order=",g_admin_signal_order," destination=",g_manual_destination," tp_count=",tp_count,
+         " publication=TEXT_ONLY");
    string issue_symbol=CanonicalSignalSymbol(symbol);
    if(!g_api.IssueAdminSignal(AdminSignalMarketType(issue_symbol),issue_symbol,g_admin_signal_direction,g_admin_signal_order,
                               "M5",entry,sl,targets,risk,g_admin_sizing_mode,(g_admin_sizing_mode=="FIXED"?g_admin_fixed_lot:0.0),trailing,-1,-1,g_manual_destination,reqid,
-                              response,chart_base64))
+                              response))
      {
       g_admin_signal_busy=false;
       Print("NEXUS ADMIN SIGNAL FAILED: ",g_api.LastError()," HTTP=",g_api.LastHttpStatus()," response=",response);
