@@ -23,7 +23,7 @@ _TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 1
 _MIN_BARS = 24
 _MAX_BARS = 120
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-signal-canonical-v5"
+_STYLE_VERSION = "nexus-signal-minimal-v6"
 
 # Approved minimal chart palette. Keep the number of semantic colors small:
 # neutral navy, cyan/teal candles, blue entry, green targets, red stop.
@@ -301,55 +301,34 @@ def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]
 
 
 def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, Any], targets: list[float]) -> bytes:
-    """Render the canonical NEXUS Mini App publication visual.
+    """Render the approved minimal NEXUS signal flash card.
 
-    V5 is intentionally generated only from broker-truth OHLC plus the immutable
-    signal snapshot stored in the database. Uploaded screenshots and ChartAgent
-    pixels are never used for WEB_ADMIN Telegram publication.
+    The publication image contains only the broker-truth candlestick chart,
+    the NEXUS logo, and the signal levels drawn directly on the chart. No
+    header, information rail, footer, marketing copy, or auxiliary panels are
+    allowed in this renderer.
     """
     width, height = 1600, 900
     image = Image.new("RGB", (width, height), _BG)
     draw = ImageDraw.Draw(image)
 
-    # Layout: large chart first, compact information rail second.
-    header_h = 78
-    footer_h = 34
-    chart_left, chart_right = 34, 1176
-    chart_top, chart_bottom = 100, height - footer_h - 20
-    rail_left, rail_right = 1204, 1566
+    # Edge-to-edge chart with only a small safe margin for Telegram compression.
+    chart_left, chart_right = 20, width - 20
+    chart_top, chart_bottom = 20, height - 20
     chart_w = chart_right - chart_left
     chart_h = chart_bottom - chart_top
 
-    code = str(_signal_value(signal, "code", "NEXUS") or "NEXUS")
-    symbol = normalize_symbol(str(_signal_value(signal, "symbol", "") or ""))
-    timeframe = str(_signal_value(signal, "timeframe", "M5") or "M5").upper()
-    direction = str(_signal_value(signal, "direction", "") or "").upper()
-    order_type = str(_signal_value(signal, "order_type", "MARKET") or "MARKET").upper()
     entry = float(_signal_value(signal, "entry_price", 0) or 0)
     sl = float(_signal_value(signal, "stop_loss", 0) or 0)
     digits = meta.get("digits")
-    direction_color = _UP if direction in {"BUY", "LONG"} else _DOWN
 
-    _paste_small_logo(image)
-    draw.text((34, 24), "NEXUS SIGNAL", font=_font(22, True), fill=(236, 243, 250))
-    draw.text((220, 27), code, font=_font(18, True), fill=_PRICE_TEXT)
-    identity = f"{symbol}  •  {direction}  •  {timeframe}  •  {order_type.replace('_', ' ')}"
-    draw.text((1566, 26), identity, font=_font(18, True), fill=direction_color, anchor="ra")
-    draw.line((34, header_h, 1566, header_h), fill=(25, 48, 68), width=1)
-
-    draw.rounded_rectangle(
-        (chart_left, chart_top, chart_right, chart_bottom),
-        radius=18,
-        fill=(5, 15, 27),
-        outline=(28, 52, 72),
-        width=1,
-    )
-    for i in range(1, 10):
-        x = int(chart_left + chart_w * i / 10)
-        draw.line((x, chart_top + 1, x, chart_bottom - 1), fill=_GRID, width=1)
+    # Quiet chart surface: no container card, title rail, or footer.
+    for i in range(1, 12):
+        x = int(chart_left + chart_w * i / 12)
+        draw.line((x, chart_top, x, chart_bottom), fill=_GRID, width=1)
     for i in range(1, 7):
         y = int(chart_top + chart_h * i / 7)
-        draw.line((chart_left + 1, y, chart_right - 1, y), fill=_GRID, width=1)
+        draw.line((chart_left, y, chart_right, y), fill=_GRID, width=1)
 
     level_values = [value for value in [entry, sl, *targets] if isinstance(value, (int, float)) and value > 0]
     lows = [float(item["low"]) for item in candles]
@@ -383,88 +362,45 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
             fill=color,
         )
 
+    # Levels remain part of the chart itself. Labels are deliberately tiny and
+    # live at the far-right edge; there is no separate information panel.
     level_specs: list[tuple[str, float, tuple[int, int, int]]] = []
-    if entry > 0:
-        level_specs.append(("ENTRY", entry, _ENTRY))
     if sl > 0:
         level_specs.append(("SL", sl, _SL))
+    if entry > 0:
+        level_specs.append(("ENTRY", entry, _ENTRY))
     for idx, value in enumerate(targets[:5], start=1):
         if float(value) > 0:
             level_specs.append((f"TP{idx}", float(value), _TP))
 
     label_positions = _resolve_label_positions(
-        [(label, max(chart_top + 3, min(chart_bottom - 3, y_of(price))), color) for label, price, color in level_specs]
+        [(label, max(chart_top + 8, min(chart_bottom - 8, y_of(price))), color) for label, price, color in level_specs]
     )
+    label_x = chart_right - 12
+    line_right = chart_right - 150
 
     for label, price, color in level_specs:
-        y = max(chart_top + 3, min(chart_bottom - 3, y_of(price)))
-        _draw_dashed(draw, (chart_left + 10, y, chart_right - 12, y), color, width=2, dash=9, gap=7)
+        y = max(chart_top + 8, min(chart_bottom - 8, y_of(price)))
+        _draw_dashed(draw, (chart_left + 12, y, line_right, y), color, width=2, dash=10, gap=8)
         ly = label_positions.get(label, y)
-        label_box = (chart_right - 168, ly - 14, chart_right - 14, ly + 15)
-        draw.rounded_rectangle(label_box, radius=8, fill=(7, 22, 35), outline=color, width=1)
-        draw.text((chart_right - 154, ly - 9), label, font=_font(11, True), fill=color)
-        draw.text(
-            (chart_right - 22, ly - 10),
-            _format_level_price(price, digits),
-            font=_font(13, True),
-            fill=(241, 246, 250),
-            anchor="ra",
-        )
+        text = f"{label}  {_format_level_price(price, digits)}"
+        bbox = draw.textbbox((0, 0), text, font=_font(12, True))
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        pad_x, pad_y = 10, 6
+        x1 = label_x - tw - pad_x * 2
+        y1 = ly - th // 2 - pad_y
+        x2 = label_x
+        y2 = ly + th // 2 + pad_y
+        draw.rounded_rectangle((x1, y1, x2, y2), radius=7, fill=(5, 16, 29), outline=color, width=1)
+        draw.text((label_x - pad_x, ly), text, font=_font(12, True), fill=color, anchor="rm")
 
-    draw.rounded_rectangle(
-        (rail_left, chart_top, rail_right, chart_bottom),
-        radius=18,
-        fill=(8, 21, 35),
-        outline=(29, 55, 76),
-        width=1,
-    )
-    draw.text((rail_left + 22, chart_top + 20), "TRADE LEVELS", font=_font(16, True), fill=(188, 204, 218))
-    chip_w = 106
-    draw.rounded_rectangle(
-        (rail_right - chip_w - 20, chart_top + 14, rail_right - 20, chart_top + 47),
-        radius=9,
-        fill=(11, 39, 48) if direction_color == _UP else (51, 20, 28),
-        outline=direction_color,
-        width=1,
-    )
-    draw.text((rail_right - 20 - chip_w / 2, chart_top + 21), direction or "—",
-              font=_font(13, True), fill=direction_color, anchor="ma")
-
-    rail_y = chart_top + 78
-    rail_gap = 64
-    for label, price, color in level_specs:
-        draw.text((rail_left + 22, rail_y), label, font=_font(12, True), fill=color)
-        draw.text((rail_right - 22, rail_y - 3), _format_level_price(price, digits),
-                  font=_font(20, True), fill=(240, 244, 248), anchor="ra")
-        draw.line((rail_left + 22, rail_y + 34, rail_right - 22, rail_y + 34), fill=(25, 47, 64), width=1)
-        rail_y += rail_gap
-
-    risk = float(_signal_value(signal, "risk_percent", 0) or 0)
-    rr = float(_signal_value(signal, "rr_ratio", 0) or 0)
-    trailing = str(_signal_value(signal, "trailing_code", "") or "—")
-    meta_y = max(rail_y + 8, chart_bottom - 144)
-
-    meta_cells = [
-        ("RISK", f"{risk:g}%" if risk > 0 else "—", 0),
-        ("R:R", f"1:{rr:g}" if rr > 0 else "—", 118),
-        ("TF", timeframe, 220),
-    ]
-    for label, value, offset in meta_cells:
-        draw.text((rail_left + 22 + offset, meta_y), label, font=_font(10, True), fill=(132, 151, 169))
-        draw.text((rail_left + 22 + offset, meta_y + 21), value, font=_font(15, True), fill=(228, 235, 242))
-
-    draw.text((rail_left + 22, meta_y + 58), "TRAILING", font=_font(10, True), fill=(132, 151, 169))
-    draw.text((rail_left + 22, meta_y + 79), trailing, font=_font(14, True), fill=_PRICE_TEXT)
-    draw.text((rail_right - 22, meta_y + 58), "SOURCE", font=_font(10, True), fill=(132, 151, 169), anchor="ra")
-    draw.text((rail_right - 22, meta_y + 79), "MT5 BROKER", font=_font(14, True), fill=_PRICE_TEXT, anchor="ra")
-
-    broker_symbol = str(meta.get("broker_symbol") or symbol)
-    captured = str(meta.get("captured_at") or "")
-    footer = f"BROKER TRUTH  •  {broker_symbol}  •  {timeframe}"
-    if captured:
-        footer += f"  •  {captured[:19].replace('T', ' ')} UTC"
-    draw.text((34, height - 25), footer, font=_font(11, False), fill=(107, 126, 143))
-    draw.text((1566, height - 25), _STYLE_VERSION, font=_font(10, False), fill=(71, 91, 108), anchor="ra")
+    # Approved branding: logo only. No NEXUS SIGNAL title or other copy.
+    logo = _load_logo().copy()
+    logo.thumbnail((150, 92), Image.Resampling.LANCZOS)
+    logo_x = chart_left + 28
+    logo_y = chart_top + 24
+    image.paste(logo, (logo_x, logo_y), logo)
 
     out = BytesIO()
     image.save(out, format="PNG", optimize=True)
