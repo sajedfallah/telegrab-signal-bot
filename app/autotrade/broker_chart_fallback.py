@@ -22,8 +22,10 @@ _SUPPORTED_TF = {"M1", "M5", "M15", "M30", "H1", "H4", "D1"}
 _TF_SECONDS = {"M1": 60, "M5": 300, "M15": 900, "M30": 1800, "H1": 3600, "H4": 14400, "D1": 86400}
 _MIN_BARS = 24
 _MAX_BARS = 120
+_VISIBLE_BARS = 72
+_MIN_CANDLE_VIEW_RATIO = 0.34
 _MAX_FEED_AGE_SECONDS = 90
-_STYLE_VERSION = "nexus-signal-minimal-v6"
+_STYLE_VERSION = "nexus-signal-minimal-v7"
 
 # Approved minimal chart palette. Keep the number of semantic colors small:
 # neutral navy, cyan/teal candles, blue entry, green targets, red stop.
@@ -274,30 +276,91 @@ def _paste_small_logo(image: Image.Image) -> None:
     image.paste(logo, (x, y), logo)
 
 
-def _resolve_label_positions(levels: list[tuple[str, int, tuple[int, int, int]]]) -> dict[str, int]:
+def _resolve_label_positions(
+    levels: list[tuple[str, int, tuple[int, int, int]]],
+    *,
+    top_bound: int,
+    bottom_bound: int,
+    min_gap: int = 26,
+) -> dict[str, int]:
+    """Resolve right-edge labels inside the actual chart viewport.
+
+    Older minimal-card builds kept the legacy 72..690 bounds from the previous
+    rail layout, which could detach labels from their level lines on a 900px
+    edge-to-edge chart. Bounds are now supplied by the renderer.
+    """
     if not levels:
         return {}
     ordered = sorted(levels, key=lambda item: item[1])
-    min_gap = 24
-    top_bound = 72
-    bottom_bound = 690
     placed: list[list[Any]] = []
     for label, desired, color in ordered:
-        value = max(top_bound, desired)
+        value = max(top_bound, min(bottom_bound, desired))
         if placed:
             value = max(value, int(placed[-1][1]) + min_gap)
         placed.append([label, value, color])
+
     if placed[-1][1] > bottom_bound:
         shift = int(placed[-1][1]) - bottom_bound
         for item in placed:
             item[1] -= shift
         for idx in range(len(placed) - 2, -1, -1):
             placed[idx][1] = min(int(placed[idx][1]), int(placed[idx + 1][1]) - min_gap)
-        if placed[0][1] < top_bound:
-            shift_down = top_bound - int(placed[0][1])
-            for item in placed:
-                item[1] += shift_down
+
+    if placed[0][1] < top_bound:
+        shift_down = top_bound - int(placed[0][1])
+        for item in placed:
+            item[1] += shift_down
+
     return {str(label): int(value) for label, value, _ in placed}
+
+
+def _price_viewport(
+    candles: list[dict[str, float]],
+    level_values: list[float],
+) -> tuple[float, float]:
+    """Keep broker candles readable without hiding exact signal levels.
+
+    Nearby levels are included in the natural viewport. Very distant SL/TP
+    values no longer flatten the entire candle structure; those levels are
+    edge-pinned by the renderer while retaining their exact numeric labels.
+    """
+    lows = [float(item["low"]) for item in candles]
+    highs = [float(item["high"]) for item in candles]
+    candle_min = min(lows)
+    candle_max = max(highs)
+    reference = max(abs(candle_max), 1.0)
+    candle_span = max(candle_max - candle_min, reference * 0.0005)
+
+    # The candle body must keep at least ~34% of the vertical viewport.
+    max_view_span = candle_span / _MIN_CANDLE_VIEW_RATIO
+    center = (candle_min + candle_max) / 2.0
+    y_min = candle_min
+    y_max = candle_max
+
+    for value in sorted(
+        [float(v) for v in level_values if isinstance(v, (int, float)) and float(v) > 0],
+        key=lambda v: min(abs(v - candle_min), abs(v - candle_max)),
+    ):
+        candidate_min = min(y_min, value)
+        candidate_max = max(y_max, value)
+        if candidate_max - candidate_min <= max_view_span:
+            y_min, y_max = candidate_min, candidate_max
+
+    span = max(y_max - y_min, candle_span)
+    pad = span * 0.10
+    y_min -= pad
+    y_max += pad
+
+    # Keep the padded viewport centered enough that candle data cannot collapse
+    # against one edge after one-sided TP/SL expansion.
+    final_span = y_max - y_min
+    candle_center = (candle_min + candle_max) / 2.0
+    allowed_span = max(final_span, candle_span / _MIN_CANDLE_VIEW_RATIO)
+    lower = candle_center - allowed_span / 2.0
+    upper = candle_center + allowed_span / 2.0
+    y_min = min(y_min, lower)
+    y_max = max(y_max, upper)
+    return y_min, y_max
 
 
 def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, Any], targets: list[float]) -> bytes:
@@ -330,24 +393,22 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
         y = int(chart_top + chart_h * i / 7)
         draw.line((chart_left, y, chart_right, y), fill=_GRID, width=1)
 
+    # Keep the flash card visually legible: use the most relevant entry-time
+    # candles rather than squeezing 120 bars into Telegram's image viewport.
+    render_candles = candles[-_VISIBLE_BARS:] if len(candles) > _VISIBLE_BARS else candles
+
     level_values = [value for value in [entry, sl, *targets] if isinstance(value, (int, float)) and value > 0]
-    lows = [float(item["low"]) for item in candles]
-    highs = [float(item["high"]) for item in candles]
-    y_min = min(lows + level_values) if level_values else min(lows)
-    y_max = max(highs + level_values) if level_values else max(highs)
-    span = max(y_max - y_min, max(abs(y_max), 1.0) * 0.0005)
-    y_min -= span * 0.10
-    y_max += span * 0.10
+    y_min, y_max = _price_viewport(render_candles, level_values)
     span = y_max - y_min
 
     def y_of(price: float) -> int:
         ratio = (y_max - float(price)) / span
         return int(chart_top + ratio * chart_h)
 
-    count = len(candles)
+    count = len(render_candles)
     step = chart_w / max(count, 1)
     body_w = max(4, min(12, int(step * 0.56)))
-    for idx, candle in enumerate(candles):
+    for idx, candle in enumerate(render_candles):
         x = int(chart_left + (idx + 0.5) * step)
         o, h, l, close = map(float, (candle["open"], candle["high"], candle["low"], candle["close"]))
         color = _UP if close >= o else _DOWN
@@ -374,13 +435,19 @@ def _render_chart(signal: Any, candles: list[dict[str, float]], meta: dict[str, 
             level_specs.append((f"TP{idx}", float(value), _TP))
 
     label_positions = _resolve_label_positions(
-        [(label, max(chart_top + 8, min(chart_bottom - 8, y_of(price))), color) for label, price, color in level_specs]
+        [(label, max(chart_top + 10, min(chart_bottom - 10, y_of(price))), color) for label, price, color in level_specs],
+        top_bound=chart_top + 20,
+        bottom_bound=chart_bottom - 20,
+        min_gap=28,
     )
     label_x = chart_right - 12
     line_right = chart_right - 150
 
     for label, price, color in level_specs:
-        y = max(chart_top + 8, min(chart_bottom - 8, y_of(price)))
+        raw_y = y_of(price)
+        y = max(chart_top + 10, min(chart_bottom - 10, raw_y))
+        # Off-viewport levels are pinned to the top/bottom edge instead of
+        # expanding the scale until candles become a flat line.
         _draw_dashed(draw, (chart_left + 12, y, line_right, y), color, width=2, dash=10, gap=8)
         ly = label_positions.get(label, y)
         text = f"{label}  {_format_level_price(price, digits)}"

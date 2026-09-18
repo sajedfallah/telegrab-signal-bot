@@ -8,6 +8,7 @@ from PIL import Image
 import pytest
 
 from app.autotrade.broker_chart_fallback import (
+    _price_viewport,
     _render_chart,
     _signal_anchor,
     signal_visual_fingerprint,
@@ -87,9 +88,9 @@ def test_v30_signal_anchor_prefers_execution_time_and_floors_to_mt5_bar():
     assert bar_time == expected_epoch - (expected_epoch % 300)
 
 
-def test_v39_visual_contract_is_minimal_chart_logo_and_levels_only():
+def test_v43_visual_contract_is_minimal_chart_logo_and_levels_only():
     src = _text("app/autotrade/broker_chart_fallback.py")
-    assert '_STYLE_VERSION = "nexus-signal-minimal-v6"' in src
+    assert '_STYLE_VERSION = "nexus-signal-minimal-v7"' in src
     assert '"NEXUS SIGNAL"' not in src
     assert '"TRADE LEVELS"' not in src
     assert '"BROKER TRUTH' not in src
@@ -135,7 +136,7 @@ def test_v37_publication_normalizer_preserves_final_render_dimensions():
     with Image.open(BytesIO(normalized)) as image:
         assert image.size == (1600, 900)
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert '_STYLE_VERSION = "nexus-signal-minimal-v6"' in src
+    assert '_STYLE_VERSION = "nexus-signal-minimal-v7"' in src
 
 
 def test_v37_web_admin_uses_broker_renderer_as_sole_publication_authority():
@@ -172,7 +173,7 @@ def test_v37_visual_code_does_not_touch_execution_or_generate_market_data():
         assert marker not in combined
 
 
-def test_v39_publication_normalizer_never_generates_blank_fallback():
+def test_v43_publication_normalizer_never_generates_blank_fallback():
     with pytest.raises(ValueError, match="missing"):
         _clean_publication_image(None, {})
     with pytest.raises(ValueError, match="invalid"):
@@ -185,3 +186,27 @@ def test_v38_web_admin_publication_is_fingerprint_bound_and_chartagent_is_diagno
     assert "staged artwork does not match canonical signal fingerprint" in api
     assert 'if str(signal["issuer_type"] or "").upper() != "WEB_ADMIN":' in api
     assert '"DIAGNOSTIC_CHART_RECEIVED"' in api
+
+
+def test_v43_distant_levels_do_not_flatten_broker_candles():
+    _, candles, _, _ = _fixture_chart()
+    visible = candles[-72:]
+    candle_low = min(float(item["low"]) for item in visible)
+    candle_high = max(float(item["high"]) for item in visible)
+    candle_span = candle_high - candle_low
+
+    # Deliberately extreme TP/SL values reproduce the production failure mode
+    # where one distant level used to flatten every candle into a thin band.
+    y_min, y_max = _price_viewport(visible, [4278.0, 4300.0, 4200.0])
+    viewport_span = y_max - y_min
+
+    assert viewport_span > candle_span
+    assert candle_span / viewport_span >= 0.30
+
+
+def test_v43_label_resolver_uses_live_chart_bounds_not_legacy_690px_limit():
+    src = _text("app/autotrade/broker_chart_fallback.py")
+    assert "top_bound=chart_top + 20" in src
+    assert "bottom_bound=chart_bottom - 20" in src
+    assert "bottom_bound = 690" not in src
+    assert "_VISIBLE_BARS = 72" in src
