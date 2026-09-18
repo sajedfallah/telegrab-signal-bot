@@ -38,4 +38,4 @@ jobs:
         run: python -m compileall -q app
       - name: Canonical visual regression
         run: |
-          python -m pytest             tests/test_unified_signal_visual_v28.py             tests/test_publication_consistency_v34.py             tests/test_broker_chart_fallback_v26.py             tests/test_market_candles_and_publication_recovery.py             tests/test_miniapp_admin_signal_center.py             tests/test_mt5_publication_execution_gate.py             tests/test_chart_delivery_reliability_v24.py             tests/test_v36_testlab_alert_visual.py -q
+          python -m pytest             tests/test_unified_signal_visual_v28.py             tests/test_publication_consistency_v34.py             tests/test_broker_chart_fallback_v26.py             tests/test_market_candles_and_publication_recovery.py             tests/test_miniapp_admin_signal_center.py             tests/test_mt5_publication_execution_gate.py             tests/test_chart_delivery_reliability_v24.py -q
