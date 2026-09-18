@@ -14,7 +14,8 @@ from .chart_renderer import render_ict_chart
 from .fast_scalp import assess_fast_scalp
 from .shadow_runner import ShadowRunnerConfig, _assessment_summary
 from .snapshot_adapter import build_mt5_snapshot
-from .telegram_reporter import format_hourly_analysis
+from .telegram_reporter import TelegramShadowReporter, format_hourly_analysis
+from .signal_watcher import run_cycle as run_signal_cycle
 
 router = Router()
 _config: ShadowRunnerConfig | None = None
@@ -105,7 +106,14 @@ async def analysis_command(message: Message):
         await status.edit_text(f"آپدیت ساخته نشد: {type(exc).__name__}: {exc}")
 
 
-async def run(account: str, symbols: tuple[str, ...]):
+async def _signal_loop(account: str, symbols: tuple[str, ...], reporter: TelegramShadowReporter, interval: int, standard_min_rr: float | None, fast_min_rr: float | None):
+    sent={}
+    while True:
+        sent=await asyncio.to_thread(run_signal_cycle,account,symbols,reporter,standard_min_rr,fast_min_rr,sent)
+        await asyncio.sleep(interval)
+
+
+async def run(account: str, symbols: tuple[str, ...], *, signal_interval: int = 10, standard_min_rr: float | None = None, fast_min_rr: float | None = None):
     global _config, _allowed_chat_id, _allowed_user_id
     token = os.getenv("NEXUS_AGENT_TEST_BOT_TOKEN", "").strip()
     _allowed_chat_id = os.getenv("NEXUS_AGENT_TEST_CHAT_ID", "").strip()
@@ -116,9 +124,17 @@ async def run(account: str, symbols: tuple[str, ...]):
     bot = Bot(token=token)
     dp = Dispatcher()
     dp.include_router(router)
+    signal_task = None
+    if _allowed_chat_id:
+        reporter=TelegramShadowReporter(token,_allowed_chat_id)
+        signal_task=asyncio.create_task(_signal_loop(account,symbols,reporter,signal_interval,standard_min_rr,fast_min_rr))
     try:
         await dp.start_polling(bot, allowed_updates=["message", "channel_post"])
     finally:
+        if signal_task is not None:
+            signal_task.cancel()
+            try: await signal_task
+            except asyncio.CancelledError: pass
         await bot.session.close()
 
 
@@ -126,9 +142,15 @@ def main():
     parser = argparse.ArgumentParser(description="NEXUS on-demand ICT Telegram analysis bot")
     parser.add_argument("--account", required=True)
     parser.add_argument("--symbols", default="XAUUSD")
+    parser.add_argument("--signal-interval",type=int,default=10)
+    parser.add_argument("--standard-min-rr",type=float,default=None)
+    parser.add_argument("--fast-min-rr",type=float,default=None)
     args = parser.parse_args()
+    if args.signal_interval < 5: parser.error("--signal-interval must be >= 5")
+    for name,value in (("--standard-min-rr",args.standard_min_rr),("--fast-min-rr",args.fast_min_rr)):
+        if value is not None and value <= 0: parser.error(f"{name} must be > 0")
     symbols = tuple(dict.fromkeys(x.strip().upper() for x in args.symbols.split(",") if x.strip()))
-    asyncio.run(run(args.account, symbols))
+    asyncio.run(run(args.account, symbols, signal_interval=args.signal_interval, standard_min_rr=args.standard_min_rr, fast_min_rr=args.fast_min_rr))
 
 
 if __name__ == "__main__":
