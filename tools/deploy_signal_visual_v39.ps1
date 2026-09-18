@@ -160,39 +160,15 @@ try {
     Write-Host "SERVICE: RUNNING"
     Wait-PublicHealth
 
-    Write-Host "=== 8. COMPILE MARKETFEED IF METAEDITOR IS AVAILABLE ==="
-    $Candidates = @("C:\Program Files\MetaTrader 5\metaeditor64.exe","C:\Program Files (x86)\MetaTrader 5\metaeditor64.exe")
-    $MetaEditor = $Candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $MetaEditor) {
-        $Roots = @($env:ProgramFiles, [Environment]::GetEnvironmentVariable("ProgramFiles(x86)"))
-        foreach ($Root in $Roots) {
-            if ($Root -and (Test-Path $Root)) {
-                $MetaEditor = Get-ChildItem -Path $Root -Filter "metaeditor64.exe" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
-                if ($MetaEditor) { break }
-            }
-        }
-    }
-
-    if ($MetaEditor) {
-        $Mq5 = Join-Path $Prod "mt5\NEXUS_MarketFeed\NEXUS_MarketFeed.mq5"
-        $CompileLog = Join-Path $Backup "marketfeed-compile.log"
-        & $MetaEditor /compile:"$Mq5" /log:"$CompileLog"
-        Start-Sleep -Seconds 2
-        if (-not (Test-Path $CompileLog)) { throw "MetaEditor compile log not created" }
-        $CompileText = Get-Content $CompileLog -Raw
-        if ($CompileText -notmatch "0 errors") { throw "NEXUS_MarketFeed compile failed" }
-        Write-Host "MARKETFEED COMPILE: PASS"
-        Write-Warning "Reload/re-attach NEXUS_MarketFeed before M30/H4 collection starts."
-    } else {
-        Write-Warning "MetaEditor64.exe not found. Backend V39 is deployed; MarketFeed M30/H4 compile is pending."
-    }
+    Write-Host "=== 8. MARKETFEED STATUS ==="
+    Write-Warning "Backend V39 is already healthy. MarketFeed compilation is handled separately by tools\compile_marketfeed_v39_runtime.ps1 so a compiler issue can never roll back a healthy backend deploy."
 
     Write-Host "NEXUS SIGNAL VISUAL V39 DEPLOY: PASS"
     Write-Host "Commit: $Commit"
     Write-Host "Style : nexus-signal-minimal-v6"
     Write-Host "Backup: $Backup"
 } catch {
-    Write-Error $_
+    Write-Warning ("DEPLOY FAILED: " + $_.Exception.Message)
     if ($Copied) { Restore-Backup }
     throw
 }
