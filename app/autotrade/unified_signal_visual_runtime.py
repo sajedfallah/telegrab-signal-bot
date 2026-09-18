@@ -120,6 +120,18 @@ def install_unified_signal_visual(app) -> None:
 
     async def unified_publish(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
         signal_id = _signal_id(row)
+        issuer_hint = _issuer_type(row)
+
+        # Preserve the original MT5 fail-closed invariant: when the caller is
+        # MT5_ADMIN (or provides only an id), the base publisher must evaluate
+        # its durable execution receipt before any canonical DB lookup occurs.
+        if issuer_hint != "WEB_ADMIN":
+            return await original_publish(
+                row,
+                chart_base64,
+                allow_without_chart=allow_without_chart,
+            )
+
         canonical = db.get_signal(signal_id) if signal_id > 0 else None
         canonical = canonical or row
         issuer = _issuer_type(canonical)
