@@ -178,6 +178,7 @@
     const p = u.pathname;
 
     if (p === '/bootstrap') return clone(bootstrap);
+    if (p === '/experience') return clone(home.experience);
     if (p === '/home') return clone(home);
     if (p === '/plans') return {plans:clone(plans)};
     if (p === '/account/status') return clone(account);
