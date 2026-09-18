@@ -11,6 +11,7 @@ from aiogram.types import BufferedInputFile, Message
 
 from .agents.ict import assess_ict
 from .chart_renderer import render_ict_chart
+from .fast_scalp import assess_fast_scalp
 from .shadow_runner import ShadowRunnerConfig, _assessment_summary
 from .snapshot_adapter import build_mt5_snapshot
 from .telegram_reporter import format_hourly_analysis
@@ -38,6 +39,7 @@ def _analysis_record(config: ShadowRunnerConfig, symbol: str, timeframe: str = "
         "m5_recent_high": max((float(x["high"]) for x in recent), default=None),
         "m5_recent_low": min((float(x["low"]) for x in recent), default=None),
         "assessments": [assessment],
+        "fast_scalp": (lambda fs: {"strategy_id": fs.strategy_id, "state": fs.state.value, "direction": fs.direction.value, "poi": fs.poi, "sweep_anchor": fs.sweep_anchor, "entry_zone": fs.entry_zone, "evidence": list(fs.evidence), "blocks": list(fs.blocks)})(assess_fast_scalp(snapshot)) if timeframe == "M1" else None,
     }
 
 
