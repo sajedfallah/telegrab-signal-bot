@@ -1,0 +1,61 @@
+name: NEXUS Signal Visual CI
+
+on:
+  pull_request:
+    branches:
+      - feature/live-charts-v1
+    paths:
+      - 'app/autotrade/**'
+      - 'app/market_candles.py'
+      - 'mt5/NEXUS_MarketFeed/**'
+      - 'tests/test_broker_chart_fallback_v26.py'
+      - 'tests/test_unified_signal_visual_v28.py'
+      - 'tests/test_market_candles_and_publication_recovery.py'
+  push:
+    branches:
+      - bugfix/miniapp-signal-visual-v38
+  workflow_dispatch:
+
+jobs:
+  signal-visual-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BOT_TOKEN: "123456:TESTTOKEN"
+      ADMIN_IDS: "9001001"
+      NEXUS_ADMIN_MT5_ACCOUNTS: "80150619"
+      NEXUS_ADMIN_TOKEN: "TEST_ADMIN_TOKEN"
+      PUBLIC_CHANNEL_ID: "-1001234567890"
+      PUBLIC_CHANNEL_URL: "https://t.me/nexus_test_public"
+      FREE_CHANNEL_URL: "https://t.me/nexus_test_free"
+      VIP_CHANNEL_ID: "-1003900670697"
+      SUPPORT_USERNAME: "https://t.me/nexus_support"
+      PAYMENT_CARD: "0000000000000000"
+      PAYMENT_OWNER: "NEXUS"
+      CONTENT_AGENTS_ENABLED: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pytest
+
+      - name: Compile changed Python runtime
+        run: |
+          python -m py_compile app/autotrade/api.py
+          python -m py_compile app/autotrade/broker_chart_fallback.py
+          python -m py_compile app/autotrade/unified_signal_visual_runtime.py
+          python -m py_compile app/market_candles.py
+
+      - name: Run signal visual regression suite
+        run: |
+          python -m pytest             tests/test_broker_chart_fallback_v26.py             tests/test_unified_signal_visual_v28.py             tests/test_market_candles_and_publication_recovery.py -q
