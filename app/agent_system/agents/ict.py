@@ -87,7 +87,7 @@ def _ltf_trigger(rows, timeframe="M5", sweep_window=4):
 
 def assess_ict(snapshot: MarketSnapshot, trigger_timeframe: str = "M5") -> AgentAssessment:
     trigger_timeframe = str(trigger_timeframe or "M5").upper()
-    supported = {"M1", "M5", "M15", "H1", "D1"}
+    supported = {"M1", "M5", "M15", "H1", "D1", "W1", "MN1"}
     if trigger_timeframe not in supported:
         raise ValueError(f"unsupported ICT analysis timeframe: {trigger_timeframe}")
 
