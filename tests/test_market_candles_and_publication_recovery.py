@@ -141,3 +141,18 @@ def test_marketfeed_v40_warms_new_timeframes_and_reports_sync_state():
     assert 'CopyRates pending symbol=' in src
     assert 'history warmup pending symbol=' in src
     assert 'NEXUS MarketFeed V1.20 initialized tfs=M1,M5,M15,M30,H1,H4,D1' in src
+
+
+def test_market_feed_accepts_full_eight_symbol_seven_timeframe_payload():
+    candle = CandlePoint(time=1_700_000_000, open=100, high=101, low=99, close=100.5)
+    symbols = ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD")
+    timeframes = ("M1", "M5", "M15", "M30", "H1", "H4", "D1")
+    req = MarketFeedRequest(
+        account_number="80150619",
+        series=[
+            CandleSeries(symbol=symbol, timeframe=timeframe, candles=[candle])
+            for symbol in symbols
+            for timeframe in timeframes
+        ],
+    )
+    assert len(req.series) == 56
