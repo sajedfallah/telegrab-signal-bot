@@ -2,8 +2,6 @@
   const landing = document.getElementById('nexusLanding');
   const enterButton = document.getElementById('enterNexus');
   const appShell = document.querySelector('.app-shell');
-  const poster = landing?.querySelector('.nexus-landing-poster');
-
   if (!landing || !enterButton || !appShell) {
     document.body.classList.remove('landing-active');
     appShell?.removeAttribute('aria-hidden');
@@ -11,24 +9,6 @@
   }
 
   let entered = false;
-
-  const markFallback = () => {
-    landing.classList.add('landing-fallback');
-    enterButton.setAttribute('aria-label', 'ورود به NEXUS');
-    if (!enterButton.querySelector('.nexus-fallback-cta')) {
-      const fallback = document.createElement('span');
-      fallback.className = 'nexus-fallback-cta';
-      fallback.innerHTML = '<b>NEXUS</b><small>Trading Intelligence</small><em>ورود به پنل</em>';
-      enterButton.appendChild(fallback);
-    }
-  };
-
-  if (poster) {
-    poster.addEventListener('error', markFallback, { once: true });
-    if (poster.complete && poster.naturalWidth === 0) markFallback();
-  } else {
-    markFallback();
-  }
 
   const revealApp = () => {
     landing.hidden = true;
