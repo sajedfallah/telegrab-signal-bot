@@ -54,7 +54,7 @@ def test_v26_broker_chart_renderer_outputs_valid_png_with_real_level_contract():
     assert len(raw) > 10_000
     with Image.open(BytesIO(raw)) as image:
         assert image.format == "PNG"
-        assert image.size == (1280, 720)
+        assert image.size == (1600, 900)
 
 
 def test_v37_publication_recovery_uses_marketfeed_immediately_and_never_placeholder_for_web_admin():
@@ -100,3 +100,10 @@ def test_v26_repair_tool_bootstraps_project_root_for_direct_execution():
     assert "Path(__file__).resolve().parents[1]" in src
     assert "sys.path.insert(0, str(_PROJECT_ROOT))" in src
     assert src.index("sys.path.insert(0, str(_PROJECT_ROOT))") < src.index("from app import db")
+
+
+def test_v38_renderer_supports_every_admin_miniapp_timeframe():
+    src = _text("app/autotrade/broker_chart_fallback.py")
+    assert '_SUPPORTED_TF = {"M1", "M5", "M15", "M30", "H1", "H4", "D1"}' in src
+    assert '"M30": 1800' in src
+    assert '"H4": 14400' in src
