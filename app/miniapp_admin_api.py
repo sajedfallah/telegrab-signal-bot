@@ -438,11 +438,12 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         with db.conn() as con:
             con.execute(
                 "UPDATE signals SET signal_uuid=COALESCE(signal_uuid,?),issuer_type='WEB_ADMIN',issuer_account=?,"
-                "issued_at=COALESCE(issued_at,?),status='DRAFT',publication_stage='WAITING_FOR_CHART' WHERE id=?",
+                "issued_at=COALESCE(issued_at,?),status='DRAFT',publication_stage='WAITING_EXECUTION' WHERE id=?",
                 (str(uuid.uuid4()), account, db.now_iso(), int(row["id"])),
             )
-        job = db.create_chart_capture_job(int(row["id"]), f"MINIAPP_ADMIN:{int(user['id'])}")
-        status = "READY" if mt5["online"] else "WAITING_FOR_MT5"
+        # V45 text-only publication: Mini App issuance no longer creates a
+        # ChartAgent capture job because Telegram receives no image.
+        status = "WAITING_EXECUTION" if mt5["online"] else "WAITING_FOR_MT5"
         payload = {**calc, "setup_mode": req.setup_mode, "destination": req.destination,
                    "timeframe": req.timeframe, "trailing_code": req.trailing_code,
                    "trailing_name": str(trail.get("name") or req.trailing_code),
@@ -458,9 +459,6 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         db.add_signal_event(int(row["id"]), "MINIAPP_SIGNAL_CREATED", actor_type="MINIAPP_ADMIN",
                             actor_id=int(user["id"]), request_id=req.request_id,
                             correlation_id=str(row["code"]), payload=payload)
-        db.add_signal_event(int(row["id"]), "CHART_JOB_CREATED", actor_type="MINIAPP_ADMIN",
-                            actor_id=int(user["id"]), request_id=f"chart-job:{job['id']}",
-                            payload={"job_id": int(job["id"]), "account": account})
         result = _sync_request(request_row)
         result["idempotent"] = False
         result["mt5_admin"] = mt5
