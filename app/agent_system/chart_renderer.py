@@ -22,13 +22,13 @@ def _zones(evidence):
     out=[]
     for raw in evidence:
         s=str(raw)
-        m=re.search(r"Daily Quadrant (\\w+) ([\\d.]+)-([\\d.]+); 25=([\\d.]+), 50=([\\d.]+), 75=([\\d.]+)",s)
+        m=re.search(r"Daily Quadrant (\w+) ([\d.]+)-([\d.]+); 25=([\d.]+), 50=([\d.]+), 75=([\d.]+)",s)
         if m:
             side,lo,hi,p25,p50,p75=m.groups()
             out.append(("QUADRANT",float(lo),float(hi),side))
             for label,v in (("Q25",p25),("Q50",p50),("Q75",p75)): out.append((label,float(v),float(v),""))
             continue
-        m=re.search(r"15M (bullish|bearish) (FVG|OB) ([\\d.]+)-([\\d.]+)",s)
+        m=re.search(r"15M (bullish|bearish) (FVG|OB) ([\d.]+)-([\d.]+)",s)
         if m:
             direction,kind,lo,hi=m.groups(); out.append((f"{kind} {direction.upper()}",float(lo),float(hi),""))
     return out
