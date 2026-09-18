@@ -1,76 +1,350 @@
-/* NEXUS Landing — animated starfield + official logo + space CTA */
-:root{--nx-landing-bg:#020b18;--nx-landing-bg2:#090a0f}
-html,body{background:var(--nx-landing-bg)!important}
-body.landing-active{overflow:hidden!important;overscroll-behavior:none}
-body.landing-active>.app-shell{visibility:hidden;pointer-events:none}
-.nexus-landing{position:fixed;inset:0;z-index:10000;width:100vw;height:100dvh;overflow:hidden;display:grid;place-items:center;isolation:isolate;background:radial-gradient(ellipse at bottom,#1b2735 0%,#090a0f 100%);-webkit-user-select:none;user-select:none}
-.nexus-landing[hidden]{display:none!important}
-.nexus-starfield{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-.nexus-bg-stars{position:absolute;inset:0;background-repeat:repeat;will-change:transform}
-.nexus-bg-stars::after{content:"";position:absolute;left:0;top:100%;width:100%;height:100%;background:inherit}
-.nexus-bg-stars-1{opacity:.75;background-image:radial-gradient(circle,rgba(255,255,255,.95) 1px,transparent 1.25px);background-size:43px 43px;background-position:7px 13px;animation:nexusStarDrift 50s linear infinite}
-.nexus-bg-stars-2{opacity:.48;background-image:radial-gradient(circle,rgba(190,220,255,.9) 1.25px,transparent 1.6px);background-size:79px 79px;background-position:31px 19px;animation:nexusStarDrift 90s linear infinite}
-.nexus-bg-stars-3{opacity:.24;background-image:radial-gradient(circle,rgba(105,174,255,.9) 1.6px,transparent 2px);background-size:137px 137px;background-position:67px 41px;animation:nexusStarDrift 140s linear infinite}
-.nexus-landing-content{position:relative;z-index:2;width:min(100%,640px);height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:calc(32px + env(safe-area-inset-top)) 24px calc(28px + env(safe-area-inset-bottom))}
-.nexus-landing-logo{width:clamp(150px,44vw,230px);height:auto;display:block;object-fit:contain;filter:drop-shadow(0 0 30px rgba(0,137,255,.22));transform:translateY(-3vh)}
-.nexus-space-enter{position:absolute;z-index:3;left:50%;bottom:max(32px,calc(22px + env(safe-area-inset-bottom)));transform:translateX(-50%);display:flex;justify-content:center;align-items:center;width:min(13rem,78vw);overflow:hidden;height:3rem;padding:0;background-size:300% 300%;cursor:pointer;backdrop-filter:blur(1rem);-webkit-backdrop-filter:blur(1rem);border-radius:5rem;transition:.5s;animation:nexusGradient 5s ease infinite;border:double 4px transparent;background-image:linear-gradient(#111827,#111827),linear-gradient(137.48deg,#ffdb3b 10%,#fe53bb 45%,#8f51ea 67%,#0044ff 87%);background-origin:border-box;background-clip:content-box,border-box;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
-.nexus-space-enter strong{position:relative;z-index:2;font-family:Vazirmatn,sans-serif;font-size:13px;font-weight:900;letter-spacing:.02em;color:#fff;text-shadow:0 0 4px #fff;white-space:nowrap}
-.nexus-btn-stars{position:absolute;z-index:-1;inset:0;overflow:hidden;transition:.5s;backdrop-filter:blur(1rem);border-radius:5rem}
-.nexus-btn-stars-layer{position:absolute;left:50%;top:50%;width:200rem;height:200rem;transform:translate(-50%,-50%);background:transparent}
-.nexus-btn-stars-layer::after{content:"";position:absolute;top:-10rem;left:-100rem;width:100%;height:100%;animation:nexusBtnStarRotate 90s linear infinite;background-image:radial-gradient(#fff 1px,transparent 1%);background-size:50px 50px}
-.nexus-btn-stars-layer::before{content:"";position:absolute;top:0;left:-50%;width:170%;height:500%;animation:nexusBtnStar 60s linear infinite;background-image:radial-gradient(#fff 1px,transparent 1%);background-size:50px 50px;opacity:.5}
-.nexus-btn-glow{position:absolute;display:flex;width:12rem;z-index:-1}
-.nexus-btn-circle{width:100%;height:30px;filter:blur(2rem);animation:nexusPulse 4s infinite}
-.nexus-btn-circle:first-child{background:rgba(254,83,186,.636)}
-.nexus-btn-circle:last-child{background:rgba(142,81,234,.704)}
-@media(hover:hover) and (pointer:fine){.nexus-space-enter:hover{transform:translateX(-50%) scale(1.08)}.nexus-space-enter:hover .nexus-btn-stars{z-index:1;background-color:#111827}.nexus-space-enter:hover strong{z-index:2}}
-.nexus-space-enter:active{border:double 4px #fe53bb;background-origin:border-box;background-clip:content-box,border-box;animation:none;transform:translateX(-50%) scale(.98)}
-.nexus-space-enter:active .nexus-btn-circle{background:#fe53bb}
-.nexus-space-enter:focus-visible{outline:2px solid #fff;outline-offset:4px}
-.nexus-landing.is-leaving{opacity:0;transform:scale(.988);pointer-events:none;transition:opacity 340ms ease,transform 340ms ease}
-.app-shell.nexus-app-entering{animation:nexusAppArrive 340ms ease both}
-@keyframes nexusStarDrift{from{transform:translateY(0)}to{transform:translateY(-100%)}}
-@keyframes nexusBtnStar{from{transform:translateY(0)}to{transform:translateY(-135rem)}}
-@keyframes nexusBtnStarRotate{from{transform:rotate(360deg)}to{transform:rotate(0)}}
-@keyframes nexusGradient{0%{background-position:0 50%}50%{background-position:100% 50%}100%{background-position:0 50%}}
-@keyframes nexusPulse{0%{transform:scale(.75);box-shadow:0 0 0 0 rgba(0,0,0,.7)}70%{transform:scale(1);box-shadow:0 0 0 10px rgba(0,0,0,0)}100%{transform:scale(.75);box-shadow:0 0 0 0 rgba(0,0,0,0)}}
-@keyframes nexusAppArrive{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
-@media(max-width:430px){.nexus-landing-logo{width:42vw;max-width:190px}.nexus-space-enter{bottom:max(26px,calc(18px + env(safe-area-inset-bottom)));width:min(13rem,76vw)}}
-@media(orientation:landscape){.nexus-landing-logo{width:min(24vw,170px);transform:none}.nexus-space-enter{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)));height:2.8rem}}
-@media(prefers-reduced-motion:reduce){.nexus-bg-stars,.nexus-btn-stars-layer::before,.nexus-btn-stars-layer::after,.nexus-space-enter,.nexus-btn-circle,.nexus-landing,.app-shell.nexus-app-entering{animation:none!important;transition:none!important}}
+/* NEXUS Landing — approved minimal chart/candlestick composition */
 
-/* Desktop preview: preserve Telegram Mini App mobile viewport proportions. */
-@media (min-width:700px){
-  .nexus-landing{
-    place-items:center;
-    background:#050a12;
+:root{
+  --nx-landing-bg:#03070d;
+  --nx-landing-blue:#28a7ff;
+  --nx-landing-blue-soft:#8bdcff;
+  --nx-landing-text:#f5f9ff;
+  --nx-landing-muted:#9fb1c5;
+}
+
+html,body{background:var(--nx-landing-bg)!important}
+
+body.landing-active{
+  overflow:hidden!important;
+  overscroll-behavior:none;
+}
+
+body.landing-active>.app-shell{
+  visibility:hidden;
+  pointer-events:none;
+}
+
+.nexus-landing{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  width:100vw;
+  height:100dvh;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  background:#050a12;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+
+.nexus-landing[hidden]{display:none!important}
+
+.nexus-landing-stage{
+  position:relative;
+  width:100%;
+  height:100dvh;
+  min-height:100dvh;
+  overflow:hidden;
+  isolation:isolate;
+  background:#03070d;
+}
+
+.nexus-landing-stage::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 42%,rgba(20,129,204,.08),transparent 35%),
+    linear-gradient(180deg,#03070d 0%,#040911 100%);
+}
+
+.nexus-landing-noise{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  opacity:.045;
+  background-image:radial-gradient(circle,rgba(255,255,255,.16) 1px,transparent 1.15px);
+  background-size:38px 38px;
+}
+
+.nexus-landing-chart{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  width:100%;
+  height:100%;
+  pointer-events:none;
+  opacity:.78;
+}
+
+.nexus-chart-flow{
+  stroke-dasharray:10 18;
+  animation:nexusChartDash 8s linear infinite;
+}
+
+.nexus-chart-candle line{
+  stroke:#49bfff;
+  stroke-width:2;
+}
+
+.nexus-chart-candle rect{
+  fill:url(#nxLandingCandle);
+}
+
+.nexus-chart-candle{
+  opacity:.42;
+  animation:nexusCandlePulse 2.4s ease-in-out infinite;
+  transform-box:fill-box;
+  transform-origin:center;
+}
+
+.nexus-chart-candle:nth-child(2){animation-delay:.25s}
+.nexus-chart-candle:nth-child(3){animation-delay:.5s}
+.nexus-chart-candle:nth-child(4){animation-delay:.75s}
+.nexus-chart-candle:nth-child(5){animation-delay:1s}
+.nexus-chart-candle:nth-child(6){animation-delay:1.25s}
+
+.nexus-landing-content{
+  position:absolute;
+  inset:0;
+  z-index:2;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  gap:13px;
+  padding:
+    calc(28px + env(safe-area-inset-top))
+    22px
+    calc(112px + env(safe-area-inset-bottom));
+}
+
+.nexus-landing-logo{
+  width:clamp(106px,31vw,150px);
+  height:auto;
+  display:block;
+  object-fit:contain;
+  filter:drop-shadow(0 0 20px rgba(0,163,255,.18));
+}
+
+.nexus-landing-brand{
+  margin-left:.18em;
+  color:var(--nx-landing-text);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(46px,14vw,76px);
+  font-weight:700;
+  letter-spacing:.18em;
+  line-height:1;
+  text-shadow:0 0 16px rgba(95,184,255,.12);
+}
+
+.nexus-landing-tagline{
+  margin-left:.34em;
+  color:var(--nx-landing-muted);
+  font-family:Arial,Helvetica,sans-serif;
+  font-size:clamp(9px,2.8vw,12px);
+  font-weight:400;
+  letter-spacing:.34em;
+  line-height:1.4;
+  white-space:nowrap;
+}
+
+.nexus-enter-wrap{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  bottom:max(30px,calc(22px + env(safe-area-inset-bottom)));
+  transform:translateX(-50%);
+}
+
+.nexus-enter-button{
+  position:relative;
+  width:min(290px,72vw);
+  height:52px;
+  padding:0;
+  overflow:visible;
+  cursor:pointer;
+  border:0;
+  border-radius:12px;
+  background:#0b0f15;
+  color:#fff;
+  appearance:none;
+  -webkit-appearance:none;
+  transition:transform .2s ease;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:manipulation;
+}
+
+.nexus-enter-button::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:12px;
+  opacity:.12;
+  background:
+    radial-gradient(circle at 50% 50%,transparent 0,transparent 20%,#111111aa 50%),
+    radial-gradient(ellipse 100% 100%,#fff,#fff0);
+  background-size:3px 3px,auto auto;
+  transition:opacity .3s ease;
+}
+
+.nexus-enter-text{
+  position:relative;
+  z-index:3;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  color:#fff;
+  font-family:Vazirmatn,Arial,sans-serif;
+  font-size:15px;
+  font-weight:700;
+}
+
+.nexus-enter-arrow{
+  color:#bfe8ff;
+  font:700 18px/1 Arial,sans-serif;
+  direction:ltr;
+}
+
+.nexus-enter-edge{
+  pointer-events:none;
+  position:absolute;
+  --w:2px;
+  --t:-26px;
+  --s:calc(var(--t) * -1);
+  --e:calc(100% + var(--t));
+  --g:#fff0,#6dc5ff33 var(--s),#82d8ffaa var(--s),#fff,#82d8ffaa var(--e),#6dc5ff33 var(--e),#fff0;
+}
+
+.nexus-enter-edge::before,
+.nexus-enter-edge::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:inherit;
+  z-index:-2;
+}
+
+.nexus-enter-edge::before{filter:blur(4px)}
+.nexus-enter-edge::after{
+  filter:blur(11px);
+  opacity:.72;
+  transition:opacity .3s ease;
+}
+
+.nexus-enter-edge-l{left:-2px}
+.nexus-enter-edge-r{right:-2px}
+
+.nexus-enter-edge-l,
+.nexus-enter-edge-r{
+  top:var(--t);
+  bottom:var(--t);
+  width:var(--w);
+  background:linear-gradient(var(--g));
+}
+
+.nexus-enter-edge-t{top:-2px}
+.nexus-enter-edge-b{bottom:-2px}
+
+.nexus-enter-edge-t,
+.nexus-enter-edge-b{
+  left:var(--t);
+  right:var(--t);
+  height:var(--w);
+  background:linear-gradient(90deg,var(--g));
+}
+
+@media(hover:hover) and (pointer:fine){
+  .nexus-enter-button:hover{transform:translateY(-1px)}
+  .nexus-enter-button:hover::before{opacity:.28}
+  .nexus-enter-button:hover .nexus-enter-edge::after{opacity:1}
+}
+
+.nexus-enter-button:active{transform:scale(.985)}
+
+.nexus-enter-button:focus-visible{
+  outline:2px solid var(--nx-landing-blue-soft);
+  outline-offset:4px;
+}
+
+.nexus-enter-button:disabled{cursor:default}
+
+.nexus-landing.is-leaving{
+  opacity:0;
+  transform:scale(.988);
+  pointer-events:none;
+  transition:opacity 340ms ease,transform 340ms ease;
+}
+
+.app-shell.nexus-app-entering{
+  animation:nexusAppArrive 340ms ease both;
+}
+
+@keyframes nexusCandlePulse{
+  0%,100%{
+    opacity:.30;
+    filter:drop-shadow(0 0 0 rgba(0,160,255,0));
   }
-  .nexus-landing::after{
-    content:"";
-    position:absolute;
-    inset:0;
-    z-index:0;
-    pointer-events:none;
-    background:radial-gradient(circle at 50% 50%,rgba(20,91,150,.12),transparent 42%);
+  50%{
+    opacity:.92;
+    filter:drop-shadow(0 0 8px rgba(0,176,255,.48));
   }
-  .nexus-landing-content,
-  .nexus-starfield{
-    width:min(100vw,430px);
-    left:50%;
-    right:auto;
-    transform:translateX(-50%);
-  }
-  .nexus-starfield{
-    top:0;
-    bottom:0;
-    height:100dvh;
-    box-shadow:0 0 0 1px rgba(255,255,255,.035),0 0 70px rgba(0,0,0,.55);
-    background:radial-gradient(ellipse at bottom,#1b2735 0%,#090a0f 100%);
-  }
+}
+
+@keyframes nexusChartDash{
+  to{stroke-dashoffset:-220}
+}
+
+@keyframes nexusAppArrive{
+  from{opacity:0;transform:translateY(9px)}
+  to{opacity:1;transform:translateY(0)}
+}
+
+/* Telegram/mobile */
+@media(max-width:430px){
   .nexus-landing-content{
-    position:absolute;
-    top:0;
-    bottom:0;
-    height:100dvh;
+    padding:
+      calc(24px + env(safe-area-inset-top))
+      20px
+      calc(104px + env(safe-area-inset-bottom));
+  }
+
+  .nexus-landing-logo{width:clamp(100px,30vw,128px)}
+  .nexus-landing-brand{font-size:clamp(46px,15vw,62px)}
+  .nexus-landing-tagline{font-size:9px;letter-spacing:.30em;margin-left:.30em}
+  .nexus-enter-wrap{bottom:max(27px,calc(18px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{width:min(280px,74vw);height:50px}
+}
+
+/* Desktop browser preview remains a mobile Mini App frame. */
+@media(min-width:700px){
+  .nexus-landing-stage{
+    width:430px;
+    max-width:430px;
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,.035),
+      0 0 70px rgba(0,0,0,.55);
+  }
+}
+
+@media(orientation:landscape) and (max-height:520px){
+  .nexus-landing-logo{width:82px}
+  .nexus-landing-brand{font-size:42px}
+  .nexus-landing-tagline{font-size:8px}
+  .nexus-enter-wrap{bottom:max(14px,calc(10px + env(safe-area-inset-bottom)))}
+  .nexus-enter-button{height:46px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .nexus-chart-flow,
+  .nexus-chart-candle,
+  .nexus-landing,
+  .app-shell.nexus-app-entering{
+    animation:none!important;
+    transition:none!important;
   }
 }
