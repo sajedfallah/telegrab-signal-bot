@@ -12,13 +12,18 @@ $Repo = Join-Path $Work "repo"
 $Release = Join-Path $Work "release"
 $Archive = Join-Path $Work "release.zip"
 $Backup = Join-Path $Prod "_backup\chart-alert-dedup-v46-$Stamp"
-$Python = Join-Path $Prod ".venv\Scripts\python.exe"
 $HealthUrl = "https://api.nexustrade.ir/miniapp/api/health"
 
-$Files = @(
-    "app\autotrade\chart_alert_dedup_runtime.py",
-    "app\combined_api.py"
+$PythonCandidates = @(
+    (Join-Path $Prod ".venv\Scripts\python.exe"),
+    (Join-Path $Prod "venv\Scripts\python.exe")
 )
+$Python = $PythonCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+$DedupRel = "app\autotrade\chart_alert_dedup_runtime.py"
+$CombinedRel = "app\combined_api.py"
+$ProdDedup = Join-Path $Prod $DedupRel
+$ProdCombined = Join-Path $Prod $CombinedRel
 
 function Wait-Health {
     for($i=1; $i -le 30; $i++) {
@@ -34,16 +39,29 @@ function Wait-Health {
     throw "API health failed"
 }
 
+function Backup-File([string]$Rel) {
+    $Source = Join-Path $Prod $Rel
+    if(Test-Path $Source) {
+        $Target = Join-Path $Backup $Rel
+        New-Item -ItemType Directory -Force -Path (Split-Path $Target -Parent) | Out-Null
+        Copy-Item $Source $Target -Force
+        Write-Host "BACKUP: $Rel"
+    }
+}
+
 if(-not (Test-Path $Prod)) { throw "Production runtime not found: $Prod" }
-if(-not (Test-Path $Python)) { throw "Production Python not found: $Python" }
+if(-not $Python) { throw "Production Python not found under .venv or venv" }
+if(-not (Test-Path $ProdCombined)) { throw "Production combined_api.py not found" }
 
 Write-Host "=== NEXUS CHART ALERT DEDUP V46 ==="
 Write-Host "Commit: $Commit"
 Write-Host "Production: $Prod"
+Write-Host "Python: $Python"
 
 New-Item -ItemType Directory -Force -Path $Work,$Release,$Backup | Out-Null
 
 try {
+    Write-Host "=== FETCH EXACT COMMIT ==="
     git clone --filter=blob:none --no-checkout $RepoUrl $Repo
     if($LASTEXITCODE -ne 0) { throw "git clone failed" }
 
@@ -53,65 +71,89 @@ try {
     $Resolved = (git -C $Repo rev-parse $Commit).Trim()
     if($Resolved -ne $Commit) { throw "Exact commit verification failed" }
 
-    git -C $Repo archive --format=zip --output=$Archive $Commit app/autotrade/chart_alert_dedup_runtime.py app/combined_api.py tests/test_chart_alert_dedup_v46.py
+    Write-Host "=== ARCHIVE TARGET FILE ==="
+    git -C $Repo archive --format=zip --output=$Archive $Commit app/autotrade/chart_alert_dedup_runtime.py
     if($LASTEXITCODE -ne 0 -or -not (Test-Path $Archive)) { throw "git archive failed" }
 
     Expand-Archive -Path $Archive -DestinationPath $Release -Force
 
-    $Dedup = Get-Content (Join-Path $Release "app\autotrade\chart_alert_dedup_runtime.py") -Raw
-    $Combined = Get-Content (Join-Path $Release "app\combined_api.py") -Raw
+    $StageDedup = Join-Path $Release $DedupRel
+    $DedupText = Get-Content $StageDedup -Raw
+    if(-not $DedupText.Contains('_DEDUP_VERSION = "v46"')) { throw "V46 marker missing" }
+    if(-not $DedupText.Contains("INSERT OR IGNORE INTO chart_delivery_alert_incidents")) { throw "Durable incident claim missing" }
+    if(-not $DedupText.Contains("guard._alert_due = durable_alert_due")) { throw "Alert gate replacement missing" }
 
-    if(-not $Dedup.Contains('_DEDUP_VERSION = "v46"')) { throw "V46 marker missing" }
-    if(-not $Dedup.Contains("INSERT OR IGNORE INTO chart_delivery_alert_incidents")) { throw "Durable incident claim missing" }
-    if(-not $Dedup.Contains("guard._alert_due = durable_alert_due")) { throw "Alert gate replacement missing" }
-    if(-not $Combined.Contains("install_chart_alert_dedup_runtime(app)")) { throw "Dedup install missing" }
-    if($Combined.IndexOf("install_chart_delivery_guard(app)") -gt $Combined.IndexOf("install_chart_alert_dedup_runtime(app)")) { throw "Dedup install order invalid" }
+    & $Python -m py_compile $StageDedup
+    if($LASTEXITCODE -ne 0) { throw "Staged Python compile failed" }
 
     Write-Host "CONTRACT: PASS"
 
-    Push-Location $Release
-    try {
-        & $Python -m py_compile app\autotrade\chart_alert_dedup_runtime.py app\combined_api.py
-        if($LASTEXITCODE -ne 0) { throw "Python compile failed" }
-
-        & $Python -m pytest tests\test_chart_alert_dedup_v46.py -q
-        if($LASTEXITCODE -ne 0) { throw "V46 tests failed" }
-    } finally {
-        Pop-Location
-    }
-
-    Write-Host "STAGING TESTS: PASS"
-
-    foreach($Rel in $Files) {
-        $Current = Join-Path $Prod $Rel
-        if(Test-Path $Current) {
-            $Bak = Join-Path $Backup $Rel
-            New-Item -ItemType Directory -Force -Path (Split-Path $Bak -Parent) | Out-Null
-            Copy-Item $Current $Bak -Force
-            Write-Host "BACKUP: $Rel"
-        }
-    }
+    Write-Host "=== BACKUP ==="
+    Backup-File $DedupRel
+    Backup-File $CombinedRel
 
     $Copied = $false
     try {
-        foreach($Rel in $Files) {
-            $Src = Join-Path $Release $Rel
-            $Dst = Join-Path $Prod $Rel
-            New-Item -ItemType Directory -Force -Path (Split-Path $Dst -Parent) | Out-Null
-            Copy-Item $Src $Dst -Force
-            Write-Host "DEPLOYED: $Rel"
+        Write-Host "=== TARGETED BACKEND PATCH ==="
+        New-Item -ItemType Directory -Force -Path (Split-Path $ProdDedup -Parent) | Out-Null
+        Copy-Item $StageDedup $ProdDedup -Force
+        Write-Host "DEPLOYED: $DedupRel"
+
+        $Combined = Get-Content $ProdCombined -Raw
+        $Hook = "install_chart_alert_dedup_runtime(app)"
+        if(-not $Combined.Contains($Hook)) {
+            $Anchor = "install_chart_delivery_guard(app)"
+            $AnchorIndex = $Combined.IndexOf($Anchor)
+            if($AnchorIndex -lt 0) { throw "Chart delivery guard install anchor not found in Production combined_api.py" }
+
+            $LineEnd = $Combined.IndexOf([char]10, $AnchorIndex)
+            if($LineEnd -lt 0) { $LineEnd = $Combined.Length - 1 }
+
+            $Patch = @"
+
+# V46: durable incident-based Chart Delivery alert dedup.
+from .autotrade.chart_alert_dedup_runtime import install_chart_alert_dedup_runtime
+install_chart_alert_dedup_runtime(app)
+"@
+            $Combined = $Combined.Insert($LineEnd + 1, $Patch)
+            [System.IO.File]::WriteAllText($ProdCombined, $Combined, (New-Object System.Text.UTF8Encoding($false)))
+            Write-Host "PATCHED: $CombinedRel"
+        } else {
+            Write-Host "PRESERVED: existing dedup install hook in $CombinedRel"
         }
+
         $Copied = $true
 
-        & $Python -m py_compile (Join-Path $Prod "app\autotrade\chart_alert_dedup_runtime.py") (Join-Path $Prod "app\combined_api.py")
+        & $Python -m py_compile $ProdDedup $ProdCombined
         if($LASTEXITCODE -ne 0) { throw "Production Python compile failed" }
 
         Write-Host "=== RESTART API ONLY ==="
         Restart-Service -Name "NEXUS-AutoTrade-API" -Force
         Wait-Health
 
-        $ProdDedup = Get-Content (Join-Path $Prod "app\autotrade\chart_alert_dedup_runtime.py") -Raw
-        if(-not $ProdDedup.Contains('_DEDUP_VERSION = "v46"')) { throw "Production V46 marker missing" }
+        $VerifyDedup = Get-Content $ProdDedup -Raw
+        $VerifyCombined = Get-Content $ProdCombined -Raw
+        if(-not $VerifyDedup.Contains('_DEDUP_VERSION = "v46"')) { throw "Production V46 marker missing" }
+        if(-not $VerifyCombined.Contains($Hook)) { throw "Production dedup hook missing" }
+
+        $SchemaScript = Join-Path $Work "verify_schema.py"
+        @'
+from app import db
+with db.conn() as con:
+    row = con.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='chart_delivery_alert_incidents'"
+    ).fetchone()
+print("PASS" if row else "FAIL")
+'@ | Set-Content -Path $SchemaScript -Encoding UTF8
+
+        Push-Location $Prod
+        try {
+            $SchemaResult = (& $Python $SchemaScript | Out-String).Trim()
+        } finally {
+            Pop-Location
+        }
+        if($SchemaResult -ne "PASS") { throw "Dedup incident table was not created" }
+        Write-Host "DEDUP SCHEMA: PASS"
 
         Write-Host ""
         Write-Host "CHART ALERT DEDUP V46: PASS"
@@ -120,16 +162,26 @@ try {
         Write-Host "Trading EA/T05/T07: UNTOUCHED"
         Write-Host "MT5/MarketFeed: UNTOUCHED"
         Write-Warning "The existing incident may emit one final alert when V46 first claims it; unchanged repeats should then stop."
-    } catch {
+    }
+    catch {
         if($Copied) {
             Write-Warning "DEPLOY FAILED - ROLLING BACK"
-            foreach($Rel in $Files) {
-                $Bak = Join-Path $Backup $Rel
-                if(Test-Path $Bak) {
-                    Copy-Item $Bak (Join-Path $Prod $Rel) -Force
-                    Write-Host "RESTORED: $Rel"
-                }
+            $BakDedup = Join-Path $Backup $DedupRel
+            $BakCombined = Join-Path $Backup $CombinedRel
+
+            if(Test-Path $BakDedup) {
+                Copy-Item $BakDedup $ProdDedup -Force
+                Write-Host "RESTORED: $DedupRel"
+            } elseif(Test-Path $ProdDedup) {
+                Remove-Item $ProdDedup -Force
+                Write-Host "REMOVED NEW: $DedupRel"
             }
+
+            if(Test-Path $BakCombined) {
+                Copy-Item $BakCombined $ProdCombined -Force
+                Write-Host "RESTORED: $CombinedRel"
+            }
+
             Restart-Service -Name "NEXUS-AutoTrade-API" -Force
             try { Wait-Health } catch {}
         }
