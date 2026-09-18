@@ -1,30 +1,32 @@
 # NEXUS
 
-## NEXUS ICT Expert V22.31 — NEXUS TRAIL 07
+## NEXUS ICT Expert V22.42 — Observability Data Lake
 
-نسخه Companion Expert فعلی برای مدیریت Position در MT5: **V22.31** با Profile رسمی **`NEXUS_TRAIL_07 / NEXUS Smart Hybrid v2`**.
+نسخه فعلی Companion Expert track: **V22.42**.
 
-رفتار اصلی:
+تمرکز فعلی:
+- Daily CE / Quadrant-aware signal quality.
+- Reversal / Continuation + Market Regime.
+- Parent/Reply Telegram lifecycle.
+- Execution reject transparency.
+- R-Multiple / MFE / MAE analytics.
+- CE vs No-CE و CE50 vs CE75 attribution.
+- Deep Signal Snapshot + Lifecycle + Telegram Delivery datasets.
+- ثبت ستاپ‌های Armed / Invalidated / Expired برای جلوگیری از Survivorship Bias.
 
-- Break Even دقیق روی Entry در `1R`.
-- TP1: بستن `30%` از حجم اولیه پس از تأیید واقعی Execution.
-- TP2: بستن `30%` دیگر از حجم اولیه پس از TP1 تأییدشده.
-- Remaining Volume اسماً `40%` و مدیریت Runner با `Market Structure 2/2 + ATR(14)×2` بعد از TP1.
-- SL فقط در جهت بهبود حرکت می‌کند و هرگز عقب نمی‌رود.
-- Final TP/TP3 تمام Remaining Volume را می‌بندد.
-- Partial Close ناموفق Stage را Done نمی‌کند و با backoff `1/2/4/8/16/30s` Retry می‌شود.
-- Safetyهای execution truth، ownership چند Instance، broker min/step و Stops/Freeze حفظ شده‌اند.
+**V22.42 هیچ فیلتر جدیدی برای صدور Signal اضافه نمی‌کند.** داده‌ها فقط برای تحلیل آینده جمع می‌شوند.
 
-**این انتشار Backend/DB/API breaking change ندارد.** NEXUS CORE و AutoTrade API فعلی بدون Migration باقی می‌مانند.
+مستندات جدید:
+- [Evolution V22.32 → V22.42](docs/releases/NEXUS_ICT_V22_32_TO_V22_42_FA.md)
+- [V22.42 Telemetry Schema](docs/analytics/NEXUS_ICT_V22_42_TELEMETRY_SCHEMA_FA.md)
+- [V22.31 Trail07 Release](docs/releases/NEXUS_ICT_V22_31_FA.md)
+- [V22.31 Runbook](docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md)
+- Tracking: #47, #50
+- PR: #48
 
-مستندات:
+> Security: Private server MQ5 source شامل runtime credential است و عمداً در GitHub عمومی قرار نمی‌گیرد.
 
-- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
-- Release فنی و عملیاتی کامل: [`docs/releases/NEXUS_ICT_V22_31_FA.md`](docs/releases/NEXUS_ICT_V22_31_FA.md)
-- Runbook استقرار، تست و Rollback: [`docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md`](docs/wiki/NEXUS_ICT_V22_31_RUNBOOK_FA.md)
-- Tracking issue: #47
-
-> وضعیت QA: Static integration checks پاس شده‌اند؛ Compile واقعی MetaEditor و Demo forward-test باید قبل از Production ثبت شوند.
+> QA: Static checks ثبت شده‌اند؛ MetaEditor compile و Demo forward-test هنوز قبل از Production لازم‌اند.
 
 ---
 
