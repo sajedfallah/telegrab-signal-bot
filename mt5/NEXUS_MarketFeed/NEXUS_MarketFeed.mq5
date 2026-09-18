@@ -1,5 +1,5 @@
 #property strict
-#property version   "1.10"
+#property version   "1.20"
 #property description "NEXUS authoritative MT5 candle and Bid/Ask feed for Mini App Live Charts"
 
 input string InpApiBaseUrl="https://api.nexustrade.ir";
@@ -120,11 +120,43 @@ bool AppendSeries(string &payload,const string canonical,const string broker_sym
   {
    MqlRates rates[];
    ArraySetAsSeries(rates,true);
+
+   ResetLastError();
    int copied=CopyRates(broker_symbol,tf,0,bars_count,rates);
+
+   // Newly introduced timeframes can be unsynchronized immediately after an
+   // EA upgrade/reload. CopyRates itself requests history asynchronously; fall
+   // back to a tiny probe so subsequent timer ticks can finish synchronization
+   // instead of silently omitting the timeframe forever.
    if(copied<=0)
      {
-      Print("NEXUS MarketFeed: CopyRates failed symbol=",broker_symbol," tf=",TimeframeCode(tf)," err=",GetLastError());
-      return false;
+      int first_error=GetLastError();
+      long synchronized=0;
+      ResetLastError();
+      SeriesInfoInteger(broker_symbol,tf,SERIES_SYNCHRONIZED,synchronized);
+
+      MqlRates probe[];
+      ArraySetAsSeries(probe,true);
+      ResetLastError();
+      int probe_copied=CopyRates(broker_symbol,tf,0,3,probe);
+      int probe_error=GetLastError();
+
+      if(probe_copied>0)
+        {
+         ArrayResize(rates,probe_copied);
+         for(int i=0;i<probe_copied;i++)
+            rates[i]=probe[i];
+         copied=probe_copied;
+        }
+      else
+        {
+         Print("NEXUS MarketFeed: CopyRates pending symbol=",broker_symbol,
+               " tf=",TimeframeCode(tf),
+               " synced=",synchronized,
+               " first_err=",first_error,
+               " probe_err=",probe_error);
+         return false;
+        }
      }
 
    int digits=(int)SymbolInfoInteger(broker_symbol,SYMBOL_DIGITS);
@@ -162,7 +194,7 @@ bool BuildPayload(string &payload,const int bars_count)
    payload="{\"account_number\":\""+JsonEscape(account)+"\",";
    payload+="\"broker\":\""+JsonEscape(broker)+"\",";
    payload+="\"server\":\""+JsonEscape(server)+"\",";
-   payload+="\"ea_version\":\"NEXUS-MARKET-FEED-1.1\",\"quotes\":[";
+   payload+="\"ea_version\":\"NEXUS-MARKET-FEED-1.2\",\"quotes\":[";
 
    bool first_quote=true;
    for(int s=0;s<count;s++)
@@ -249,6 +281,39 @@ void PublishFeed()
      }
   }
 
+void WarmupSeries()
+  {
+   string symbols[];
+   int count=StringSplit(InpSymbols,',',symbols);
+   if(count<=0) return;
+
+   ENUM_TIMEFRAMES tfs[7]={PERIOD_M1,PERIOD_M5,PERIOD_M15,PERIOD_M30,PERIOD_H1,PERIOD_H4,PERIOD_D1};
+
+   for(int s=0;s<count;s++)
+     {
+      string canonical=Upper(Trim(symbols[s]));
+      if(canonical=="") continue;
+      string broker_symbol=ResolveBrokerSymbol(canonical);
+      if(broker_symbol=="") continue;
+
+      for(int t=0;t<ArraySize(tfs);t++)
+        {
+         MqlRates probe[];
+         ArraySetAsSeries(probe,true);
+         ResetLastError();
+         int copied=CopyRates(broker_symbol,tfs[t],0,3,probe);
+         long synchronized=0;
+         SeriesInfoInteger(broker_symbol,tfs[t],SERIES_SYNCHRONIZED,synchronized);
+         if(copied<=0)
+            Print("NEXUS MarketFeed: history warmup pending symbol=",broker_symbol,
+                  " tf=",TimeframeCode(tfs[t]),
+                  " synced=",synchronized,
+                  " err=",GetLastError());
+        }
+     }
+  }
+
+
 int OnInit()
   {
    if(InpUpdateSeconds<1)
@@ -256,6 +321,8 @@ int OnInit()
       Print("NEXUS MarketFeed: InpUpdateSeconds must be >= 1");
       return INIT_PARAMETERS_INCORRECT;
      }
+   Print("NEXUS MarketFeed V1.20 initialized tfs=M1,M5,M15,M30,H1,H4,D1");
+   WarmupSeries();
    EventSetTimer(InpUpdateSeconds);
    PublishFeed();
    return INIT_SUCCEEDED;

@@ -129,3 +129,15 @@ def test_market_feed_ea_sends_only_admin_authenticated_broker_candles():
     assert "PERIOD_M30" in src
     assert "PERIOD_H4" in src
     assert "ENUM_TIMEFRAMES tfs[7]" in src
+
+
+def test_marketfeed_v40_warms_new_timeframes_and_reports_sync_state():
+    src = _text("mt5/NEXUS_MarketFeed/NEXUS_MarketFeed.mq5")
+    assert '#property version   "1.20"' in src
+    assert 'NEXUS-MARKET-FEED-1.2' in src
+    assert 'WarmupSeries()' in src
+    assert 'PERIOD_M30' in src and 'PERIOD_H4' in src
+    assert 'SERIES_SYNCHRONIZED' in src
+    assert 'CopyRates pending symbol=' in src
+    assert 'history warmup pending symbol=' in src
+    assert 'NEXUS MarketFeed V1.20 initialized tfs=M1,M5,M15,M30,H1,H4,D1' in src
