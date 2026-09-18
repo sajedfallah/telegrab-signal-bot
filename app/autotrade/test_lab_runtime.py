@@ -114,6 +114,7 @@ def install_test_lab_runtime(app) -> None:
 
     from . import api as api_mod
     from .. import miniapp_admin_api as mini_mod
+    from ..config import settings as real_settings
 
     original_admin_status = mini_mod._admin_mt5_status
 
@@ -164,7 +165,7 @@ def install_test_lab_runtime(app) -> None:
         user = mini_mod._admin(x_telegram_init_data)
         account = _test_account()
         channel_ok = bool(str(os.getenv("NEXUS_TEST_CHANNEL_ID", "")).strip())
-        allowed = account in {str(value) for value in api_mod.settings.nexus_admin_mt5_accounts}
+        allowed = account in {str(value) for value in real_settings.nexus_admin_mt5_accounts}
         return {
             "ok": bool(account and channel_ok and allowed),
             "user": user,
@@ -176,17 +177,29 @@ def install_test_lab_runtime(app) -> None:
             "forced_destination": "TEST",
         }
 
-    real_api_settings = api_mod.settings
-    if not isinstance(real_api_settings, _ApiSettingsProxy):
-        api_mod.settings = _ApiSettingsProxy(real_api_settings)
+    # Keep the historical proxy attribute available for Test Lab helpers that
+    # reference api_mod.settings, even though the production API imports the
+    # canonical Settings object directly from app.config.
+    if not isinstance(getattr(api_mod, "settings", None), _ApiSettingsProxy):
+        api_mod.settings = _ApiSettingsProxy(real_settings)
 
     original_publisher = api_mod._publish_mt5_admin_signal_async
 
     async def test_channel_publisher(row, chart_base64=None, *, allow_without_chart=False):
+        test_account = _test_account()
+        issuer_hint = (
+            str(row.get("issuer_type") or "").upper()
+            if isinstance(row, dict)
+            else str(row["issuer_type"] or "").upper() if "issuer_type" in row.keys() else ""
+        )
+        # Never let the optional Test Lab wrapper move ahead of the canonical
+        # MT5 receipt gate. Test Lab is WEB_ADMIN-only.
+        if not test_account or issuer_hint != "WEB_ADMIN":
+            return await original_publisher(row, chart_base64, allow_without_chart=allow_without_chart)
+
         canonical = db.get_signal(int(row["id"])) or row
         account = str(canonical["issuer_account"] or "").strip()
-        test_account = _test_account()
-        if not test_account or account != test_account:
+        if account != test_account:
             return await original_publisher(canonical, chart_base64, allow_without_chart=allow_without_chart)
 
         # Once the test root exists, never enter production repair wrappers.

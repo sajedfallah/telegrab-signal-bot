@@ -6,7 +6,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.autotrade.broker_chart_fallback import _render_chart, _signal_anchor
+from app.autotrade.broker_chart_fallback import (
+    _render_chart,
+    _signal_anchor,
+    signal_visual_fingerprint,
+)
 from app.autotrade.unified_signal_visual_runtime import _clean_publication_image
 
 
@@ -24,21 +28,25 @@ def _fixture_chart() -> tuple[dict, list[dict[str, float]], dict, list[float]]:
         "symbol": "XAUUSD",
         "timeframe": "M5",
         "direction": "BUY",
+        "order_type": "MARKET",
         "entry_price": 4278.0,
         "stop_loss": 4273.85,
+        "risk_percent": 1.0,
+        "rr_ratio": 3.0,
+        "destination": "BOTH",
     }
     candles = []
     base = 4270.0
     for idx in range(90):
         o = base + idx * 0.11
-        c = o + (0.55 if idx % 4 else -0.42)
+        close = o + (0.55 if idx % 4 else -0.42)
         candles.append(
             {
                 "time": 1_700_000_000 + idx * 300,
                 "open": o,
-                "high": max(o, c) + 0.35,
-                "low": min(o, c) - 0.35,
-                "close": c,
+                "high": max(o, close) + 0.35,
+                "low": min(o, close) - 0.35,
+                "close": close,
                 "tick_volume": 100 + idx,
             }
         )
@@ -48,12 +56,13 @@ def _fixture_chart() -> tuple[dict, list[dict[str, float]], dict, list[float]]:
         "broker_symbol": "XAUUSD.ec",
         "timeframe": "M5",
         "digits": 2,
+        "captured_at": "2026-09-18T12:00:00+00:00",
         "age_seconds": 1.0,
     }
     return signal, candles, meta, [4282.5, 4284.0, 4287.0]
 
 
-def test_v28_approved_chart_is_clean_1280x720_png():
+def test_v37_canonical_chart_is_valid_1280x720_png():
     signal, candles, meta, targets = _fixture_chart()
     raw = _render_chart(signal, candles, meta, targets)
     assert raw.startswith(b"\x89PNG\r\n\x1a\n")
@@ -77,29 +86,32 @@ def test_v30_signal_anchor_prefers_execution_time_and_floors_to_mt5_bar():
     assert bar_time == expected_epoch - (expected_epoch % 300)
 
 
-def test_v30_visual_contract_uses_yellow_prices_and_entry_time_candle_window():
+def test_v37_visual_contract_has_branded_header_chart_and_trade_level_rail():
     src = _text("app/autotrade/broker_chart_fallback.py")
-    assert '_STYLE_VERSION = "nexus-clean-signal-v3"' in src
+    assert '_STYLE_VERSION = "nexus-signal-canonical-v4"' in src
+    assert '"NEXUS SIGNAL"' in src
+    assert '"TRADE LEVELS"' in src
+    assert '"BROKER TRUTH' in src
     assert "_ENTRY = (33, 150, 243)" in src
     assert "_TP = (28, 218, 126)" in src
     assert "_SL = (255, 82, 95)" in src
-    assert "_PRICE_TEXT = (255, 209, 102)" in src
-    assert 'for field in ("opened_at", "limit_activated_at", "issued_at", "created_at")' in src
-    assert "AND bar_time<=?" in src
-    assert 'meta["reason"] = "ENTRY_ANCHOR_BAR_MISSING"' in src
-    assert "line_start = min(width - 300, last_x +" in src
-    assert "line_end = 1158" in src
-    assert "dash=6, gap=5" in src
     assert 'level_specs.append(("ENTRY", entry, _ENTRY))' in src
     assert 'level_specs.append(("SL", sl, _SL))' in src
     assert 'level_specs.append((f"TP{idx}", float(value), _TP))' in src
-    assert "label_font = _font(12, True)" in src
-    assert "price_font = _font(11, False)" in src
-    assert 'draw.text((price_x, label_y), f"{price:.{precision}f}"' in src
-    assert "draw.rounded_rectangle" not in src
 
 
-def test_v30_visual_contract_never_fakes_entry_by_mutating_broker_ohlc():
+def test_v37_fingerprint_changes_when_canonical_signal_numbers_change():
+    signal, _, _, targets = _fixture_chart()
+    first = signal_visual_fingerprint(signal, targets)
+    second_signal = dict(signal)
+    second_signal["entry_price"] = float(signal["entry_price"]) + 1.0
+    second = signal_visual_fingerprint(second_signal, targets)
+    assert first != second
+    assert len(first) == 64
+    assert len(second) == 64
+
+
+def test_v37_visual_contract_never_fakes_broker_ohlc():
     src = _text("app/autotrade/broker_chart_fallback.py")
     forbidden = (
         'candle["close"] = entry',
@@ -107,56 +119,41 @@ def test_v30_visual_contract_never_fakes_entry_by_mutating_broker_ohlc():
         'candle["high"] = entry',
         'candle["low"] = entry',
         "synthetic_entry",
+        "random",
     )
     for marker in forbidden:
         assert marker not in src
 
 
-def test_v29_visual_contract_removes_old_decorative_chart_copy():
-    src = _text("app/autotrade/broker_chart_fallback.py")
-    forbidden = (
-        "NEXUS  |  MT5 BROKER FEED",
-        "Source: MT5 MarketFeed",
-        "Freshness:",
-        "CHART AUTHORITY",
-        "VERIFIED CHART",
-        "MARKET INTELLIGENCE",
-    )
-    for marker in forbidden:
-        assert marker not in src
-
-
-def test_v30_publication_normalizer_adds_no_extra_footer_or_trade_copy():
+def test_v37_publication_normalizer_preserves_final_render_dimensions():
     signal, candles, meta, targets = _fixture_chart()
     raw = _render_chart(signal, candles, meta, targets)
     normalized = _clean_publication_image(raw, {"entry": 4278.0, "tp1": 4282.5})
     with Image.open(BytesIO(normalized)) as image:
         assert image.size == (1280, 720)
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert "old renderer added a header rail, large logo panel and a numeric footer" in src
-    assert "without adding any extra text or panels" in src
-    assert '_STYLE_VERSION = "nexus-clean-signal-v3"' in src
+    assert '_STYLE_VERSION = "nexus-signal-canonical-v4"' in src
 
 
-def test_v28_mt5_and_miniapp_share_one_renderer_before_publication():
+def test_v37_web_admin_uses_broker_renderer_as_sole_publication_authority():
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert '_SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}' in src
+    assert 'if issuer == "WEB_ADMIN"' in src
     assert "ensure_broker_chart_asset(canonical)" in src
-    assert "card_generator.build_publication_signal_image = _clean_publication_image" in src
-    assert "api_mod._publish_mt5_admin_signal_async = unified_publish" in src
-    assert '"SIGNAL_VISUAL_CANONICALIZED"' in src
-    assert '"style_version": _STYLE_VERSION' in src
-    assert '"anchor_applied": broker_result.get("anchor_applied")' in src
+    assert '"MT5_MARKET_FEED_CANONICAL"' in src
+    assert "VISUAL_GATE" in src
+    assert "authoritative_mt5_screenshot" in src  # MT5_ADMIN compatibility only
+    authority_fn = src[src.index("def _authoritative_staged_chart"):src.index("def _clean_publication_image")]
+    assert 'issuer != "MT5_ADMIN"' in authority_fn
 
 
-def test_v28_install_order_is_after_existing_reliability_guards():
+def test_v37_install_order_keeps_consistency_outermost():
     src = _text("app/combined_api.py")
-    assert "install_telegram_anchor_guard(app)" in src
     assert "install_unified_signal_visual(app)" in src
-    assert src.index("install_telegram_anchor_guard(app)") < src.index("install_unified_signal_visual(app)")
+    assert "install_publication_consistency(app)" in src
+    assert src.index("install_unified_signal_visual(app)") < src.index("install_publication_consistency(app)")
 
 
-def test_v28_does_not_touch_execution_or_generate_market_data():
+def test_v37_visual_code_does_not_touch_execution_or_generate_market_data():
     renderer = _text("app/autotrade/broker_chart_fallback.py")
     runtime = _text("app/autotrade/unified_signal_visual_runtime.py")
     combined = renderer + "\n" + runtime
@@ -165,7 +162,6 @@ def test_v28_does_not_touch_execution_or_generate_market_data():
         "place_order",
         "send_order",
         "MetaTrader5",
-        "random",
         "requests.get",
         "httpx",
     )

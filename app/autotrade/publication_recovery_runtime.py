@@ -152,14 +152,15 @@ def _stage_broker_chart(signal: Any) -> dict[str, Any]:
 def install_publication_recovery(app) -> None:
     """Make Telegram publication self-healing after broker execution.
 
-    WEB_ADMIN uses this priority:
-      1) screenshot-only ChartAgent real MT5 PNG;
-      2) after a short grace, a server-rendered chart from fresh MT5 MarketFeed
-         OHLC (broker truth, never synthetic);
-      3) only if neither source is available, the branded placeholder card.
+    WEB_ADMIN publication uses one canonical source:
+      1) broker-confirmed execution truth;
+      2) server-rendered chart from fresh MT5 MarketFeed OHLC;
+      3) canonical stored Entry/SL/TP values overlaid by the renderer.
 
-    This removes ChartAgent as a single point of failure while keeping the
-    broker-confirmed execution gate and destination-aware Telegram idempotency.
+    ChartAgent screenshots remain diagnostic-only and never become Telegram
+    publication artwork. Missing/stale broker candles fail closed for the image
+    layer and are retried on later live-state heartbeats; no blank placeholder
+    is published.
     """
     if getattr(app.state, "nexus_publication_recovery_v1", False):
         return
@@ -209,6 +210,50 @@ def install_publication_recovery(app) -> None:
                     correlation_id=str(row["code"]),
                     payload={"chart_status": None, "publication_stage": stage, "fallback": False},
                 )
+                continue
+
+            # V37 WEB_ADMIN rule: render the final publication image immediately
+            # from fresh MT5 MarketFeed + canonical DB signal values. Do not wait
+            # for or publish ChartAgent screenshot pixels.
+            if issuer_type == "WEB_ADMIN":
+                broker = _stage_broker_chart(row)
+                broker_ok = bool(broker.get("ok"))
+                if broker_ok:
+                    broker_chart.append(signal_id)
+                    background_tasks.add_task(
+                        api_mod._publish_mt5_admin_signal_async,
+                        row,
+                        None,
+                        allow_without_chart=True,
+                    )
+                    queued.append(signal_id)
+                    db.add_signal_event(
+                        signal_id,
+                        "PUBLICATION_CANONICAL_VISUAL_QUEUED",
+                        actor_type="BACKEND",
+                        account_number=account,
+                        correlation_id=str(row["code"]),
+                        payload={
+                            "publication_stage": stage,
+                            "source": "MT5_MARKET_FEED_CANONICAL",
+                            "broker_chart": broker,
+                        },
+                    )
+                else:
+                    db.add_signal_event(
+                        signal_id,
+                        "PUBLICATION_CANONICAL_VISUAL_WAIT",
+                        actor_type="BACKEND",
+                        account_number=account,
+                        correlation_id=str(row["code"]),
+                        result="FAILED",
+                        reason=str(broker.get("reason") or "fresh broker candles unavailable")[:1000],
+                        payload={
+                            "publication_stage": stage,
+                            "source": "MT5_MARKET_FEED_CANONICAL",
+                            "broker_chart": broker,
+                        },
+                    )
                 continue
 
             job = db.get_signal_chart_capture_job(signal_id)

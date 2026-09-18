@@ -280,10 +280,18 @@ def install_chart_delivery_guard(app) -> None:
     original_publish = api_mod._publish_mt5_admin_signal_async
 
     async def durable_publish(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
+        issuer_hint = (
+            str(row.get("issuer_type") or "").upper()
+            if isinstance(row, dict)
+            else str(row["issuer_type"] or "").upper() if "issuer_type" in row.keys() else ""
+        )
+        # This repair layer is WEB_ADMIN-only. Do not perform any DB lookup
+        # ahead of the MT5_ADMIN publisher's execution-receipt gate.
+        if issuer_hint != "WEB_ADMIN":
+            return await original_publish(row, chart_base64, allow_without_chart=allow_without_chart)
+
         canonical = db.get_signal(int(row["id"])) or row
         issuer_type = str(canonical["issuer_type"] or "").upper()
-        if issuer_type != "WEB_ADMIN":
-            return await original_publish(canonical, chart_base64, allow_without_chart=allow_without_chart)
 
         raw, asset_path, asset_state = _read_publication_asset(int(canonical["id"]))
         existing = {
