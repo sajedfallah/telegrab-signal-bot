@@ -6,9 +6,10 @@ Snapshot: **2026-09-18**
 | --- | --- | --- |
 | Canonical Git branch | `main` | Use for all new baselines |
 | Main branch protected | **No** (`protected:false`; no rulesets) | Enable PR/review/check protection in GitHub Settings |
-| Vercel production | **READY** | Canonical URL active |
+| Repository HEAD | `4694fe20e8ee3436cf441aff53f4bb4add4c6b41` | PR #54 governance cleanup |
+| Vercel production | **READY** — `dpl_Dbn6jDByjhon1x6X6PqZetqPdEeT` | `main@4694fe20`; canonical URL active |
 | Telegram Main Mini App | **Production Vercel URL configured** | No action |
-| Vercel PR Preview | **Enabled** | `vercel[bot]` posts Preview on PR |
+| Vercel PR Preview | **Enabled / verified** | `vercel[bot]` posts a `Ready` Preview on PR; verified on #48 |
 | Vercel project duplication | **None for NEXUS** | Keep single project |
 | Vercel frontend secrets required | **None** | Keep secrets on VPS |
 | API rewrite | **Healthy design** | `/miniapp/api/*` -> VPS |
