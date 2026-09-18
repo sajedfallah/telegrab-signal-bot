@@ -228,9 +228,17 @@ def install_telegram_anchor_guard(app) -> None:
         if not isinstance(result, dict):
             return result
 
-        canonical = db.get_signal(int(row["id"])) or row
-        if str(canonical["issuer_type"] or "").strip().upper() != "WEB_ADMIN":
+        issuer_hint = (
+            str(row.get("issuer_type") or "").upper()
+            if isinstance(row, dict)
+            else str(row["issuer_type"] or "").upper() if "issuer_type" in row.keys() else ""
+        )
+        # Anchor repair is WEB_ADMIN-only. An MT5_ADMIN execution-gate rejection
+        # must return without any later DB read.
+        if issuer_hint != "WEB_ADMIN":
             return result
+
+        canonical = db.get_signal(int(row["id"])) or row
 
         stale_channels = _missing_anchor_channels(result.get("errors"))
         required = set(_required_channels(str(canonical["destination"] or "BOTH")))
