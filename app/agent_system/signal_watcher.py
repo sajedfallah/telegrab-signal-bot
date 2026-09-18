@@ -51,32 +51,36 @@ def _fast_gate(snapshot,plan,policy):
 def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
     standard_policy=RiskPolicy(version="standard-m5-shadow-v1",min_rr=standard_min_rr)
     fast_policy=RiskPolicy(version="fast-scalp-m1-shadow-v1",min_rr=fast_min_rr)
+    sent=sent if sent is not None else {}
+    for symbol in symbols:
+        try:
+            standard=_summary(run_shadow(account,symbol,risk_policy=standard_policy))
+            if standard.get("entry") is not None and standard.get("risk_allowed") is True:
+                fp=_standard_fingerprint(standard)
+                if sent.get((symbol,"M5"))!=fp:
+                    reporter.send_text("📐 Strategy: ICT_STANDARD_M5\\n\\n"+format_shadow_record(standard))
+                    sent[(symbol,"M5")]=fp
+                    print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"standard_m5_signal":fp},ensure_ascii=False))
+
+            snap=build_mt5_snapshot(account,symbol)
+            setup=assess_fast_scalp(snap)
+            if setup.state==FastScalpState.ENTRY_READY:
+                plan,_=build_fast_scalp_signal(snap,setup)
+                if plan is not None and not _fast_gate(snap,plan,fast_policy):
+                    fp=_fast_fingerprint(plan)
+                    if sent.get((symbol,"M1"))!=fp:
+                        reporter.send_text(_format_fast(plan))
+                        sent[(symbol,"M1")]=fp
+                        print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"fast_m1_signal":fp},ensure_ascii=False))
+        except Exception as exc:
+            print(json.dumps({"symbol":symbol,"signal_watcher_error":f"{type(exc).__name__}: {exc}"},ensure_ascii=False))
+    return sent
+
+
+def run(account,symbols,interval,reporter,standard_min_rr,fast_min_rr):
     sent={}
     while True:
-        for symbol in symbols:
-            try:
-                # Existing Standard ICT path stays authoritative for M5.
-                standard=_summary(run_shadow(account,symbol,risk_policy=standard_policy))
-                if standard.get("entry") is not None and standard.get("risk_allowed") is True:
-                    fp=_standard_fingerprint(standard)
-                    if sent.get((symbol,"M5"))!=fp:
-                        reporter.send_text("📐 Strategy: ICT_STANDARD_M5\n\n"+format_shadow_record(standard))
-                        sent[(symbol,"M5")]=fp
-                        print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"standard_m5_signal":fp},ensure_ascii=False))
-
-                # Independent Fast Scalp M1 path. It cannot mutate the standard path.
-                snap=build_mt5_snapshot(account,symbol)
-                setup=assess_fast_scalp(snap)
-                if setup.state==FastScalpState.ENTRY_READY:
-                    plan,_=build_fast_scalp_signal(snap,setup)
-                    if plan is not None and not _fast_gate(snap,plan,fast_policy):
-                        fp=_fast_fingerprint(plan)
-                        if sent.get((symbol,"M1"))!=fp:
-                            reporter.send_text(_format_fast(plan))
-                            sent[(symbol,"M1")]=fp
-                            print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"fast_m1_signal":fp},ensure_ascii=False))
-            except Exception as exc:
-                print(json.dumps({"symbol":symbol,"signal_watcher_error":f"{type(exc).__name__}: {exc}"},ensure_ascii=False))
+        sent=run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent)
         time.sleep(interval)
 
 
