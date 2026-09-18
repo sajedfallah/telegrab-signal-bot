@@ -1,0 +1,21 @@
+/* NEXUS browser-only preview marker. Never enables demo data by itself. */
+.nexus-preview-badge{
+  position:fixed;
+  z-index:12000;
+  top:max(8px,calc(6px + env(safe-area-inset-top,0px)));
+  left:50%;
+  transform:translateX(-50%);
+  max-width:calc(100vw - 32px);
+  padding:6px 10px;
+  border:1px solid rgba(251,191,36,.34);
+  border-radius:999px;
+  background:rgba(16,23,34,.92);
+  color:#fde68a;
+  box-shadow:0 8px 28px rgba(0,0,0,.28);
+  backdrop-filter:blur(12px);
+  font:800 10px/1.2 Vazirmatn,system-ui,sans-serif;
+  white-space:nowrap;
+  pointer-events:none;
+}
+body.landing-active .nexus-preview-badge{opacity:.72}
+body[data-nexus-preview="1"]:not(.landing-active) .topbar{padding-top:max(44px,calc(34px + var(--nx-content-safe-top,0px)))}
