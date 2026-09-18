@@ -99,15 +99,16 @@ install_chart_repair_claim_runtime(app)
 from .autotrade.telegram_anchor_guard import install_telegram_anchor_guard
 install_telegram_anchor_guard(app)
 
-# V28/V33 presentation rule: a real staged ChartAgent/MT5 screenshot is
-# authoritative. The fresh MarketFeed renderer is fallback-only when no real MT5
-# screenshot has been staged. Execution and Telegram routing remain unchanged.
+# V37 presentation rule: WEB_ADMIN/Mini App publication is generated only from
+# the canonical stored signal + fresh authenticated MT5 MarketFeed candles.
+# ChartAgent screenshots are diagnostic-only and can never override the Telegram
+# artwork. MT5_ADMIN keeps its existing direct screenshot compatibility.
 from .autotrade.unified_signal_visual_runtime import install_unified_signal_visual
 install_unified_signal_visual(app)
 
-# V34 is the outermost publication wrapper. It serializes concurrent recovery
-# tasks per signal and re-stages the completed ChartAgent image before BOTH
-# channel publication, preventing FREE/VIP from diverging onto different assets.
+# V37 is the outermost publication wrapper. It serializes concurrent recovery
+# tasks per signal and rebuilds the canonical broker-truth visual under the same
+# lock before incomplete BOTH-channel publication, preventing FREE/VIP drift.
 from .autotrade.publication_consistency_runtime import install_publication_consistency
 install_publication_consistency(app)
 
