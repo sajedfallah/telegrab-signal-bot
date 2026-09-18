@@ -1,3 +1,5 @@
+> ⚠️ **SUPERSEDED:** این شاخه دیگر مرجع NEXUS ICT نیست. مستندات canonical در `main` و پوشه `docs/nexus-ict/` قرار دارند. ادامه توسعه/مستندسازی روی این Branch انجام نشود.
+
 # NEXUS — وضعیت فعلی پروژه
 
 ## NEXUS ICT Expert V22.46 — Forward Test Candidate
