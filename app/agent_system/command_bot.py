@@ -78,7 +78,7 @@ async def analysis_command(message: Message):
         await message.answer("این دستور فقط برای ادمین NEXUS فعال است. /whoami را ارسال کنید.")
         return
     parts = (message.text or "").split()[1:]
-    supported_timeframes = {"M1", "M5", "M15", "H1", "D1"}
+    supported_timeframes = {"M1", "M5", "M15", "H1", "D1", "W1", "MN1"}
     symbol = "XAUUSD"
     timeframe = "M5"
     for raw in parts:
@@ -88,7 +88,7 @@ async def analysis_command(message: Message):
         elif value in _config.symbols:
             symbol = value
         else:
-            await message.answer("فرمت دستور نامعتبر است. مثال: /analysis M1 یا /analysis XAUUSD M5")
+            await message.answer("فرمت دستور نامعتبر است. مثال: /analysis M1، /analysis W1 یا /analysis XAUUSD MN1")
             return
     status = await message.answer(f"در حال ساخت آپدیت تازه {symbol} • {timeframe} از Snapshot متاتریدر…")
     try:
