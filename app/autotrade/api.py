@@ -613,10 +613,13 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
             errors.append(f"CHART: {exc}")
             raw = b""
 
-    if issuer_type == "WEB_ADMIN" and not raw and not allow_without_chart:
+    if issuer_type == "WEB_ADMIN" and not raw:
+        # V37 hard fail-closed: no caller may opt a Mini App signal into a blank
+        # or placeholder Telegram image. The canonical broker-truth renderer
+        # must stage a real PNG first; recovery can retry when feed data is fresh.
         return {"free_message_id": None, "vip_message_id": None,
                 "errors": ["VISUAL_GATE: canonical signal visual asset is missing"],
-                "published": False, "complete": False}
+                "published": False, "complete": False, "visual_retryable": True}
 
     try:
         card_signal = publication_card_payload(row, db.get_signal_targets(int(row["id"])))
