@@ -2,32 +2,31 @@
   const landing = document.getElementById('nexusLanding');
   const enterButton = document.getElementById('enterNexus');
   const appShell = document.querySelector('.app-shell');
-  const poster = document.querySelector('.nexus-landing-poster');
-
   if (!landing || !enterButton || !appShell) {
     document.body.classList.remove('landing-active');
+    appShell?.removeAttribute('aria-hidden');
     return;
   }
 
   let entered = false;
 
-  // Reveal the poster after it has loaded. Handle cached images too.
-  if (poster) {
-    const revealPoster = () => poster.classList.add('is-ready');
-    const revealFallback = () => poster.classList.add('is-fallback');
-    poster.addEventListener('load', revealPoster, { once: true });
-    poster.addEventListener('error', revealFallback, { once: true });
-    if (poster.complete) {
-      if (poster.naturalWidth > 0) revealPoster();
-      else revealFallback();
-    }
-  }
+  const revealApp = () => {
+    landing.hidden = true;
+    landing.classList.remove('is-leaving');
+    appShell.removeAttribute('aria-hidden');
+    appShell.style.visibility = '';
+    appShell.style.pointerEvents = '';
+    document.body.classList.remove('landing-active');
+    appShell.classList.remove('nexus-app-entering');
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  };
 
   const showLanding = () => {
     entered = false;
     enterButton.disabled = false;
     landing.hidden = false;
     landing.classList.remove('is-leaving');
+    appShell.classList.remove('nexus-app-entering');
     appShell.setAttribute('aria-hidden', 'true');
     document.body.classList.add('landing-active');
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -35,9 +34,13 @@
 
   const enterApp = () => {
     if (entered || enterButton.disabled) return;
-
     entered = true;
     enterButton.disabled = true;
+    appShell.removeAttribute('aria-hidden');
+    appShell.style.visibility = 'visible';
+    appShell.style.pointerEvents = 'none';
+    document.body.classList.remove('landing-active');
+    appShell.classList.add('nexus-app-entering');
     landing.classList.add('is-leaving');
 
     try {
@@ -46,35 +49,30 @@
 
     window.setTimeout(() => {
       if (!entered) return;
-      landing.hidden = true;
-      appShell.removeAttribute('aria-hidden');
-      document.body.classList.remove('landing-active');
-      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-    }, 220);
+      revealApp();
+      try {
+        if (typeof window.render === 'function') window.render('home');
+        if (typeof window.hydrateNexusHome === 'function') window.hydrateNexusHome();
+      } catch (_) {}
+    }, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 340);
   };
 
-  // Telegram can keep its WebView alive after the Mini App is closed. Reset
-  // the gate whenever the document leaves the foreground so every reopen
-  // starts on the landing page, even when the same WebView is reused.
   const resetForNextOpen = () => {
     if (entered || landing.hidden) showLanding();
   };
 
   enterButton.addEventListener('click', enterApp);
-
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') resetForNextOpen();
   });
-
   window.addEventListener('pagehide', resetForNextOpen);
   window.addEventListener('pageshow', showLanding);
 
-  // The navigation layer calls the exact same landing lifecycle when the
-  // in-app Back button returns from Home to the entry screen.
   window.NexusLanding = {
     show: showLanding,
     enter: enterApp,
     reset: resetForNextOpen,
+    reveal: revealApp,
   };
 
   showLanding();
