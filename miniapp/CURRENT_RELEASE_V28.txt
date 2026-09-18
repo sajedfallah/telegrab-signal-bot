@@ -1,0 +1,17 @@
+NEXUS Mini App — Current Running Release
+
+Release: V28
+Status: CURRENT / RUNNING
+Date: 2026-09-19
+Source branch: release/miniapp-v28-current
+Base commit: 41b3b5552ee9cf11c89447d31d8ab90cba5b9fd0
+Runtime UI commit: 13a5d5718478a8d6a1a964b378916a3e710448c8
+Build marker: 20260919-approved-vercel-landing-v28
+Production URL: https://api.nexustrade.ir/miniapp/?v=20260919-approved-vercel-landing-v28
+
+Contract:
+- Approved post-Vercel minimal chart/candlestick landing
+- Signals PnL animation preserved
+- Live Charts preserved
+- No poster-v6 landing
+- No nexus-landing-v18.jpg landing
