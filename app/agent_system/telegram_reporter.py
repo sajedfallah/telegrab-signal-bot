@@ -96,7 +96,9 @@ def format_hourly_analysis(record:Mapping[str,object])->str:
     hi=record.get("m5_recent_high"); lo=record.get("m5_recent_low")
     if lo is not None: lines.append(f"• سناریوی Long در {analysis_tf}: محدوده نقدینگی پایین تا حوالی {float(lo):g} زیر نظر است؛ اول Sweep/Reclaim سمت Sell-side و بعد MSS/Displacement صعودی {analysis_tf} لازم داریم.")
     if hi is not None: lines.append(f"• سناریوی Short در {analysis_tf}: محدوده نقدینگی بالا تا حوالی {float(hi):g} زیر نظر است؛ اول Sweep/Reclaim سمت Buy-side و بعد MSS/Displacement نزولی {analysis_tf} لازم داریم.")
-    for x in triggers[:4]: lines.append("• "+translations.get(x,x))
+    for x in triggers[:4]:
+        translated=x.replace(f"{analysis_tf} bullish displacement/MSS",f"روی {analysis_tf} جابه‌جایی/MSS صعودی دیده شده.").replace(f"{analysis_tf} bearish displacement/MSS",f"روی {analysis_tf} جابه‌جایی/MSS نزولی دیده شده.")
+        lines.append("• "+translations.get(x,translated))
     invalid=list((ict or {}).get("invalidation") or [])
     if "HTF/LTF alignment required" in invalid: lines.append(f"• اگر تریگر {analysis_tf} خلاف جهت ساختار 1H باشد، عجله نمی‌کنیم و منتظر هم‌جهتی می‌مانیم.")
     missing=list((ict or {}).get("missing_data") or [])
@@ -104,5 +106,5 @@ def format_hourly_analysis(record:Mapping[str,object])->str:
     lines.extend(["","📌 جمع‌بندی:"])
     if direction=="LONG": lines.append("فعلاً ساختار به نفع Long تأیید شده، ولی ورود فقط بعد از تکمیل شرایط اجرایی و Risk Gate.")
     elif direction=="SHORT": lines.append("فعلاً ساختار به نفع Short تأیید شده، ولی ورود فقط بعد از تکمیل شرایط اجرایی و Risk Gate.")
-    else: lines.append("فعلاً ورود نداریم. بازار توی ناحیه‌های مهم قرار گرفته و منتظریم {analysis_tf} جهت بعدی رو با Sweep + MSS مشخص کنه؛ بدون تأیید وارد نمی‌شیم.")
+    else: lines.append(f"فعلاً ورود نداریم. بازار توی ناحیه‌های مهم قرار گرفته و منتظریم {analysis_tf} جهت بعدی رو با Sweep + MSS مشخص کنه؛ بدون تأیید وارد نمی‌شیم.")
     return "\n".join(lines)
