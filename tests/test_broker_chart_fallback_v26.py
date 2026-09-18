@@ -57,14 +57,16 @@ def test_v26_broker_chart_renderer_outputs_valid_png_with_real_level_contract():
         assert image.size == (1600, 900)
 
 
-def test_v37_publication_recovery_uses_marketfeed_immediately_and_never_placeholder_for_web_admin():
+def test_v45_publication_recovery_uses_text_only_for_web_admin():
     src = _text("app/autotrade/publication_recovery_runtime.py")
-    assert "ensure_broker_chart_asset" in src
-    assert '"PUBLICATION_CANONICAL_VISUAL_QUEUED"' in src
-    assert '"PUBLICATION_CANONICAL_VISUAL_WAIT"' in src
-    assert '"MT5_MARKET_FEED_CANONICAL"' in src
-    assert "publication_broker_chart_signal_ids" in src
-    web_admin_block = src[src.index('if issuer_type == "WEB_ADMIN"'):src.index("job = db.get_signal_chart_capture_job", src.index('if issuer_type == "WEB_ADMIN"'))]
+    web_admin_block = src[
+        src.index('if issuer_type == "WEB_ADMIN"'):
+        src.index("job = db.get_signal_chart_capture_job", src.index('if issuer_type == "WEB_ADMIN"'))
+    ]
+    assert '"PUBLICATION_TEXT_QUEUED"' in web_admin_block
+    assert '"publication_mode": "TEXT_ONLY"' in web_admin_block
+    assert "ensure_broker_chart_asset" not in web_admin_block
+    assert "MT5_MARKET_FEED_CANONICAL" not in web_admin_block
     assert "CHART_PLACEHOLDER" not in web_admin_block
 
 
