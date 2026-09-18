@@ -922,7 +922,7 @@ bool CaptureJob(const long job_id,const long signal_db_id,const string signal_co
       if(!DrawCompactTag(chart_id,prefix,"SL.TAG",label_reference,sl,
                          sl_color,"SL",digits))
       {
-         error_text="SL_TAG_DRAW_FAILED";
+         error_text="SL_TAG_DRAW_FAILED:"+g_last_tag_error;
          break;
       }
 
