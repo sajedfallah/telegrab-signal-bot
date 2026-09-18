@@ -210,3 +210,9 @@ def test_v43_label_resolver_uses_live_chart_bounds_not_legacy_690px_limit():
     assert "bottom_bound=chart_bottom - 20" in src
     assert "bottom_bound = 690" not in src
     assert "_VISIBLE_BARS = 72" in src
+
+
+def test_v44_fingerprint_is_bound_to_renderer_style_version():
+    src = _text("app/autotrade/broker_chart_fallback.py")
+    assert '"style_version": _STYLE_VERSION' in src
+    assert '_STYLE_VERSION = "nexus-signal-minimal-v7"' in src

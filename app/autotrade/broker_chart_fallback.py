@@ -87,6 +87,7 @@ def _signal_value(signal: Any, key: str, default=None):
 def _canonical_visual_payload(signal: Any, targets: list[float]) -> dict[str, Any]:
     """Immutable publication identity used to bind one image to one signal snapshot."""
     return {
+        "style_version": _STYLE_VERSION,
         "signal_id": int(_signal_value(signal, "id", 0) or 0),
         "code": str(_signal_value(signal, "code", "") or ""),
         "symbol": normalize_symbol(str(_signal_value(signal, "symbol", "") or "")),
