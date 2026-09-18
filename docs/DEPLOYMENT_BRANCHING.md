@@ -14,7 +14,7 @@ Last verified: **2026-09-18**
 | Vercel project ID | `prj_5MA4Bz9EelogSiiqj9vSrK8Yw5NS` |
 | Vercel Root Directory | `miniapp` |
 | Production URL | https://telegrab-signal-bot.vercel.app/ |
-| Current production deployment | `dpl_Dbn6jDByjhon1x6X6PqZetqPdEeT` (`main@4694fe20`) |
+| Production deployment identity | `main` -> canonical production domain; exact deployment ID changes on every production deploy |
 | Main branch alias | https://telegrab-signal-bot-git-main-fallahsajed-2126s-projects.vercel.app/ |
 | VPS API | https://api.nexustrade.ir |
 | Telegram Main Mini App URL | https://telegrab-signal-bot.vercel.app/ |
