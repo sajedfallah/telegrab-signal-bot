@@ -2,12 +2,10 @@ name: Repository Governance CI
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [main]
+  workflow_dispatch: {}
 
 jobs:
   repository-contract:
@@ -17,27 +15,46 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify canonical repository files
-        shell: bash
+      - name: Verify repository contract
+        shell: python
         run: |
-          set -euo pipefail
-          for file in README.md CONTRIBUTING.md LICENSE .gitignore miniapp/vercel.json; do
-            test -f "$file" || { echo "Missing required file: $file"; exit 1; }
-          done
+          import json
+          import pathlib
+          import subprocess
+          import sys
 
-      - name: Validate Vercel configuration JSON
-        run: python -m json.tool miniapp/vercel.json >/dev/null
+          required = [
+              "README.md",
+              "CONTRIBUTING.md",
+              "LICENSE",
+              ".gitignore",
+              "miniapp/vercel.json",
+          ]
+          missing = [path for path in required if not pathlib.Path(path).is_file()]
+          if missing:
+              print("Missing required files:", ", ".join(missing))
+              sys.exit(1)
 
-      - name: Block tracked runtime secrets and databases
-        shell: bash
-        run: |
-          set -euo pipefail
-          bad="$(git ls-files | grep -E '(^|/).env($|.(local|production|development|staging)$)|.(db|sqlite|sqlite3)$' || true)"
-          bad="$(printf '%s
-' "$bad" | grep -v '^.env.example$' || true)"
-          if [ -n "$bad" ]; then
-            echo "Forbidden tracked runtime files:"
-            printf '%s
-' "$bad"
-            exit 1
-          fi
+          with open("miniapp/vercel.json", "r", encoding="utf-8") as handle:
+              json.load(handle)
+
+          tracked = subprocess.check_output(["git", "ls-files"], text=True).splitlines()
+          bad = []
+          for path in tracked:
+              lower = path.lower()
+              name = pathlib.PurePosixPath(path).name
+              if name == ".env":
+                  bad.append(path)
+                  continue
+              if name.startswith(".env.") and name != ".env.example":
+                  bad.append(path)
+                  continue
+              if lower.endswith((".db", ".sqlite", ".sqlite3")):
+                  bad.append(path)
+
+          if bad:
+              print("Forbidden tracked runtime files:")
+              print("\n".join(bad))
+              sys.exit(1)
+
+          print("Repository governance contract: PASS")
