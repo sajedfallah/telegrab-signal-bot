@@ -34,9 +34,17 @@ def test_reporter_disabled_never_requires_secrets(monkeypatch):
 
 
 def test_hourly_analysis_includes_agent_evidence_and_wait_state():
-    record={"symbol":"XAUUSD","scan":"WATCH","supervisor":"WAIT","final":"WAIT","direction":"NEUTRAL","assessments":[{"agent":"nexus-ict-v1","direction":"NEUTRAL","evidence":["1H structure HH/HL","5M bullish MSS"],"missing_data":[]} ]}
+    record={"symbol":"XAUUSD","final":"ANALYSIS","direction":"NEUTRAL","bid":4356.51,"ask":4356.73,"m5_recent_high":4363.06,"m5_recent_low":4343.0,"assessments":[{"agent":"nexus-ict-v1","direction":"NEUTRAL","evidence":["1H structure HH/HL","Daily Quadrant UPPER 4295.2-4367.46; 25=4313.26, 50=4331.33, 75=4349.4","Price is inside Daily Quadrant HTF reaction zone; lower-timeframe confirmation remains mandatory","15M bearish FVG 4358.15-4363.06"],"invalidation":["valid 5M liquidity sweep + MSS confirmation required"],"missing_data":[]}]}
     text=format_hourly_analysis(record)
-    assert "تحلیل ساعتی NEXUS | XAUUSD" in text
-    assert "دیدگاه ICT: خنثی / در انتظار تأیید" in text
-    assert "ساختار 1H: سقف و کف بالاتر (HH/HL) — تمایل صعودی" in text
-    assert "جمع‌بندی: فعلاً ورود تأییدشده نداریم" in text
+    assert "آپدیت ساعتی NEXUS | XAUUSD" in text
+    assert "بچه‌های نکسوس" in text
+    assert "ساختار 1H فعلاً HH/HL" in text
+    assert "محدوده کامل: 4295.2 تا 4367.46" in text
+    assert "سطح 25٪: 4313.26" in text
+    assert "سطح 50٪: 4331.33" in text
+    assert "سطح 75٪: 4349.4" in text
+    assert "سناریوی Long در 5M" in text
+    assert "4343" in text
+    assert "سناریوی Short در 5M" in text
+    assert "4363.06" in text
+    assert "SHADOW" not in text
