@@ -121,6 +121,67 @@ try {
     throw
 }
 
+Write-Host "=== LIVE MT5 AUTOTRADE TEXT-ONLY UPDATE ==="
+$TerminalId = "F768FD01673817E50AE451C8D34261DE"
+$TerminalRoot = Join-Path $env:APPDATA "MetaQuotes\Terminal\$TerminalId"
+$LiveCore = Join-Path $TerminalRoot "MQL5\Experts\NEXUS_AutoTrade_UI65\Core\NEXUS_AutoTrade_Core.mq5"
+$LiveEntry = Join-Path $TerminalRoot "MQL5\Experts\NEXUS_AutoTrade_UI65\NEXUS_AutoTrade_UI65.mq5"
+$LiveEx5 = [System.IO.Path]::ChangeExtension($LiveEntry, ".ex5")
+$LiveLog = [System.IO.Path]::ChangeExtension($LiveEntry, ".log")
+$Mt5Backup = Join-Path $Backup "live-mt5"
+
+if(-not (Test-Path $LiveCore)) {
+    $Candidates = @(Get-ChildItem -Path (Join-Path $env:APPDATA "MetaQuotes\Terminal") -Filter "NEXUS_AutoTrade_Core.mq5" -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "\\MQL5\\Experts\\NEXUS_AutoTrade_UI65\\Core\\NEXUS_AutoTrade_Core\.mq5$" })
+    if($Candidates.Count -eq 1) {
+        $LiveCore = $Candidates[0].FullName
+        $LiveRoot = Split-Path (Split-Path $LiveCore -Parent) -Parent
+        $LiveEntry = Join-Path $LiveRoot "NEXUS_AutoTrade_UI65.mq5"
+        $LiveEx5 = [System.IO.Path]::ChangeExtension($LiveEntry, ".ex5")
+        $LiveLog = [System.IO.Path]::ChangeExtension($LiveEntry, ".log")
+    } else {
+        throw "Expected exactly one live NEXUS_AutoTrade_Core.mq5; found $($Candidates.Count)"
+    }
+}
+if(-not (Test-Path $LiveEntry)) { throw "Live NEXUS_AutoTrade_UI65.mq5 not found: $LiveEntry" }
+
+New-Item -ItemType Directory -Force -Path $Mt5Backup | Out-Null
+Copy-Item $LiveCore (Join-Path $Mt5Backup "NEXUS_AutoTrade_Core.mq5") -Force
+if(Test-Path $LiveEx5) { Copy-Item $LiveEx5 (Join-Path $Mt5Backup "NEXUS_AutoTrade_UI65.ex5") -Force }
+Copy-Item "$Prod\mt5\NEXUS_AutoTrade_UI65\Core\NEXUS_AutoTrade_Core.mq5" $LiveCore -Force
+if(-not (Select-String -Path $LiveCore -Pattern "publication=TEXT_ONLY" -Quiet)) { throw "Live MT5 core text-only marker missing after copy" }
+
+$Editors = @()
+foreach($Base in @("C:\Program Files","C:\Program Files (x86)")) {
+    if(Test-Path $Base) { $Editors += Get-ChildItem -Path $Base -Filter "metaeditor64.exe" -File -Recurse -ErrorAction SilentlyContinue }
+}
+$Editor = @($Editors | Sort-Object LastWriteTime -Descending -Unique | Select-Object -First 1)
+if($Editor.Count -ne 1) { throw "MetaEditor64.exe not found" }
+if(Test-Path $LiveLog) { Remove-Item $LiveLog -Force }
+& $Editor[0].FullName "/compile:$LiveEntry" /log
+$Deadline = (Get-Date).AddSeconds(120)
+$SummarySeen = $false
+$Errors = $null
+$Warnings = $null
+while((Get-Date) -lt $Deadline) {
+    if(Test-Path $LiveLog) {
+        $CompileText = Get-Content $LiveLog -Raw -ErrorAction SilentlyContinue
+        if($CompileText -match "(?im)(\d+)\s+errors?,\s*(\d+)\s+warnings?") {
+            $SummarySeen = $true
+            $Errors = [int]$Matches[1]
+            $Warnings = [int]$Matches[2]
+            break
+        }
+    }
+    Start-Sleep -Seconds 1
+}
+if(-not $SummarySeen -or $Errors -ne 0 -or -not (Test-Path $LiveEx5)) {
+    Copy-Item (Join-Path $Mt5Backup "NEXUS_AutoTrade_Core.mq5") $LiveCore -Force
+    if(Test-Path (Join-Path $Mt5Backup "NEXUS_AutoTrade_UI65.ex5")) { Copy-Item (Join-Path $Mt5Backup "NEXUS_AutoTrade_UI65.ex5") $LiveEx5 -Force }
+    throw "MT5 AutoTrade V45 compile failed; live MT5 files restored"
+}
+Write-Host "MT5 AUTOTRADE COMPILE: PASS ($Errors errors, $Warnings warnings)"
+Write-Warning "Reload/re-attach NEXUS_AutoTrade_UI65 once so the running EA stops local signal screenshot capture."
+
 Write-Host ""
 Write-Host "NEXUS TEXT-ONLY SIGNAL V45: PASS"
 Write-Host "Commit: $Commit"
