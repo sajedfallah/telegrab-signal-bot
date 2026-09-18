@@ -95,15 +95,18 @@ def test_publication_recovery_requires_broker_receipt_and_covers_recovery_gaps()
     assert "COALESCE(free_message_id,0)=0 OR COALESCE(vip_message_id,0)=0" in src
 
 
-def test_broker_confirmed_web_admin_signal_falls_back_after_short_chart_grace_and_stays_repairable():
+def test_broker_confirmed_web_admin_signal_uses_canonical_marketfeed_without_chartagent_grace():
     src = _text("app/autotrade/publication_recovery_runtime.py")
-    assert "_PUBLICATION_CHART_GRACE_SECONDS = 20" in src
-    assert "_job_age_seconds(job)" in src
-    assert 'fallback_mode": "CHART_GRACE_TIMEOUT"' in src
-    assert 'fallback_asset_mode": "MT5_MARKET_FEED" if broker_ok else "CHART_PLACEHOLDER"' in src
-    assert "publishing fallback while capture remains repairable" in src
-    assert "job_status in _INFLIGHT_CHART" in src
-    assert "allow_without_chart=True" in src
+    start = src.index('if issuer_type == "WEB_ADMIN"')
+    end = src.index("job = db.get_signal_chart_capture_job", start)
+    block = src[start:end]
+    assert "_stage_broker_chart(row)" in block
+    assert '"PUBLICATION_CANONICAL_VISUAL_QUEUED"' in block
+    assert '"PUBLICATION_CANONICAL_VISUAL_WAIT"' in block
+    assert '"MT5_MARKET_FEED_CANONICAL"' in block
+    assert "allow_without_chart=True" in block
+    assert "CHART_PLACEHOLDER" not in block
+    assert "_PUBLICATION_CHART_GRACE_SECONDS" not in block
 
 
 def test_forex_frontend_uses_mt5_market_candle_endpoint_without_fake_fallback():
