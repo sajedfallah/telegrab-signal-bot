@@ -53,22 +53,28 @@ def _latest_directional_fvg(rows: tuple[dict, ...], direction: Direction) -> tup
     return found
 
 
-def _m5_liquidity_anchor(rows: tuple[dict, ...], direction: Direction) -> float | None:
-    if len(rows) < 14:
+def _m5_liquidity_anchor(rows: tuple[dict, ...], direction: Direction, sweep_window: int = 4) -> float | None:
+    if len(rows) < 20:
         return None
-    # The ICT assessor confirms the sweep on the penultimate closed 5M bar.
-    sweep_bar = rows[-2]
-    prior = rows[-14:-2]
-    if direction == Direction.LONG:
-        prior_low = min(float(x["low"]) for x in prior)
-        if float(sweep_bar["low"]) < prior_low and float(sweep_bar["close"]) > prior_low:
-            return float(sweep_bar["low"])
-    elif direction == Direction.SHORT:
-        prior_high = max(float(x["high"]) for x in prior)
-        if float(sweep_bar["high"]) > prior_high and float(sweep_bar["close"]) < prior_high:
-            return float(sweep_bar["high"])
-    return None
-
+    # Keep Signal Engine aligned with ICT: the sweep may precede the latest
+    # MSS check by up to sweep_window closed M5 bars. Use the most recent
+    # qualifying sweep as the stop anchor; older sweeps are expired.
+    start = max(12, len(rows) - 1 - sweep_window)
+    anchor = None
+    for idx in range(start, len(rows) - 1):
+        sweep_bar = rows[idx]
+        prior = rows[idx - 12:idx]
+        if len(prior) < 12:
+            continue
+        if direction == Direction.LONG:
+            prior_low = min(float(x["low"]) for x in prior)
+            if float(sweep_bar["low"]) < prior_low and float(sweep_bar["close"]) > prior_low:
+                anchor = float(sweep_bar["low"])
+        elif direction == Direction.SHORT:
+            prior_high = max(float(x["high"]) for x in prior)
+            if float(sweep_bar["high"]) > prior_high and float(sweep_bar["close"]) < prior_high:
+                anchor = float(sweep_bar["high"])
+    return anchor
 
 def _targets(m15: tuple[dict, ...], entry: float, stop: float, direction: Direction) -> tuple[float, ...]:
     risk = abs(entry - stop)
