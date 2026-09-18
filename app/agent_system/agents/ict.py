@@ -42,10 +42,10 @@ def _latest_ob(rows):
         if displacement and float(cur["close"])<float(cur["open"]) and float(prev["close"])>float(prev["open"]): bear=(float(prev["low"]),float(prev["high"]))
     return bull,bear
 
-def _m5_trigger(rows, sweep_window=4):
-    """Confirm a recent liquidity sweep with a later 5M MSS.
+def _ltf_trigger(rows, timeframe="M5", sweep_window=4):
+    """Confirm a recent liquidity sweep with a later lower-timeframe MSS.
 
-    A valid sweep may precede the MSS by several closed 5M candles. The sweep
+    A valid sweep may precede the MSS by several closed candles. The sweep
     must still be inside the bounded confirmation window; older sweeps expire.
     """
     if len(rows) < 20:
@@ -72,39 +72,72 @@ def _m5_trigger(rows, sweep_window=4):
 
     ev = []
     if sell_side is not None:
-        ev.append(f"5M sell-side liquidity sweep/reclaim ({len(rows)-1-sell_side} bars before MSS check)")
+        ev.append(f"{timeframe} sell-side liquidity sweep/reclaim ({len(rows)-1-sell_side} bars before MSS check)")
     if buy_side is not None:
-        ev.append(f"5M buy-side liquidity sweep/reclaim ({len(rows)-1-buy_side} bars before MSS check)")
+        ev.append(f"{timeframe} buy-side liquidity sweep/reclaim ({len(rows)-1-buy_side} bars before MSS check)")
     if bm:
-        ev.append("5M bullish displacement/MSS")
+        ev.append(f"{timeframe} bullish displacement/MSS")
     if sm:
-        ev.append("5M bearish displacement/MSS")
+        ev.append(f"{timeframe} bearish displacement/MSS")
     if sell_side is not None and bm:
         return Direction.LONG, tuple(ev)
     if buy_side is not None and sm:
         return Direction.SHORT, tuple(ev)
     return Direction.NEUTRAL, tuple(ev)
 
-def assess_ict(snapshot: MarketSnapshot) -> AgentAssessment:
-    missing=list(snapshot.missing_data); d1,h1,m15,m5=(_rows(snapshot,tf) for tf in ("D1","H1","M15","M5"))
-    for tf,rows,minimum in (("D1",d1,10),("H1",h1,20),("M15",m15,20),("M5",m5,20)):
+def assess_ict(snapshot: MarketSnapshot, trigger_timeframe: str = "M5") -> AgentAssessment:
+    trigger_timeframe = str(trigger_timeframe or "M5").upper()
+    supported = {"M1", "M5", "M15", "H1", "D1"}
+    if trigger_timeframe not in supported:
+        raise ValueError(f"unsupported ICT analysis timeframe: {trigger_timeframe}")
+
+    missing=list(snapshot.missing_data)
+    d1,h1,m15=(_rows(snapshot,tf) for tf in ("D1","H1","M15"))
+    trigger_rows=_rows(snapshot,trigger_timeframe)
+    for tf,rows,minimum in (("D1",d1,10),("H1",h1,20),("M15",m15,20),(trigger_timeframe,trigger_rows,20)):
         if len(rows)<minimum: missing.append(f"candles:{tf}")
     if snapshot.data_freshness_ms>30000: missing.append("stale_market_data")
     if missing:
-        return AgentAssessment(agent_id="nexus-ict-v1",symbol=snapshot.symbol,snapshot_id=snapshot.snapshot_id,direction=Direction.NEUTRAL,confidence=None,evidence=("ICT assessment failed closed because required market inputs are incomplete",),invalidations=("fresh D1/H1/M15/M5 snapshot required",),missing_data=tuple(dict.fromkeys(missing)),created_at=snapshot.as_of.astimezone(timezone.utc))
-    bias,bias_note=_h1_bias(h1); bull_fvg,bear_fvg=_latest_fvg(m15); bull_ob,bear_ob=_latest_ob(m15); trigger,trigger_ev=_m5_trigger(m5); evidence=[bias_note]; invalid=[]
+        return AgentAssessment(
+            agent_id="nexus-ict-v1",symbol=snapshot.symbol,snapshot_id=snapshot.snapshot_id,
+            direction=Direction.NEUTRAL,confidence=None,
+            evidence=("ICT assessment failed closed because required market inputs are incomplete",),
+            invalidations=(f"fresh D1/H1/M15/{trigger_timeframe} snapshot required",),
+            missing_data=tuple(dict.fromkeys(missing)),created_at=snapshot.as_of.astimezone(timezone.utc)
+        )
+
+    bias,bias_note=_h1_bias(h1)
+    zone_rows=trigger_rows if trigger_timeframe != "D1" else d1
+    bull_fvg,bear_fvg=_latest_fvg(zone_rows)
+    bull_ob,bear_ob=_latest_ob(zone_rows)
+    trigger,trigger_ev=_ltf_trigger(trigger_rows, trigger_timeframe)
+    evidence=[bias_note]
+    invalid=[]
     q=derive_daily_quadrant(d1)
     price=(float(snapshot.bid)+float(snapshot.ask))/2 if snapshot.bid and snapshot.ask else float(snapshot.last or 0)
     if q:
         evidence.append(f"Daily Quadrant {q.wick_side} {q.low:g}-{q.high:g}; 25={q.level_25:g}, 50={q.level_50:g}, 75={q.level_75:g}")
         if q.contains(price): evidence.append("Price is inside Daily Quadrant HTF reaction zone; lower-timeframe confirmation remains mandatory")
-    if bull_fvg: evidence.append(f"15M bullish FVG {bull_fvg[0]:g}-{bull_fvg[1]:g}")
-    if bear_fvg: evidence.append(f"15M bearish FVG {bear_fvg[0]:g}-{bear_fvg[1]:g}")
-    if bull_ob: evidence.append(f"15M bullish OB {bull_ob[0]:g}-{bull_ob[1]:g}")
-    if bear_ob: evidence.append(f"15M bearish OB {bear_ob[0]:g}-{bear_ob[1]:g}")
-    evidence.extend(trigger_ev); direction=Direction.NEUTRAL
-    if bias==Direction.LONG and trigger==Direction.LONG: direction=Direction.LONG; invalid.append("invalidate if 5M bullish structure fails after trigger")
-    elif bias==Direction.SHORT and trigger==Direction.SHORT: direction=Direction.SHORT; invalid.append("invalidate if 5M bearish structure fails after trigger")
-    elif trigger!=Direction.NEUTRAL and trigger!=bias: evidence.append("5M trigger conflicts with 1H bias; wait"); invalid.append("HTF/LTF alignment required")
-    else: invalid.append("valid 5M liquidity sweep + MSS confirmation required")
-    return AgentAssessment(agent_id="nexus-ict-v1",symbol=snapshot.symbol,snapshot_id=snapshot.snapshot_id,direction=direction,confidence=None,evidence=tuple(evidence),invalidations=tuple(invalid),missing_data=(),created_at=snapshot.as_of.astimezone(timezone.utc))
+    if bull_fvg: evidence.append(f"{trigger_timeframe} bullish FVG {bull_fvg[0]:g}-{bull_fvg[1]:g}")
+    if bear_fvg: evidence.append(f"{trigger_timeframe} bearish FVG {bear_fvg[0]:g}-{bear_fvg[1]:g}")
+    if bull_ob: evidence.append(f"{trigger_timeframe} bullish OB {bull_ob[0]:g}-{bull_ob[1]:g}")
+    if bear_ob: evidence.append(f"{trigger_timeframe} bearish OB {bear_ob[0]:g}-{bear_ob[1]:g}")
+    evidence.extend(trigger_ev)
+    direction=Direction.NEUTRAL
+    if bias==Direction.LONG and trigger==Direction.LONG:
+        direction=Direction.LONG
+        invalid.append(f"invalidate if {trigger_timeframe} bullish structure fails after trigger")
+    elif bias==Direction.SHORT and trigger==Direction.SHORT:
+        direction=Direction.SHORT
+        invalid.append(f"invalidate if {trigger_timeframe} bearish structure fails after trigger")
+    elif trigger!=Direction.NEUTRAL and trigger!=bias:
+        evidence.append(f"{trigger_timeframe} trigger conflicts with 1H bias; wait")
+        invalid.append("HTF/LTF alignment required")
+    else:
+        invalid.append(f"valid {trigger_timeframe} liquidity sweep + MSS confirmation required")
+    return AgentAssessment(
+        agent_id="nexus-ict-v1",symbol=snapshot.symbol,snapshot_id=snapshot.snapshot_id,
+        direction=direction,confidence=None,evidence=tuple(evidence),
+        invalidations=tuple(invalid),missing_data=(),
+        created_at=snapshot.as_of.astimezone(timezone.utc)
+    )
