@@ -46,6 +46,28 @@ async def whoami_command(message: Message):
     await message.answer(f"User ID: {user_id}\nChat ID: {message.chat.id}")
 
 
+async def _send_id(message: Message):
+    user_id = message.from_user.id if message.from_user else "-"
+    thread_id = message.message_thread_id if message.message_thread_id is not None else "-"
+    chat_type = getattr(message.chat, "type", "-")
+    await message.answer(
+        f"Chat ID: {message.chat.id}\n"
+        f"Topic / Thread ID: {thread_id}\n"
+        f"User ID: {user_id}\n"
+        f"Chat Type: {chat_type}"
+    )
+
+
+@router.message(Command("id"))
+async def id_command(message: Message):
+    await _send_id(message)
+
+
+@router.channel_post(Command("id"))
+async def id_channel_command(message: Message):
+    await _send_id(message)
+
+
 @router.message(Command("analysis"))
 async def analysis_command(message: Message):
     if _config is None:
@@ -82,7 +104,7 @@ async def run(account: str, symbols: tuple[str, ...]):
     dp = Dispatcher()
     dp.include_router(router)
     try:
-        await dp.start_polling(bot, allowed_updates=["message"])
+        await dp.start_polling(bot, allowed_updates=["message", "channel_post"])
     finally:
         await bot.session.close()
 
