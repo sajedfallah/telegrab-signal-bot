@@ -12,8 +12,8 @@ Snapshot: **2026-09-18**
 | Vercel project duplication | **None for NEXUS** | Keep single project |
 | Vercel frontend secrets required | **None** | Keep secrets on VPS |
 | API rewrite | **Healthy design** | `/miniapp/api/*` -> VPS |
-| Branch count at audit | **67** | Triage historical branches |
-| Fully merged branch deletion candidates | **5** | Delete after owner/stack check |
+| Remote branch count | **61** (reduced from 67) | Continue controlled cleanup |
+| Audited branches deleted | **6** | Completed: 5 merged + 1 one-time ops branch |
 | Open PRs after immediate cleanup | **18** | Continue triage of long-lived/stacked PRs |
 | README | Added by governance update | Canonical entry point |
 | CONTRIBUTING | Added by governance update | Canonical developer flow |
@@ -25,7 +25,7 @@ Snapshot: **2026-09-18**
 ## Immediate governance priorities
 
 1. Enable GitHub branch protection/rules for `main`.
-2. PR #49 and #6 are closed as superseded; delete their branches after dependency review and continue with remaining cleanup candidates.
+2. PR #49 and #6 are closed as superseded; their diverged branches remain for explicit historical review before deletion.
 3. Retarget or close long-lived stacked PRs so future work starts from `main`.
 4. Keep the Vercel project count at one for NEXUS.
 5. Keep Telegram on the canonical Vercel production domain, not ephemeral deployment URLs.
