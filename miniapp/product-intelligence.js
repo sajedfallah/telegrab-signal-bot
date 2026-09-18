@@ -101,7 +101,11 @@
   }
 
   function skeleton(kind = 'card', count = 3) {
-    return `<div class="nexus-skeleton nexus-skeleton-${escape(kind)}">${Array.from({length: Math.max(1, count)}, () => '<div class="skeleton-block"><i></i><span></span><span></span></div>').join('')}</div>`;
+    const blocks = Array.from(
+      {length: Math.max(1, count)},
+      () => '<div class="skeleton-block" aria-hidden="true"><i></i><span></span><span></span></div>'
+    ).join('');
+    return `<div class="nexus-skeleton nexus-skeleton-${escape(kind)}" role="status" aria-live="polite" aria-busy="true" aria-label="در حال بارگذاری">${blocks}</div>`;
   }
 
   function fixBidiSurfaces(root = document) {

@@ -2,8 +2,16 @@
   const backButton = document.getElementById('nexusBackBtn');
   const viewEl = document.getElementById('view');
   const enterButton = document.getElementById('enterNexus');
+  const tg = window.Telegram?.WebApp;
+  const nativeBack = tg?.BackButton;
+  const nativeBackAvailable = Boolean(
+    nativeBack &&
+    typeof nativeBack.show === 'function' &&
+    typeof nativeBack.hide === 'function'
+  );
 
   if (!backButton || !viewEl) return;
+  if (nativeBackAvailable) document.documentElement.classList.add('nexus-native-back');
 
   const routeStack = ['landing'];
   let currentRoute = document.body.classList.contains('landing-active') ? 'landing' : routeName();
@@ -27,10 +35,26 @@
     return Boolean(modal && !modal.hidden);
   }
 
+  const coreRoutes = new Set(['landing', 'home', 'signals', 'charts', 'subscriptions', 'account']);
+
+  function shouldShowBack() {
+    return modalVisible() || !coreRoutes.has(currentRoute);
+  }
+
+  function syncNativeBackButton() {
+    if (!nativeBackAvailable) return;
+    try {
+      if (shouldShowBack()) nativeBack.show();
+      else nativeBack.hide();
+    } catch (_) {}
+  }
+
   function updateBackButton() {
+    const showBack = shouldShowBack();
     backButton.dataset.currentRoute = currentRoute;
     backButton.setAttribute('aria-label', currentRoute === 'home' ? 'بازگشت به صفحه ورود' : 'بازگشت به صفحه قبلی');
-    backButton.hidden = ['landing', 'home', 'signals', 'charts', 'subscriptions', 'account'].includes(currentRoute);
+    backButton.hidden = nativeBackAvailable || !showBack;
+    syncNativeBackButton();
   }
 
   function applyHomeAnalysisLabel(root = document) {
@@ -94,6 +118,7 @@
   function goBack() {
     if (modalVisible()) {
       try { closeModal(); } catch (_) {}
+      window.setTimeout(updateBackButton, 0);
       return;
     }
 
@@ -105,6 +130,9 @@
   }
 
   backButton.addEventListener('click', goBack);
+  if (nativeBackAvailable && typeof nativeBack.onClick === 'function') {
+    try { nativeBack.onClick(goBack); } catch (_) {}
+  }
 
   enterButton?.addEventListener('click', () => {
     routeStack.length = 0;
@@ -119,9 +147,18 @@
   const observer = new MutationObserver(rememberRouteChange);
   observer.observe(viewEl, { childList: true, subtree: true });
 
+  const modalRoot = document.getElementById('modalRoot');
+  if (modalRoot) {
+    new MutationObserver(updateBackButton).observe(modalRoot, {
+      attributes: true,
+      attributeFilter: ['hidden', 'class']
+    });
+  }
+
   document.addEventListener('click', event => {
     const target = event.target.closest?.('[data-route],[data-go],[data-home-go],[data-open-track-record]');
     if (!target) return;
+    window.NexusTelegramShell?.haptic?.('selection');
     window.setTimeout(rememberRouteChange, 0);
   }, true);
 

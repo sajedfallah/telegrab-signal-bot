@@ -1,0 +1,58 @@
+/* NEXUS Telegram Mini App shell V29 — safe areas + native navigation bridge */
+:root{
+  --nx-safe-top:env(safe-area-inset-top,0px);
+  --nx-safe-right:env(safe-area-inset-right,0px);
+  --nx-safe-bottom:env(safe-area-inset-bottom,0px);
+  --nx-safe-left:env(safe-area-inset-left,0px);
+  --nx-content-safe-top:env(safe-area-inset-top,0px);
+  --nx-content-safe-right:env(safe-area-inset-right,0px);
+  --nx-content-safe-bottom:env(safe-area-inset-bottom,0px);
+  --nx-content-safe-left:env(safe-area-inset-left,0px);
+}
+
+body:not(.landing-active){
+  padding-bottom:max(
+    calc(88px + env(safe-area-inset-bottom,0px)),
+    calc(88px + var(--nx-content-safe-bottom))
+  );
+}
+
+.app-shell .topbar{
+  padding-top:max(16px,calc(8px + var(--nx-content-safe-top)));
+  padding-inline:
+    max(18px,calc(12px + var(--nx-content-safe-right)))
+    max(18px,calc(12px + var(--nx-content-safe-left)));
+}
+
+.app-shell .bottom-nav{
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  padding-right:max(12px,calc(8px + var(--nx-content-safe-right)));
+  padding-left:max(12px,calc(8px + var(--nx-content-safe-left)));
+  padding-bottom:max(
+    calc(9px + env(safe-area-inset-bottom,0px)),
+    calc(9px + var(--nx-content-safe-bottom))
+  );
+}
+
+.app-shell .nexus-page-back{
+  top:calc(var(--nx-content-safe-top) + 68px);
+}
+
+.nexus-native-back .app-shell .nexus-page-back{
+  display:none!important;
+}
+
+.modal-sheet{
+  padding-bottom:max(
+    calc(22px + env(safe-area-inset-bottom,0px)),
+    calc(22px + var(--nx-content-safe-bottom))
+  );
+}
+
+@media(max-width:380px){
+  .app-shell .topbar{
+    padding-inline:
+      max(14px,calc(10px + var(--nx-content-safe-right)))
+      max(14px,calc(10px + var(--nx-content-safe-left)));
+  }
+}
