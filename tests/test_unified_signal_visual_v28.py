@@ -87,12 +87,14 @@ def test_v30_signal_anchor_prefers_execution_time_and_floors_to_mt5_bar():
     assert bar_time == expected_epoch - (expected_epoch % 300)
 
 
-def test_v37_visual_contract_has_branded_header_chart_and_trade_level_rail():
+def test_v39_visual_contract_is_minimal_chart_logo_and_levels_only():
     src = _text("app/autotrade/broker_chart_fallback.py")
-    assert '_STYLE_VERSION = "nexus-signal-canonical-v5"' in src
-    assert '"NEXUS SIGNAL"' in src
-    assert '"TRADE LEVELS"' in src
-    assert '"BROKER TRUTH' in src
+    assert '_STYLE_VERSION = "nexus-signal-minimal-v6"' in src
+    assert '"NEXUS SIGNAL"' not in src
+    assert '"TRADE LEVELS"' not in src
+    assert '"BROKER TRUTH' not in src
+    assert "approved minimal NEXUS signal flash card" in src
+    assert "logo only" in src
     assert "_ENTRY = (33, 150, 243)" in src
     assert "_TP = (28, 218, 126)" in src
     assert "_SL = (255, 82, 95)" in src
@@ -133,7 +135,7 @@ def test_v37_publication_normalizer_preserves_final_render_dimensions():
     with Image.open(BytesIO(normalized)) as image:
         assert image.size == (1600, 900)
     src = _text("app/autotrade/unified_signal_visual_runtime.py")
-    assert '_STYLE_VERSION = "nexus-signal-canonical-v5"' in src
+    assert '_STYLE_VERSION = "nexus-signal-minimal-v6"' in src
 
 
 def test_v37_web_admin_uses_broker_renderer_as_sole_publication_authority():
@@ -170,7 +172,7 @@ def test_v37_visual_code_does_not_touch_execution_or_generate_market_data():
         assert marker not in combined
 
 
-def test_v38_publication_normalizer_never_generates_blank_fallback():
+def test_v39_publication_normalizer_never_generates_blank_fallback():
     with pytest.raises(ValueError, match="missing"):
         _clean_publication_image(None, {})
     with pytest.raises(ValueError, match="invalid"):

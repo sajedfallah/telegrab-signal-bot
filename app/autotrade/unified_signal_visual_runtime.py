@@ -12,7 +12,7 @@ from .broker_chart_fallback import ensure_broker_chart_asset
 
 log = logging.getLogger("nexus.unified_signal_visual")
 
-_STYLE_VERSION = "nexus-signal-canonical-v5"
+_STYLE_VERSION = "nexus-signal-minimal-v6"
 _SUPPORTED_ISSUERS = {"MT5_ADMIN", "WEB_ADMIN"}
 
 
