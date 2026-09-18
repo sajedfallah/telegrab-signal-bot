@@ -116,31 +116,15 @@ def _record_web_admin_receipt(
     )
 
     if status_u in _ACCEPTED_EXECUTION_STATUSES:
-        job = db.get_signal_chart_capture_job(signal_id)
-        if job and str(job["status"] or "").upper() in {"FAILED", "EXPIRED"}:
-            try:
-                job = db.retry_chart_capture_job(signal_id)
-            except ValueError:
-                job = db.get_signal_chart_capture_job(signal_id)
-        if not job:
-            job = db.create_chart_capture_job(signal_id, f"EXECUTION_CONFIRMED:{uid}")
-            db.add_signal_event(
-                signal_id,
-                "CHART_JOB_CREATED",
-                actor_type="BACKEND",
-                actor_id=uid,
-                account_number=str(account),
-                request_id=f"chart-job:{job['id']}",
-                correlation_id=str(row["code"]),
-                payload={"job_id": int(job["id"]), "account": str(account), "after_execution": True},
-            )
+        # V37: broker execution unlocks canonical visual generation directly.
+        # No screenshot job is required for Telegram publication.
         with db.conn() as con:
             con.execute(
-                "UPDATE signals SET publication_stage='WAITING_FOR_CHART' WHERE id=?",
+                "UPDATE signals SET publication_stage='WAITING_FOR_VISUAL' WHERE id=?",
                 (signal_id,),
             )
-        _set_request_state(signal_id, "WAITING_CHART", None)
-        return {"ok": True, "publication": "WAITING_CHART", "chart_job_id": int(job["id"]) if job else None}
+        _set_request_state(signal_id, "WAITING_VISUAL", None)
+        return {"ok": True, "publication": "WAITING_VISUAL"}
 
     if status_u in _TERMINAL_FAILURE_STATUSES:
         final_status = "REJECTED" if status_u == "REJECTED" else "FAILED"
@@ -197,20 +181,13 @@ def install_miniapp_execution_gate(app) -> None:
             status = "REJECTED" if receipt_status == "REJECTED" else "FAILED"
             error = str(receipt["error_text"] or f"MT5 execution {receipt_status.lower()}")
         elif receipt_status in _ACCEPTED_EXECUTION_STATUSES:
-            if not job:
-                status = "WAITING_CHART"
+            stage = str(signal["publication_stage"] or "").upper()
+            if stage in {"CANONICAL_VISUAL_READY", "FLASHCARD_READY"}:
+                status = "PROCESSING_VISUAL"
+            elif stage == "PUBLISH_FAILED":
+                status, error = "FAILED", "Telegram publication failed"
             else:
-                job_status = str(job["status"] or "").upper()
-                if job_status in {"UPLOADED", "COMPLETED"}:
-                    status = "SCREENSHOT_READY"
-                elif job_status in {"CLAIMED", "CAPTURING"}:
-                    status = "PROCESSING_CHART"
-                elif job_status == "FAILED":
-                    status, error = "FAILED", str(job["error_text"] or "chart capture failed")
-                elif job_status == "EXPIRED":
-                    status, error = "FAILED", str(job["error_text"] or "chart capture expired")
-                else:
-                    status = "WAITING_CHART"
+                status = "WAITING_VISUAL"
         else:
             mt5 = mini_mod._admin_mt5_status()
             status = "WAITING_EXECUTION" if mt5["online"] else "WAITING_FOR_MT5"
@@ -370,7 +347,7 @@ def install_miniapp_execution_gate(app) -> None:
                        s.issuer_type='WEB_ADMIN'
                        AND s.issuer_account=?
                        AND s.status='DRAFT'
-                       AND UPPER(COALESCE(s.publication_stage,'')) IN ('WAITING_EXECUTION','WAITING_FOR_CHART')
+                       AND UPPER(COALESCE(s.publication_stage,'')) IN ('WAITING_EXECUTION','WAITING_FOR_VISUAL','CANONICAL_VISUAL_READY')
                        AND NOT EXISTS (
                          SELECT 1 FROM autotrade_signal_receipts r
                          WHERE r.signal_id=s.id AND r.platform='MT5'
