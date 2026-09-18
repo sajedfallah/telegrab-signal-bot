@@ -306,7 +306,7 @@ def test_duplicate_screenshot_recovers_crash_window_and_requeues_publication(cli
         assert con.execute("SELECT COUNT(*) FROM signal_chart_capture_jobs").fetchone()[0] == 1
 
 
-def test_retry_endpoint_requeues_persisted_screenshot_without_new_rows(client, monkeypatch):
+def test_retry_does_not_use_persisted_screenshot_without_execution_receipt(client, monkeypatch):
     from app.autotrade import api
     async def no_publish(*_args, **_kwargs): return {"complete": False}
     monkeypatch.setattr(api, "_publish_mt5_admin_signal_async", no_publish)
@@ -315,7 +315,7 @@ def test_retry_endpoint_requeues_persisted_screenshot_without_new_rows(client, m
     assert client.post(url, headers=chart_headers(), json=chart_body(job, real_png())).status_code == 200
     retried = client.post(f"/miniapp/api/admin/signals/{created['request_id']}/retry", headers=headers())
     assert retried.status_code == 200
-    assert retried.json()["publication"] == "RETRY_QUEUED"
+    assert retried.json()["publication"] == "WAITING_EXECUTION"
     with db.conn() as con:
         assert con.execute("SELECT COUNT(*) FROM signals").fetchone()[0] == 1
         assert con.execute("SELECT COUNT(*) FROM signal_chart_capture_jobs").fetchone()[0] == 1
@@ -391,12 +391,13 @@ def test_expired_offline_job_retries_same_signal_and_request(client):
         assert con.execute("SELECT request_id FROM miniapp_admin_signal_requests").fetchone()[0] == created["request_id"]
 
 
-def test_retry_control_is_wired_to_existing_api():
+def test_retry_control_is_wired_to_canonical_publication_api():
     js = Path("miniapp/admin-signal-v13.js").read_text(encoding="utf-8")
     assert "retry-signal" in js
     assert "/retry" in js
-    for state in ("FAILED", "PUBLISH_FAILED", "EXPIRED", "UPLOADED", "COMPLETED"):
+    for state in ("FAILED", "PUBLISH_FAILED", "EXPIRED"):
         assert state in js
+    assert "['UPLOADED','COMPLETED'].includes(job)" not in js
 
 
 def test_pricing_catalog_repair_does_not_overwrite_custom_price(tmp_path, monkeypatch):
@@ -417,7 +418,7 @@ def test_pricing_catalog_repair_does_not_overwrite_custom_price(tmp_path, monkey
     assert str(plan[0]) == "777"
 
 
-def test_legacy_failure_payload_and_retry(client):
+def test_legacy_chart_failure_does_not_requeue_screenshot_pipeline(client):
     created, job = claim_job(client, "legacy-failure-retry")
     failed = client.post(
         f"/api/v1/autotrade/admin/chart-capture/{job['job_id']}/fail",
@@ -432,7 +433,9 @@ def test_legacy_failure_payload_and_retry(client):
         f"/miniapp/api/admin/signals/{created['request_id']}/retry", headers=headers()
     )
     assert retried.status_code == 200, retried.text
-    assert retried.json()["chart_job"]["status"] == "PENDING"
+    assert retried.json()["publication"] == "WAITING_EXECUTION"
+    with db.conn() as con:
+        assert con.execute("SELECT status FROM signal_chart_capture_jobs WHERE id=?", (job["job_id"],)).fetchone()[0] == "FAILED"
 
 
 def test_web_admin_position_commands_are_allowed(client):
