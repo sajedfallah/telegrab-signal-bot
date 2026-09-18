@@ -4,7 +4,8 @@
 > **Canonical branch:** `main`  
 > **Last repository status update:** 2026-09-18  
 > **Core source baseline:** NEXUS Core v7.0.3  
-> **Current Mini App production release:** 2026-09-18 / `ccaaa11f80805efad148536479ad377b9e9190d9`
+> **Current Mini App release lineage:** PR #51 / `ccaaa11f80805efad148536479ad377b9e9190d9`  
+> **Current production `main`:** `5af890192898534ce18f12029d32b738d34d97f1`
 
 NEXUS is the Telegram trading platform that contains the Telegram bot, Mini App, subscription/payment flows, AutoTrade integration, MT5 components, signal lifecycle, content/academy modules, and supporting APIs.
 
@@ -51,6 +52,14 @@ https://api.nexustrade.ir
 Vercel must not contain the bot token, MT5 secrets, broker credentials, payment secrets, or other VPS runtime secrets. The frontend is static and currently has no required Vercel application environment variables.
 
 ## Latest changelog
+
+### 2026-09-18 — Repository / deployment governance consolidation
+
+- Merged PR #52 and established `README.md`, `CONTRIBUTING.md`, deployment/branching documentation, branch inventory and project dashboard.
+- Added repository governance CI and safe merged-branch housekeeping.
+- Normalized GitHub Actions to PR/`main` triggers instead of historical feature-branch triggers.
+- Closed superseded PR #49 (old Vercel preparation) and PR #6 (old repository standardization).
+- Vercel production redeployed from `main` successfully and remained `READY`.
 
 ### 2026-09-18 — Vercel Mini App production cutover
 

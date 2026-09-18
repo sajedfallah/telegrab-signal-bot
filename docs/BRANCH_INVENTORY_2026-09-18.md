@@ -23,7 +23,6 @@ No repository rulesets were present at audit time. GitHub branch metadata report
 | PR | Head branch | Base | State note |
 | ---: | --- | --- | --- |
 | #48 | `docs/nexus-ict-v22.31-trail07` | `main` | Active, mergeable |
-| #49 | `vercel-miniapp` | `main` | Draft; **superseded by production PR #51** |
 | #46 | `feature/brag-video-v1` | `feature/live-charts-v1` | Active stacked PR |
 | #45 | `feature/provider-panel-ui-v1` | `feat/phase1-tenant-foundation` | Draft stacked PR |
 | #44 | `feat/phase1-tenant-foundation` | `main` | Draft |
@@ -41,9 +40,15 @@ No repository rulesets were present at audit time. GitHub branch metadata report
 | #11 | `fix/v065-close-reply-hardening` | `main` | Draft |
 | #9 | `fix/v063-complete-hardening` | `main` | Draft |
 | #8 | `nexus-v060-current-debug-handoff` | `main` | Open historical |
-| #6 | `docs/repo-standardization-v7.1.0` | `main` | **Superseded by 2026-09-18 governance update** |
 
 The old stacked-PR structure is the main source of branch sprawl. New work must use short-lived branches from `main`.
+
+## PRs closed during this audit
+
+- **#49** — `vercel-miniapp`: closed as superseded by production PR #51 and governance PR #52.
+- **#6** — `docs/repo-standardization-v7.1.0`: closed as superseded by governance PR #52.
+
+Their branches still exist remotely and remain cleanup candidates; closing a PR does not delete a non-merged branch.
 
 ## Fully contained in main — deletion candidates
 
@@ -115,7 +120,7 @@ The following exist primarily because current historical PRs use them as bases o
 ## Cleanup order
 
 1. Close/merge open PRs that are still valuable.
-2. Close superseded PRs (#49 and #6 are immediate candidates).
+2. Superseded PRs #49 and #6 are already closed; review and delete their branches when no historical reference is required.
 3. Retarget valuable stacked PRs to `main` where practical.
 4. Delete fully merged branches.
 5. For diverged stale branches, inspect unique commits; cherry-pick only approved changes to a fresh branch from `main`.
