@@ -2,6 +2,94 @@
 
 این فایل از نسخه **NEXUS ICT Expert V22.31** به بعد، تغییرات Companion Expert را در کنار NEXUS CORE ثبت می‌کند. برای تاریخچه نسخه‌های قدیمی Core/AutoTrade به فایل‌های `NEXUS_V*.md`، `RELEASE_NOTES_*.md` و `README_FA.md` مراجعه کنید.
 
+## [NEXUS ICT V22.42] — 2026-09-18
+
+**نام انتشار:** `OBSERVABILITY DATA LAKE`  
+**دامنه:** MT5 ICT Expert / Signal Observability / Analytics  
+**Issue:** #50  
+**Pull Request:** #48
+
+### Added
+
+- Deep Signal Snapshot telemetry برای ستاپ‌های Live ارزیابی‌شده و Signalهای Confirmed.
+- Lifecycle Event dataset برای:
+  - SIGNAL_CONFIRMED
+  - EXECUTION_ATTEMPT
+  - EXECUTION_REJECT
+  - POSITION_OPENED
+  - POSITION_UPDATE
+  - TRADE_CLOSED
+- Telegram Delivery telemetry برای SENT / RETRY / FAILED.
+- Time context کامل:
+  - Server
+  - UTC
+  - New York
+  - weekday
+  - hour/minute
+  - configured session
+  - signal age
+- Runtime market context:
+  - Bid/Ask
+  - Spread
+  - Spread/ATR
+  - Tick age
+  - Terminal ping
+- Signal quality/context snapshot:
+  - score / grade
+  - component scores
+  - REVERSAL / CONTINUATION
+  - market regime
+  - execution quality
+- Daily CE telemetry:
+  - CE active
+  - CE50 / CE75
+  - Entry distance to CE50/CE75 normalized by ATR
+  - CE strength
+- POI/FVG/OB/OTE measurements.
+- Liquidity / ICT rule flags.
+- Signal-candle body/wick/range normalized by ATR.
+- Tick-volume ratio against configurable lookback.
+- Account/broker runtime context.
+- Evaluated / Armed / Invalidated / Expired / Confirmed funnel in daily intelligence review.
+
+### Preserved
+
+- Daily CE weighting from V22.39.
+- Parent/reply Telegram lifecycle from V22.40.
+- R/MFE/MAE and attribution from V22.41.
+- Performance Core.
+- AutoTrade / Dual Sizing.
+- NEXUS_TRAIL_07.
+
+### Important behavior boundary
+
+**V22.42 هیچ Signal Filter یا Hard Gate جدیدی اضافه نمی‌کند.**
+
+Telemetry جدید فقط برای:
+`Observe → Record → Join → Analyze`
+
+است و به‌صورت مستقیم Signal را Block نمی‌کند.
+
+### Security
+
+Private server MQ5 artifact دارای runtime credentials خصوصی است و در repository عمومی commit نمی‌شود.
+Repository فقط release/spec/schema را نگه می‌دارد.
+
+### QA
+
+- Static source integrity: PASS
+- SignalData reference validation: PASS
+- Brace balance: PASS
+- Telemetry hooks presence: PASS
+- MetaEditor compile: هنوز باید ثبت شود
+- Demo forward test: هنوز باید ثبت شود
+
+### Related
+
+- #50
+- `docs/releases/NEXUS_ICT_V22_32_TO_V22_42_FA.md`
+- `docs/analytics/NEXUS_ICT_V22_42_TELEMETRY_SCHEMA_FA.md`
+
 ## [NEXUS ICT V22.31] — 2026-09-17
 
 **نام انتشار:** `NEXUS TRAIL 07`  
