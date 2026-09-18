@@ -106,6 +106,17 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
             continue
         outline,fill=zone_styles.get(label,((125,130,145),(50,54,64)))
         top_y,bottom_y=min(y1,y2),max(y1,y2)
+        if label=="QUADRANT":
+            # Approved template: Daily Quadrant has NO background fill.
+            # Only thin, muted boundary rays plus Q25/Q50/Q75 levels.
+            for yy in (top_y,bottom_y):
+                dash=12; gap=8; xx=x1
+                while xx<right:
+                    d.line((xx,yy,min(xx+dash,right),yy),fill=(150,125,205),width=1)
+                    xx+=dash+gap
+            tag=f"Daily Quadrant  {lo:.2f}-{hi:.2f}"
+            d.text((x1+8,top_y+6),tag,font=small,fill=(180,155,225))
+            continue
         if bottom_y-top_y<5: bottom_y=top_y+5
         d.rectangle((x1,top_y,right,bottom_y),fill=fill,outline=outline,width=2)
         tag=f"{label}  {lo:.2f}-{hi:.2f}"
