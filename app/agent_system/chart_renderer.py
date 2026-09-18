@@ -31,7 +31,7 @@ def _zones(evidence):
             continue
         m=re.search(r"15M (bullish|bearish) (FVG|OB) ([\d.]+)-([\d.]+)",s)
         if m:
-            direction,kind,lo,hi=m.groups(); out.append((f"{kind} {direction.upper()}",float(lo),float(hi),""))
+            _tf,direction,kind,lo,hi=m.groups(); out.append((f"{kind} {direction.upper()}",float(lo),float(hi),""))
     return out
 
 
