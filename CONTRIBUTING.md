@@ -61,7 +61,7 @@ Run additional tests for the subsystem you changed.
 
 1. Rebase or update your branch from the current `main`.
 2. Push the branch.
-3. Open a PR into `main`.
+3. Open a PR into `main`; the repository PR template must be completed.
 4. Wait for GitHub Actions.
 5. Wait for the Vercel Preview to reach `READY`.
 6. Use the Vercel Preview link posted by `vercel[bot]` in the PR.
@@ -94,7 +94,11 @@ The linked Vercel project is `telegrab-signal-bot`; Root Directory is `miniapp`.
 
 No application secrets are required on the Vercel frontend. Production secrets remain on the VPS.
 
-## 8. Production boundaries
+## 8. PR template and review evidence
+
+Every PR should complete `.github/PULL_REQUEST_TEMPLATE.md`. For Mini App work, include the Vercel Preview URL or confirm the `vercel[bot]` Preview is `Ready`. For authenticated UI changes, record Telegram E2E validation with valid `initData`.
+
+## 9. Production boundaries
 
 Changes to frontend deployment must not silently alter:
 
