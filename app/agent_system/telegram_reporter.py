@@ -44,3 +44,31 @@ def format_shadow_record(record:Mapping[str,object])->str:
         lines.extend(["",f"Signal Builder: BLOCKED ({', '.join(str(x) for x in signal_blocks)})"])
     lines.extend(["",f"Risk Gate: {risk_text}",f"Risk Blocks: {', '.join(str(x) for x in blocks) if blocks else '-'}","","MODE: SHADOW — NO REAL ORDER"])
     return "\n".join(lines)
+
+
+def format_hourly_analysis(record:Mapping[str,object])->str:
+    symbol=str(record.get("symbol") or "UNKNOWN")
+    if record.get("error"):
+        return f"🕐 NEXUS HOURLY ANALYSIS | {symbol}\n\nMarket analysis unavailable: {record['error']}\n\nMODE: SHADOW — NO REAL ORDER"
+    lines=[f"🕐 NEXUS HOURLY ANALYSIS | {symbol}","",f"Scanner: {record.get('scan') or '-'}",f"Supervisor: {record.get('supervisor') or '-'}",f"Current State: {record.get('final') or '-'}",f"Direction: {record.get('direction') or 'NEUTRAL'}"]
+    assessments=record.get("assessments") or []
+    for assessment in assessments:
+        if not isinstance(assessment, Mapping):
+            continue
+        name=str(assessment.get("agent") or "agent")
+        direction=str(assessment.get("direction") or "NEUTRAL")
+        lines.extend(["",f"• {name}: {direction}"])
+        for item in list(assessment.get("evidence") or [])[:8]:
+            lines.append(f"  - {item}")
+        missing=list(assessment.get("missing_data") or [])
+        if missing:
+            lines.append(f"  Missing: {', '.join(str(x) for x in missing)}")
+    if record.get("entry") is not None:
+        lines.extend(["","📐 ACTIVE SIGNAL CANDIDATE",f"Entry: {record.get('entry')}",f"SL: {record.get('stop_loss')}"])
+        for i,tp in enumerate(record.get("take_profits") or [],1):
+            lines.append(f"TP{i}: {tp}")
+        lines.append(f"RR(TP1): {float(record.get('rr') or 0):.2f}")
+    else:
+        lines.extend(["","Signal: WAIT — no confirmed signal candidate in this snapshot"])
+    lines.extend(["","MODE: SHADOW — NO REAL ORDER"])
+    return "\n".join(lines)
