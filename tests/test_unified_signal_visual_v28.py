@@ -247,3 +247,19 @@ def test_v45_legacy_channel_root_is_text_only():
     block = src[start:end]
     assert "send_message(" in block
     assert "send_photo(" not in block
+
+
+def test_v45_miniapp_signal_creation_does_not_create_chart_capture_job():
+    base = _text("app/miniapp_admin_api.py")
+    start = base.index("def create_signal(")
+    end = base.index('@router.get("/signals")', start)
+    block = base[start:end]
+    assert "create_chart_capture_job" not in block
+    assert "WAITING_EXECUTION" in block
+
+    runtime = _text("app/autotrade/miniapp_execution_runtime.py")
+    start = runtime.index("def create_miniapp_signal(")
+    end = runtime.index('_replace_route(app, "/miniapp/api/admin/signals"', start)
+    block = runtime[start:end]
+    assert "create_chart_capture_job" not in block
+    assert "WAITING_EXECUTION" in block
