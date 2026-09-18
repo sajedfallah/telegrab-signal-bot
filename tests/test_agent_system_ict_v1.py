@@ -50,7 +50,8 @@ def _bull_expired_sweep_rows():
     breakout = max(x["high"] for x in rows[-7:-1]) + 0.5
     rows[-1] = {**rows[-1], "high": breakout + 0.2, "close": breakout}
     return rows
-\ndef _snapshot(d1=None, h1=None, m15=None, m5=None, **overrides):
+
+def _snapshot(d1=None, h1=None, m15=None, m5=None, **overrides):
     d1 = d1 or _daily_rows()
     h1 = h1 or _trend_rows("up")
     m15 = m15 or _trend_rows("up")
