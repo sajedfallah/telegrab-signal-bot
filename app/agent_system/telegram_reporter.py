@@ -49,26 +49,32 @@ def format_shadow_record(record:Mapping[str,object])->str:
 def format_hourly_analysis(record:Mapping[str,object])->str:
     symbol=str(record.get("symbol") or "UNKNOWN")
     if record.get("error"):
-        return f"🕐 NEXUS HOURLY ANALYSIS | {symbol}\n\nMarket analysis unavailable: {record['error']}\n\nMODE: SHADOW — NO REAL ORDER"
-    lines=[f"🕐 NEXUS HOURLY ANALYSIS | {symbol}","",f"Scanner: {record.get('scan') or '-'}",f"Supervisor: {record.get('supervisor') or '-'}",f"Current State: {record.get('final') or '-'}",f"Direction: {record.get('direction') or 'NEUTRAL'}"]
+        return f"🕐 NEXUS ICT HOURLY | {symbol}\n\nAnalysis unavailable: {record['error']}\n\nMODE: SHADOW — NO REAL ORDER"
     assessments=record.get("assessments") or []
-    for assessment in assessments:
-        if not isinstance(assessment, Mapping):
-            continue
-        name=str(assessment.get("agent") or "agent")
-        direction=str(assessment.get("direction") or "NEUTRAL")
-        lines.extend(["",f"• {name}: {direction}"])
-        for item in list(assessment.get("evidence") or [])[:8]:
-            lines.append(f"  - {item}")
-        missing=list(assessment.get("missing_data") or [])
-        if missing:
-            lines.append(f"  Missing: {', '.join(str(x) for x in missing)}")
-    if record.get("entry") is not None:
-        lines.extend(["","📐 ACTIVE SIGNAL CANDIDATE",f"Entry: {record.get('entry')}",f"SL: {record.get('stop_loss')}"])
-        for i,tp in enumerate(record.get("take_profits") or [],1):
-            lines.append(f"TP{i}: {tp}")
-        lines.append(f"RR(TP1): {float(record.get('rr') or 0):.2f}")
+    ict=next((a for a in assessments if isinstance(a,Mapping) and str(a.get("agent") or "").startswith("nexus-ict")),None)
+    direction=str((ict or {}).get("direction") or record.get("direction") or "NEUTRAL")
+    lines=[f"🕐 NEXUS ICT HOURLY | {symbol}","",f"ICT Bias: {direction}",f"Market State: {record.get('final') or '-'}"]
+    if ict:
+        evidence=list(ict.get("evidence") or [])
+        # ICT evidence is generated deterministically from 1H structure, 15M
+        # location/FVG/OB/Daily Quadrant and the 5M trigger. Preserve it rather
+        # than inventing narrative levels that are absent from the snapshot.
+        if evidence:
+            lines.extend(["","ICT Analysis:"])
+            for item in evidence[:12]: lines.append(f"• {item}")
+        invalidation=list(ict.get("invalidation") or [])
+        if invalidation:
+            lines.extend(["","Waiting / Invalidation:"])
+            for item in invalidation[:6]: lines.append(f"• {item}")
+        missing=list(ict.get("missing_data") or [])
+        if missing: lines.extend(["",f"Missing data: {', '.join(str(x) for x in missing)}"])
     else:
-        lines.extend(["","Signal: WAIT — no confirmed signal candidate in this snapshot"])
+        lines.extend(["","ICT Analysis: scanner did not escalate this snapshot; no directional ICT setup is asserted."])
+    if record.get("entry") is not None:
+        lines.extend(["","📐 SIGNAL",f"Direction: {record.get('direction')}",f"Entry: {record.get('entry')}",f"Entry Zone: {record.get('entry_low')} - {record.get('entry_high')}",f"SL: {record.get('stop_loss')}"])
+        for i,tp in enumerate(record.get("take_profits") or [],1): lines.append(f"TP{i}: {tp}")
+        lines.extend([f"RR(TP1): {float(record.get('rr') or 0):.2f}",f"Expires: {record.get('signal_expires_at')}"])
+    else:
+        lines.extend(["","Signal: WAIT — no confirmed signal in this hourly snapshot"])
     lines.extend(["","MODE: SHADOW — NO REAL ORDER"])
     return "\n".join(lines)
