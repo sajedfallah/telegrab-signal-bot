@@ -14,7 +14,7 @@ from ..market_candles import init_market_candle_schema
 from .contracts import MarketSnapshot
 
 
-_TIMEFRAMES = ("D1", "H1", "M15", "M5", "M1")
+_TIMEFRAMES = ("MN1", "W1", "D1", "H1", "M15", "M5", "M1")
 _REQUIRED_TIMEFRAMES = ("H1", "M15", "M5")
 _QUOTE_MAX_AGE_MS = 15_000
 _CANDLE_CAPTURE_MAX_AGE_MS = 30_000
@@ -109,7 +109,7 @@ def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, no
             missing.append("quote")
         timeframes: dict[str, tuple[dict[str, Any], ...]] = {}
         for timeframe in _TIMEFRAMES:
-            limit = 20 if timeframe == "D1" else max(20, min(500, int(candle_limit)))
+            limit = max(20, min(500, int(candle_limit)))
             rows = con.execute("SELECT bar_time,open,high,low,close,tick_volume,captured_at FROM mt5_market_candles WHERE account_number=? AND symbol=? AND timeframe=? ORDER BY bar_time DESC LIMIT ?", (account, canonical, timeframe, limit)).fetchall()
             valid: list[dict[str, Any]] = []
             for row in reversed(rows):
@@ -118,7 +118,7 @@ def build_mt5_snapshot(account: str, symbol: str, *, candle_limit: int = 220, no
                     continue
                 valid.append({"time": int(row["bar_time"]), "open": o, "high": h, "low": l, "close": c, "tick_volume": float(row["tick_volume"] or 0)})
             timeframes[timeframe] = tuple(valid)
-            minimum = 10 if timeframe == "D1" else 20
+            minimum = 10 if timeframe in ("MN1", "W1", "D1") else 20
             if len(valid) < minimum and (timeframe == "D1" or timeframe in _REQUIRED_TIMEFRAMES):
                 missing.append(f"candles:{timeframe}")
             if rows:
