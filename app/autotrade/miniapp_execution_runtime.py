@@ -166,7 +166,8 @@ def install_miniapp_execution_gate(app) -> None:
     The patch intentionally leaves customer AutoTrade, MT5_ADMIN issuance and
     T05/T07 trailing code untouched.  WEB_ADMIN candidates are exposed only to
     the authenticated Admin EA; Telegram publication remains blocked until a
-    broker-confirmed receipt and a real chart are both present.
+    broker-confirmed receipt exists. The final image is rendered from fresh
+    MT5 MarketFeed candles and the canonical stored signal snapshot.
     """
     from . import api as api_mod
     from .. import miniapp_admin_api as mini_mod
@@ -495,18 +496,9 @@ def install_miniapp_execution_gate(app) -> None:
                     "complete": False,
                     "execution_status": exec_status,
                 }
-            chart_job = db.get_signal_chart_capture_job(signal_id)
-            if not allow_without_chart and (
-                not chart_job or str(chart_job["status"] or "").upper() not in {"UPLOADED", "COMPLETED"}
-            ):
-                return {
-                    "free_message_id": None,
-                    "vip_message_id": None,
-                    "errors": ["CHART_GATE: real MT5 chart has not been uploaded"],
-                    "published": False,
-                    "complete": False,
-                    "execution_status": exec_status,
-                }
+            # V37: ChartAgent screenshots are diagnostic-only for WEB_ADMIN.
+            # Publication artwork is built from the canonical stored signal and
+            # fresh MT5 MarketFeed candles by the outer visual wrapper.
         result = await original_publisher(row, chart_base64, allow_without_chart=allow_without_chart)
         if issuer_type == "WEB_ADMIN" and isinstance(result, dict):
             receipt = db.mt5_signal_live_state(int(row.get("id") if isinstance(row, dict) else row["id"])) or {}
