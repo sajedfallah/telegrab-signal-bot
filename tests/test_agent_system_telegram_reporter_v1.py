@@ -38,5 +38,5 @@ def test_hourly_analysis_includes_agent_evidence_and_wait_state():
     text=format_hourly_analysis(record)
     assert "تحلیل ساعتی NEXUS | XAUUSD" in text
     assert "دیدگاه ICT: خنثی / در انتظار تأیید" in text
-    assert "1H structure HH/HL" in text
+    assert "ساختار 1H: سقف و کف بالاتر (HH/HL) — تمایل صعودی" in text
     assert "Signal: WAIT" in text
