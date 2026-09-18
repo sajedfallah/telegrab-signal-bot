@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="./design-v2.css?v=20260910-1215" />
   <link rel="stylesheet" href="./polish-v3.css?v=20260910-1215" />
   <link rel="stylesheet" href="./ui-v4.css?v=20260910-1215" />
-  <link rel="stylesheet" href="./landing-v18.css?v=20260915-poster-glow1" />
+  <link rel="stylesheet" href="./landing-v18.css?v=20260918-starlanding1" />
   <link rel="stylesheet" href="./navigation-v7.css?v=20260910-1845" />
   <link rel="stylesheet" href="./signals-live-v8.css?v=20260912-1405" />
   <link rel="stylesheet" href="./user-v066-final.css?v=20260914-next-ui" />
@@ -31,21 +31,17 @@
 </head>
 <body class="landing-active">
   <section class="nexus-landing" id="nexusLanding" aria-label="NEXUS Landing">
-    <div class="nexus-landing-poster-frame">
-      <img class="nexus-landing-poster" src="./assets/brand/nexus-landing-v18.jpg?v=20260915-2" alt="NEXUS Trading Signals" decoding="async" fetchpriority="high" />
-      <button class="nexus-landing-enter" id="enterNexus" type="button" aria-label="ورود به نکسوس">
-        <span class="glowing-box glowing-box-active" style="--animation-speed:2s" aria-hidden="true">
-          <span class="glowing-box-animations">
-            <span class="glowing-box-glow"></span>
-            <span class="glowing-box-stars-masker"><span class="glowing-box-stars"></span></span>
-          </span>
-          <span class="glowing-box-borders-masker"><span class="glowing-box-borders"></span></span>
-          <span class="glowing-box-button">
-            <span class="glowing-span">ورود به نکسوس</span>
-            <span class="nexus-enter-arrow">←</span>
-          </span>
-        </span>
-        <span class="nexus-visually-hidden">ورود به نکسوس</span>
+    <div class="nexus-starfield" aria-hidden="true">
+      <div class="nexus-bg-stars nexus-bg-stars-1"></div>
+      <div class="nexus-bg-stars nexus-bg-stars-2"></div>
+      <div class="nexus-bg-stars nexus-bg-stars-3"></div>
+    </div>
+    <div class="nexus-landing-content">
+      <img class="nexus-landing-logo" src="./assets/brand/nexus-logo.svg?v=20260918-starlanding1" alt="NEXUS" decoding="async" />
+      <button class="nexus-space-enter" id="enterNexus" type="button" aria-label="ورود به نکسوس">
+        <strong>ورود به نکسوس</strong>
+        <span class="nexus-btn-stars" aria-hidden="true"><span class="nexus-btn-stars-layer"></span></span>
+        <span class="nexus-btn-glow" aria-hidden="true"><span class="nexus-btn-circle"></span><span class="nexus-btn-circle"></span></span>
       </button>
     </div>
   </section>
@@ -66,6 +62,6 @@
   <template id="accountTpl"><section class="profile-card"><img class="account-brand-avatar" src="./assets/brand/nexus-mark.svg?v=20260910-1215" alt="NEXUS" decoding="async" /><div><h2 id="userName" class="bidi-safe" dir="rtl">کاربر NEXUS</h2><p id="userHandle">Telegram User</p></div><span class="badge muted">MEMBER</span></section><div class="empty-state">در حال دریافت Status Center...</div></template>
   <template id="guideTpl"><section class="page-head"><div><div class="eyebrow">GUIDE</div><h1>راهنما</h1></div></section><div class="stack"><button class="list-card"><span data-nexus-icon="chart"></span><div><b>معرفی NEXUS</b><small>آشنایی سریع با سرویس</small></div></button><button class="list-card"><span data-nexus-icon="trades"></span><div><b>راهنمای نصب اکسپرت</b><small>MetaTrader 5 / License</small></div></button></div></template>
   <template id="supportTpl"><section class="page-head"><div><div class="eyebrow">SUPPORT</div><h1>پشتیبانی</h1></div></section><div class="support-card"><div class="support-icon" data-nexus-icon="support"></div><h3>نیاز به کمک داری؟</h3><p>برای مسائل پرداخت، اشتراک، دسترسی کانال یا AutoTrade با تیم پشتیبانی در ارتباط باش.</p><button class="btn primary full" data-action="support">ارتباط با پشتیبانی</button></div></template>
-  <script src="./icons.js?v=20260910-1215"></script><script src="./symbol-visuals.js?v=20260914-next-ui"></script><script src="./app.js?v=20260913-hydration"></script><script src="./locale-v4.js?v=20260910-1215"></script><script src="./product-intelligence.js?v=20260910-1215"></script><script src="./experience.js?v=20260914-livecharts-nav2"></script><script src="./home-v2.js?v=20260913-final-user-ui"></script><script src="./vip-preview-v1.js?v=20260913-final-user-ui"></script><script src="./home-v2-nav.js?v=20260910-1215"></script><script src="./signals-v2.js?v=20260914-v14-final"></script><script src="./track-record.js?v=20260914-next-ui"></script><script src="./trades-v2.js?v=20260910-1215"></script><script src="./pricing-v2.js?v=20260910-1215"></script><script src="./account-v2.js?v=20260914-v14-final" data-nexus-account-v2="1"></script><script src="./ui-fixes.js?v=20260910-1215"></script><script src="./purchase-flow-v4.js?v=20260914-v14-final"></script><script src="./compat-v4.js?v=20260910-1215"></script><script src="./landing-v5.js?v=20260915-v18-poster-glow"></script><script src="./navigation-v7.js?v=20260914-livecharts-nav1"></script><script async src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script><script src="./live-chart-tools-v23.js?v=20260915-actionfix1"></script><script src="./live-charts.js?v=20260914-livecharts-nav1"></script><script src="./live-charts-forex.js?v=20260914-mt5feed1"></script>
+  <script src="./icons.js?v=20260910-1215"></script><script src="./symbol-visuals.js?v=20260914-next-ui"></script><script src="./app.js?v=20260913-hydration"></script><script src="./locale-v4.js?v=20260910-1215"></script><script src="./product-intelligence.js?v=20260910-1215"></script><script src="./experience.js?v=20260914-livecharts-nav2"></script><script src="./home-v2.js?v=20260913-final-user-ui"></script><script src="./vip-preview-v1.js?v=20260913-final-user-ui"></script><script src="./home-v2-nav.js?v=20260910-1215"></script><script src="./signals-v2.js?v=20260914-v14-final"></script><script src="./track-record.js?v=20260914-next-ui"></script><script src="./trades-v2.js?v=20260910-1215"></script><script src="./pricing-v2.js?v=20260910-1215"></script><script src="./account-v2.js?v=20260914-v14-final" data-nexus-account-v2="1"></script><script src="./ui-fixes.js?v=20260910-1215"></script><script src="./purchase-flow-v4.js?v=20260914-v14-final"></script><script src="./compat-v4.js?v=20260910-1215"></script><script src="./landing-v5.js?v=20260918-starlanding1"></script><script src="./navigation-v7.js?v=20260914-livecharts-nav1"></script><script async src="https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js"></script><script src="./live-chart-tools-v23.js?v=20260915-actionfix1"></script><script src="./live-charts.js?v=20260914-livecharts-nav1"></script><script src="./live-charts-forex.js?v=20260914-mt5feed1"></script>
 </body>
 </html>
