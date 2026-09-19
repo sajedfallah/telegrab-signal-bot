@@ -12,8 +12,8 @@
   justify-content:flex-end;
   border:1px solid rgba(92,174,255,.30)!important;
   background:
-    linear-gradient(180deg,#07111d 0%,#07111d 100%),
-    url("./assets/brand/nexus-home-hero-v31.jpg") top center / 100% auto no-repeat!important;
+    url("./assets/brand/nexus-home-hero-v31.jpg") top center / 100% auto no-repeat,
+    #07111d!important;
   box-shadow:
     0 16px 30px -12px rgba(0,0,0,.72),
     0 4px 12px rgba(0,0,0,.32),
