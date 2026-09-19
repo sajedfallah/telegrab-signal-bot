@@ -107,3 +107,18 @@
   .signal-detail-symbol>.nexus-symbol-svg{width:31px;height:31px;flex-basis:31px}
   .track-trade-symbol>.nexus-symbol-svg{width:24px;height:24px;flex-basis:24px}
 }
+
+.admin-symbol-identity{
+  display:inline-flex!important;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.admin-symbol-identity>.nexus-symbol-svg{
+  width:27px;
+  height:27px;
+  flex-basis:27px;
+}
+.admin-symbol-identity>span{
+  min-width:0;
+}
