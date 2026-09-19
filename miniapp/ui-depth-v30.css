@@ -1,0 +1,179 @@
+/* NEXUS V30 — aligned Home columns + shared card depth
+   Presentation only. No API, signal lifecycle, MT5 truth or landing behavior. */
+
+.app-shell{
+  --nx-depth-bg:var(--home-card-bg,linear-gradient(145deg,rgba(25,38,55,.97),rgba(13,21,33,.96)));
+  --nx-depth-bg-soft:var(--home-card-bg-soft,linear-gradient(145deg,rgba(30,44,62,.72),rgba(18,28,42,.68)));
+  --nx-depth-border:var(--home-card-border,rgba(255,255,255,.18));
+  --nx-depth-border-strong:var(--home-card-border-strong,rgba(255,255,255,.24));
+  --nx-depth-shadow:var(--home-card-shadow,0 9px 16px -6px rgba(0,0,0,.62),0 2px 6px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.035));
+  --nx-depth-shadow-soft:var(--home-card-shadow-soft,0 7px 14px -7px rgba(0,0,0,.56),0 2px 5px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.03));
+}
+
+/* Home: two genuinely independent columns on wide viewports.
+   This removes the empty vertical row created by CSS Grid's tallest-item row sizing. */
+.home-v2-columns{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  align-items:start;
+}
+
+.home-v2-column{
+  min-width:0;
+  display:grid;
+  gap:12px;
+  align-content:start;
+}
+
+.app-shell .home-v2-column>.home-v2-section{
+  margin-top:0!important;
+  border:1px solid var(--nx-depth-border)!important;
+  border-radius:var(--home-card-radius,20px)!important;
+  background:var(--nx-depth-bg)!important;
+  box-shadow:var(--nx-depth-shadow)!important;
+}
+
+/* Primary surfaces on the rest of the Mini App use the exact same depth language as Home. */
+.app-shell :is(
+  .signal-v2-card:not(.pnl-profit):not(.pnl-loss),
+  .closed-calendar,
+  .track-summary,
+  .track-section,
+  .track-integrity,
+  .track-equity-chart,
+  .price-v2-card,
+  .price-v2-comparison,
+  .trade-health-v2,
+  .trade-v2-card,
+  .account-v2-service,
+  .profile-card,
+  .account-v2-license,
+  .account-v2-utilities .menu-card,
+  .support-card,
+  .note-card,
+  .live-chart-page-head,
+  .live-chart-header,
+  .live-chart-controls,
+  .live-chart-panel,
+  .live-chart-statusbar
+){
+  border:1px solid var(--nx-depth-border)!important;
+  background:var(--nx-depth-bg)!important;
+  box-shadow:var(--nx-depth-shadow)!important;
+}
+
+/* Secondary/nested boxes retain separation without competing with their parent card. */
+.app-shell :is(
+  .closed-day-item,
+  .track-channel-grid>article,
+  .track-trade-row,
+  .track-stat-grid>div,
+  .track-risk-grid>div,
+  .track-detail-grid>div,
+  .signal-v2-core>div,
+  .signal-v2-targets>span,
+  .signal-live-panel,
+  .trade-v2-grid>div,
+  .trade-checks span,
+  .account-inline-check,
+  .account-meta-line,
+  .compare-row,
+  .notification-row,
+  .source-signal-link
+){
+  border-color:var(--nx-depth-border)!important;
+  background:var(--nx-depth-bg-soft)!important;
+  box-shadow:var(--nx-depth-shadow-soft)!important;
+}
+
+/* Preserve semantic state colors while applying depth. */
+.app-shell .price-v2-card.recommended{
+  border-color:rgba(57,215,196,.34)!important;
+}
+
+.app-shell .trade-health-v2.healthy{
+  border-color:rgba(57,215,196,.32)!important;
+  background:linear-gradient(145deg,rgba(19,61,53,.46),rgba(16,31,37,.78))!important;
+}
+
+.app-shell .trade-health-v2.attention{
+  border-color:rgba(241,199,91,.30)!important;
+}
+
+.app-shell .account-v2-vip{
+  border-color:rgba(251,191,36,.30)!important;
+}
+
+/* Do not touch LIVE PnL rotating borders; signal-pnl-motion-v25 remains authoritative. */
+.app-shell .signal-v2-card.pnl-profit,
+.app-shell .signal-v2-card.pnl-loss{
+  box-shadow:inherit;
+}
+
+@media (hover:hover) and (pointer:fine){
+  .app-shell :is(
+    .signal-v2-card:not(.pnl-profit):not(.pnl-loss),
+    .track-summary,
+    .track-section,
+    .track-integrity,
+    .track-equity-chart,
+    .price-v2-card,
+    .trade-health-v2,
+    .trade-v2-card,
+    .account-v2-service,
+    .profile-card,
+    .account-v2-license,
+    .account-v2-utilities .menu-card,
+    .closed-calendar,
+    .closed-day-item,
+    .live-chart-page-head,
+    .live-chart-header,
+    .live-chart-controls,
+    .live-chart-panel
+  ){
+    transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease;
+  }
+
+  .app-shell :is(
+    .signal-v2-card:not(.pnl-profit):not(.pnl-loss),
+    .track-section,
+    .price-v2-card,
+    .trade-v2-card,
+    .account-v2-service,
+    .account-v2-utilities .menu-card,
+    .closed-day-item
+  ):hover{
+    border-color:var(--nx-depth-border-strong)!important;
+    box-shadow:0 11px 16px -7px rgba(0,0,0,.66),0 3px 8px rgba(0,0,0,.24),inset 0 1px 0 rgba(255,255,255,.045)!important;
+  }
+}
+
+/* On phones keep the existing Home reading order:
+   recent signals -> VIP -> community -> AutoTrade. */
+@media (max-width:679px){
+  .home-v2-columns,
+  .home-v2-column{
+    display:contents;
+  }
+
+  .home-v2-recent{order:30}
+  .home-v066-vip{order:40}
+  .home-v2-community{order:50}
+  .home-v066-autotrade{order:60}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .app-shell :is(
+    .signal-v2-card,
+    .track-section,
+    .price-v2-card,
+    .trade-v2-card,
+    .account-v2-service,
+    .account-v2-utilities .menu-card,
+    .closed-day-item
+  ){
+    transition:none!important;
+  }
+}
