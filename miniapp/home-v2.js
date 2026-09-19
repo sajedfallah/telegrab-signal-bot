@@ -219,7 +219,7 @@
     const rows = [...(data.open || []).map(x => ({...x, _kind:'OPEN'})), ...(data.history || []).map(x => ({...x, _kind:x.status || x.event_type || 'HISTORY'}))].slice(0, 3);
     if (!rows.length) return section('معاملات من', `<div class="empty-state nexus-empty-state">${icon('trades')}<b>معامله فعالی وجود ندارد</b><span>وقتی اجرای واقعی جدیدی ثبت شود این بخش بروزرسانی می‌شود.</span></div>`);
     return section('معاملات من', `<div class="home-trade-list">${rows.map(row => `
-      <article><div><b>${h(row.symbol || '—')}</b><small>${h(row.direction || row.event_type || '')}</small></div><span>${h(row._kind)}</span><em class="${Number(row.profit || 0) < 0 ? 'negative' : ''}">${row.profit != null ? h(Number(row.profit).toFixed(2) + ' $') : '—'}</em></article>`).join('')}</div>
+      <article><div class="home-trade-symbol">${symbolIcon(row.symbol)}<div><b>${h(row.symbol || '—')}</b><small>${h(row.direction || row.event_type || '')}</small></div></div><span>${h(row._kind)}</span><em class="${Number(row.profit || 0) < 0 ? 'negative' : ''}">${row.profit != null ? h(Number(row.profit).toFixed(2) + ' $') : '—'}</em></article>`).join('')}</div>
       <button class="text-btn home-section-cta" data-home-go="trades">مشاهده همه معاملات ${icon('arrowLeft')}</button>`);
   }
 
