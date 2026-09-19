@@ -1,0 +1,139 @@
+/* NEXUS V35 — final authority for SVG symbol identity on signal-bearing cards */
+:is(
+  .home-signal-identity,
+  .signal-symbol-heading,
+  .signal-detail-symbol,
+  .closed-day-signal-head,
+  .home-vip-symbol,
+  .track-symbol-identity,
+  .track-trade-symbol,
+  .track-detail-symbol,
+  .source-signal-identity,
+  .trade-symbol-identity,
+  .trade-detail-symbol,
+  .admin-symbol-identity
+){
+  min-width:0;
+}
+
+.nexus-symbol-svg{
+  display:inline-grid!important;
+  place-items:center!important;
+  width:28px!important;
+  height:28px!important;
+  flex:0 0 28px!important;
+  border-radius:50%;
+  vertical-align:middle;
+  filter:drop-shadow(0 3px 7px rgba(0,0,0,.34));
+}
+.nexus-symbol-svg>svg{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+}
+
+.home-signal-identity,
+.signal-symbol-heading,
+.signal-detail-symbol,
+.closed-day-signal-head,
+.track-symbol-identity,
+.track-trade-symbol,
+.track-detail-symbol,
+.source-signal-identity,
+.trade-symbol-identity,
+.trade-detail-symbol,
+.admin-symbol-identity{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+
+.signal-symbol-heading>.nexus-symbol-svg,
+.signal-detail-symbol>.nexus-symbol-svg{
+  width:32px!important;
+  height:32px!important;
+  flex-basis:32px!important;
+}
+
+.home-signal-identity>.nexus-symbol-svg,
+.home-vip-symbol>.nexus-symbol-svg{
+  width:22px!important;
+  height:22px!important;
+  flex-basis:22px!important;
+}
+
+.closed-day-signal-head>.nexus-symbol-svg,
+.track-symbol-identity>.nexus-symbol-svg,
+.track-trade-symbol>.nexus-symbol-svg,
+.source-signal-identity>.nexus-symbol-svg,
+.trade-symbol-identity>.nexus-symbol-svg,
+.trade-detail-symbol>.nexus-symbol-svg,
+.admin-symbol-identity>.nexus-symbol-svg{
+  width:26px!important;
+  height:26px!important;
+  flex-basis:26px!important;
+}
+
+.closed-day-signal-head>div,
+.track-symbol-identity>div,
+.track-trade-symbol>div,
+.source-signal-identity>span,
+.trade-symbol-identity>div,
+.trade-detail-symbol>div{
+  min-width:0;
+}
+
+.source-signal-link .source-signal-identity{
+  direction:ltr;
+}
+.source-signal-link .source-signal-symbol{
+  direction:ltr;
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+}
+
+.home-trade-symbol{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-width:0;
+}
+.home-trade-symbol>.nexus-symbol-svg{
+  width:22px!important;
+  height:22px!important;
+  flex-basis:22px!important;
+}
+.home-trade-symbol>div{min-width:0}
+
+.home-vip-symbol{
+  position:relative;
+  display:inline-grid!important;
+  place-items:center!important;
+  width:30px;
+  height:30px;
+}
+.home-vip-lock{
+  position:absolute;
+  right:-4px;
+  bottom:-3px;
+  width:14px;
+  height:14px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#101821;
+  font-size:8px;
+  font-style:normal;
+  line-height:1;
+  box-shadow:0 0 0 1px rgba(255,255,255,.16);
+}
+
+@media(max-width:390px){
+  .signal-symbol-heading>.nexus-symbol-svg,
+  .signal-detail-symbol>.nexus-symbol-svg{
+    width:29px!important;
+    height:29px!important;
+    flex-basis:29px!important;
+  }
+}
