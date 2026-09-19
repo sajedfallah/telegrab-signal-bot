@@ -57,8 +57,8 @@
         <div><span class="eyebrow">NEXUS</span><b>Trading Intelligence</b></div>
       </div>
       <div class="eyebrow">SIGNALS · PERFORMANCE · TRUST</div>
-      <h1>با شفافیت بیشتری معامله کن</h1>
-      <p>سیگنال‌های ساختاریافته و عملکرد ثبت‌شدهٔ NEXUS را ببین؛ سپس آگاهانه سطح دسترسی مناسب خودت را انتخاب کن.</p>
+      <h1 class="home-hero-title"><span>فرصت‌ها را ببین،</span><strong>دقیق‌تر تصمیم بگیر</strong></h1>
+      <div class="home-hero-context">سیگنال‌ها و عملکرد واقعی NEXUS را یک‌جا ببین و مسیر مناسب خودت را انتخاب کن.</div>
       <div class="hero-actions home-v2-actions">
         <button class="btn primary" data-home-go="performance">مشاهده عملکرد ${icon('arrowLeft')}</button>
         <button class="btn ghost" data-home-go="signals">دیدن سیگنال‌ها</button>
