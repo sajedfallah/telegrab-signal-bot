@@ -163,7 +163,24 @@
   }
 
   function community() {
-    return section('جامعه NEXUS', `<div class="info-strip"><div><span class="nexus-card-icon small">${icon('community')}</span><b>تحلیل‌ها و خبرهای کانال عمومی</b></div><button class="text-btn" data-enter-nexus>ورود به کانال</button></div>`, 'home-v2-community');
+    return `<section class="home-v2-section home-v2-community home-community-v34">
+      <div class="home-community-v34-head">
+        <span class="home-community-v34-icon">${icon('community')}</span>
+        <div>
+          <span class="eyebrow">NEXUS COMMUNITY</span>
+          <h2>جامعه NEXUS؛ نبض بازار بیرون از سیگنال</h2>
+        </div>
+      </div>
+      <p class="home-community-v34-copy">تحلیل‌های بازار، خبرهای مهم و به‌روزرسانی‌های روزانه NEXUS را در کانال عمومی دنبال کن.</p>
+      <div class="home-community-v34-tags" aria-label="محتوای جامعه NEXUS">
+        <span>${icon('chart')} تحلیل بازار</span>
+        <span>${icon('bell')} اخبار مهم</span>
+        <span>${icon('community')} به‌روزرسانی روزانه</span>
+      </div>
+      <button class="btn primary full home-community-v34-cta" type="button" data-enter-nexus>
+        ورود به جامعه NEXUS ${icon('arrowLeft')}
+      </button>
+    </section>`;
   }
 
   function vipConversion(payload) {
@@ -248,11 +265,11 @@
     const used = new Set(['spotlight', 'performance', 'recent_signals', 'vip_conversion', 'community', 'autotrade_teaser']);
     const extras = order.filter(key => !used.has(key)).map(key => rendered.get(key) || '').join('');
 
-    const fullWidth = ['spotlight', 'performance']
+    const fullWidth = ['spotlight', 'community', 'performance']
       .map(key => rendered.get(key) || '')
       .join('');
 
-    const rightColumn = ['recent_signals', 'community']
+    const rightColumn = ['recent_signals']
       .map(key => rendered.get(key) || '')
       .join('');
 
