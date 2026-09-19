@@ -10,6 +10,10 @@
     }[c]));
   }
 
+  function symbolIcon(symbol) {
+    return window.NexusSymbolVisuals?.icon?.(symbol) || window.NexusSymbolVisuals?.mark?.(symbol) || '';
+  }
+
   function statusLabel(value) {
     const key = String(value || '').toUpperCase();
     if (key === 'CLOSED') return 'بسته‌شده';
@@ -28,7 +32,7 @@
         <div><b>${h(summary.active || 0)}</b><span>Active</span></div>
         <div><b>${h(summary.waiting || 0)}</b><span>Waiting</span></div>
       </div>
-      ${items.length ? `<div class="home-vip-locked-list">${items.map(item => `<div><span>🔒</span><b>${h(item.symbol || '—')}</b><em class="${h(String(item.status || '').toLowerCase())}">${h(statusLabel(item.status))}</em></div>`).join('')}</div>` : ''}
+      ${items.length ? `<div class="home-vip-locked-list">${items.map(item => `<div><span class="home-vip-symbol">${symbolIcon(item.symbol)}<i class="home-vip-lock">🔒</i></span><b>${h(item.symbol || '—')}</b><em class="${h(String(item.status || '').toLowerCase())}">${h(statusLabel(item.status))}</em></div>`).join('')}</div>` : ''}
       <p class="home-vip-note">برای کاربران غیرVIP فقط نماد و وضعیت کلی نمایش داده می‌شود؛ Entry، SL، TP و جزئیات Premium از Backend ارسال نمی‌شوند.</p>
       <button class="btn primary full" type="button" data-vip-preview-cta>${h(data.cta?.label || 'Unlock NEXUS VIP')}</button>
     </section>`;
