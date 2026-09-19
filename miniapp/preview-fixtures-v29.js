@@ -8,9 +8,9 @@
   ]);
   const params = new URLSearchParams(location.search);
   const host = location.hostname.toLowerCase();
-  const active = host.endsWith('.vercel.app') &&
-    !canonicalHosts.has(host) &&
-    params.get('nexus_preview') === '1';
+  const vercelPreview = host.endsWith('.vercel.app') && !canonicalHosts.has(host);
+  const vpsPreview = host === 'api.nexustrade.ir' && location.pathname.startsWith('/miniapp/preview-v29/');
+  const active = (vercelPreview || vpsPreview) && params.get('nexus_preview') === '1';
 
   const now = '2026-09-19T00:00:00+03:30';
   const later = '2026-10-19T00:00:00+03:30';
