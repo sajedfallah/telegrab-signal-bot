@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$Commit = "0fbf80d42a30f49c507b963390b853d4fa49ea47"
+$Commit = "e167900200d6898ac8bf3432c605891c7592ef2a"
 $ArchiveUrl = "https://github.com/sajedfallah/telegrab-signal-bot/archive/$Commit.zip"
 $Stamp = Get-Date -Format "yyyyMMdd-HHmmss"
 
@@ -56,12 +56,14 @@ $IndexText = [System.IO.File]::ReadAllText($SourceIndex)
 $PreviewJsText = [System.IO.File]::ReadAllText($SourcePreviewJs)
 
 foreach($Marker in @(
-    "20260919-v29-stage1-preview-data1",
+    "20260919-v30-aligned-depth1",
     "preview-fixtures-v29.js?v=20260919-preview-data1",
     "preview-fixtures-v29.css?v=20260919-preview-data1",
     "landing-v18.css?v=20260919-v29-stage1-candles-rg2",
     "signal-pnl-motion-v25.css?v=20260919-approved-vercel-landing-v28",
-    "telegram-shell-v29.css?v=20260919-v29-stage1"
+    "telegram-shell-v29.css?v=20260919-v29-stage1",
+    "ui-depth-v30.css?v=20260919-aligned-depth1",
+    "home-v2.js?v=20260919-aligned-depth1"
 )) {
     if(-not $IndexText.Contains($Marker)) { throw "Source index missing marker: $Marker" }
 }
@@ -93,7 +95,7 @@ $PreviewIndex = Join-Path $PreviewRoot "index.html"
 if(-not (Test-Path $PreviewIndex)) { throw "Preview index missing after copy" }
 
 $PreviewIndexText = [System.IO.File]::ReadAllText($PreviewIndex)
-if(-not $PreviewIndexText.Contains("20260919-v29-stage1-preview-data1")) {
+if(-not $PreviewIndexText.Contains("20260919-v30-aligned-depth1")) {
     throw "Preview index marker missing after deploy"
 }
 
@@ -106,11 +108,17 @@ $Public = Invoke-WebRequest $PreviewUrl -UseBasicParsing -Headers @{"Cache-Contr
 if($Public.StatusCode -ne 200) {
     throw "Preview public URL returned status $($Public.StatusCode)"
 }
-if(-not $Public.Content.Contains("20260919-v29-stage1-preview-data1")) {
+if(-not $Public.Content.Contains("20260919-v30-aligned-depth1")) {
     throw "Public preview is not serving the expected build"
 }
 if(-not $Public.Content.Contains("preview-fixtures-v29.js?v=20260919-preview-data1")) {
     throw "Public preview fixture reference missing"
+}
+if(-not $Public.Content.Contains("ui-depth-v30.css?v=20260919-aligned-depth1")) {
+    throw "Public preview depth layer missing"
+}
+if(-not $Public.Content.Contains("home-v2.js?v=20260919-aligned-depth1")) {
+    throw "Public preview aligned Home script missing"
 }
 
 $FixturePublic = Invoke-WebRequest "https://api.nexustrade.ir/miniapp/preview-v29/preview-fixtures-v29.js?cb=$cb" -UseBasicParsing -Headers @{"Cache-Control"="no-cache";"Pragma"="no-cache"}
