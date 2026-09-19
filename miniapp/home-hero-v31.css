@@ -1,0 +1,120 @@
+/* NEXUS Home Hero V31 — user supplied market-world visual
+   Presentation only. The image is decorative; Home data/API behavior is unchanged. */
+
+.app-shell .home-v2 > .home-v2-spotlight{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  min-height:214px;
+  padding:24px 22px 22px!important;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  border:1px solid rgba(92,174,255,.30)!important;
+  background:
+    linear-gradient(180deg,rgba(3,10,18,.10) 0%,rgba(3,10,18,.30) 34%,rgba(3,10,18,.82) 78%,rgba(3,10,18,.94) 100%),
+    linear-gradient(90deg,rgba(3,10,18,.34) 0%,rgba(3,10,18,.12) 34%,rgba(3,10,18,.12) 66%,rgba(3,10,18,.34) 100%),
+    url("./assets/brand/nexus-home-hero-v31.webp") center center / cover no-repeat!important;
+  box-shadow:
+    0 16px 30px -12px rgba(0,0,0,.72),
+    0 4px 12px rgba(0,0,0,.32),
+    inset 0 1px 0 rgba(255,255,255,.06)!important;
+}
+
+.app-shell .home-v2 > .home-v2-spotlight::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 42%,rgba(18,119,201,.10),transparent 34%),
+    linear-gradient(180deg,transparent 58%,rgba(2,8,14,.30) 100%);
+}
+
+.app-shell .home-v2-spotlight .nexus-motion-orb{
+  display:none!important;
+}
+
+.app-shell .home-v2-spotlight .home-brand-lockup{
+  display:none!important;
+}
+
+.app-shell .home-v2-spotlight>.eyebrow{
+  position:relative;
+  z-index:1;
+  width:max-content;
+  max-width:100%;
+  margin-bottom:7px;
+  padding:5px 8px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;
+  background:rgba(3,10,18,.46);
+  backdrop-filter:blur(8px);
+  color:#b9d8ef;
+  text-shadow:0 1px 8px rgba(0,0,0,.55);
+}
+
+.app-shell .home-v2-spotlight h1{
+  position:relative;
+  z-index:1;
+  max-width:18ch!important;
+  margin:0!important;
+  color:#f7fbff!important;
+  text-shadow:0 2px 16px rgba(0,0,0,.72);
+}
+
+.app-shell .home-v2-spotlight p{
+  position:relative;
+  z-index:1;
+  max-width:50ch!important;
+  margin:8px 0 0!important;
+  color:#c4d3df!important;
+  text-shadow:0 1px 10px rgba(0,0,0,.72);
+}
+
+.app-shell .home-v2-spotlight .home-v2-actions{
+  position:relative;
+  z-index:1;
+  margin-top:15px!important;
+}
+
+.app-shell .home-v2-spotlight .btn{
+  min-height:46px;
+  backdrop-filter:blur(10px);
+}
+
+.app-shell .home-v2-spotlight .btn.ghost{
+  border-color:rgba(255,255,255,.18)!important;
+  background:rgba(7,17,28,.54)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+@media(max-width:679px){
+  .app-shell .home-v2 > .home-v2-spotlight{
+    min-height:192px;
+    padding:20px 17px 17px!important;
+    background-position:center center!important;
+  }
+
+  .app-shell .home-v2-spotlight h1{
+    max-width:16ch!important;
+  }
+
+  .app-shell .home-v2-spotlight p{
+    max-width:34ch!important;
+    font-size:11.5px!important;
+    line-height:1.75!important;
+  }
+}
+
+@media(max-width:390px){
+  .app-shell .home-v2 > .home-v2-spotlight{
+    min-height:186px;
+    padding:18px 15px 15px!important;
+  }
+
+  .app-shell .home-v2-spotlight>.eyebrow{
+    font-size:8.5px!important;
+  }
+}
