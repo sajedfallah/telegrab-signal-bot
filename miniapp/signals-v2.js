@@ -16,7 +16,7 @@
   function icon(name, className = 'nexus-inline-icon') {
     return window.NexusIcons?.svg?.(name, className) || '';
   }
-  function symbolMark(symbol) { return window.NexusSymbolVisuals?.mark?.(symbol) || ''; }
+  function symbolIcon(symbol) { return window.NexusSymbolVisuals?.icon?.(symbol) || window.NexusSymbolVisuals?.mark?.(symbol) || ''; }
 
   function track(name, metadata = {}) {
     window.NexusProduct?.track?.(name, metadata);
@@ -132,7 +132,7 @@
         <span class="status-pill ${item.status === 'CLOSED' ? 'neutral' : 'success'}">${h(item.status || '')}</span>
       </div>
       <div class="signal-v2-title">
-        <div class="signal-symbol-heading">${symbolMark(item.symbol)}<div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div></div>
+        <div class="signal-symbol-heading">${symbolIcon(item.symbol)}<div><h3>${h(item.symbol || '—')}</h3><small>${h(dt(item.published_at))}</small></div></div>
         <div class="signal-v2-side">${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}${resultChip(item)}</div>
       </div>
       ${details}
@@ -175,7 +175,7 @@
       const pnl = row?.net_pnl;
       cells.push(`<button type="button" class="closed-calendar-day ${date === data.day ? 'selected' : ''}" data-closed-day="${date}"><b>${index}</b>${pnl == null ? (row ? '<small>نتیجه ناموجود</small>' : '') : `<small class="${pnl > 0 ? 'profit' : pnl < 0 ? 'loss' : 'flat'}">${signed(pnl)} $</small>`}</button>`);
     }
-    const timeline = !data.day ? '<div class="empty-state">برای مشاهده Timeline یک روز را انتخاب کنید.</div>' : (data.items || []).length ? `<div class="closed-day-timeline">${data.items.map(item => `<article class="closed-day-item" data-open-signal="${h(item.id)}"><span class="closed-day-node"></span>${symbolMark(item.symbol)}<div><b>${h(item.symbol)} · ${h(item.direction || '')}</b><small>${h(item.result || 'CLOSED')} · ${item.realized_pnl != null ? signed(item.realized_pnl) + ' $' : 'PnL ناموجود'}</small><small>ورود: ${h(closedDt(item.published_at))}</small><small>بستن: ${h(closedDt(item.closed_at))}</small></div></article>`).join('')}</div>` : '<div class="empty-state">در این روز سیگنالی بسته نشده است.</div>';
+    const timeline = !data.day ? '<div class="empty-state">برای مشاهده Timeline یک روز را انتخاب کنید.</div>' : (data.items || []).length ? `<div class="closed-day-timeline">${data.items.map(item => `<article class="closed-day-item" data-open-signal="${h(item.id)}"><span class="closed-day-node"></span><div class="closed-day-signal-head">${symbolIcon(item.symbol)}<div><b>${h(item.symbol)} · ${h(item.direction || '')}</b><small>${h(item.result || 'CLOSED')} · ${item.realized_pnl != null ? signed(item.realized_pnl) + ' $' : 'PnL ناموجود'}</small><small>ورود: ${h(closedDt(item.published_at))}</small><small>بستن: ${h(closedDt(item.closed_at))}</small></div></div></article>`).join('')}</div>` : '<div class="empty-state">در این روز سیگنالی بسته نشده است.</div>';
     return `<section class="closed-calendar"><div class="closed-calendar-head"><button type="button" data-month-shift="-1" aria-label="ماه قبل">‹</button><strong>${h(new Intl.DateTimeFormat('fa-IR-u-ca-gregory', {month:'long', year:'numeric', timeZone:'UTC'}).format(new Date(Date.UTC(year, month-1, 1))))}</strong><button type="button" data-month-shift="1" aria-label="ماه بعد">›</button></div><div class="closed-calendar-grid">${['ش','ی','د','س','چ','پ','ج'].map(label => `<span class="weekday">${label}</span>`).join('')}${cells.join('')}</div><button type="button" class="text-btn" data-closed-today>امروز</button></section><h2 class="closed-day-title">${data.day ? `سیگنال‌های بسته‌شده · ${h(data.day)}` : 'روز موردنظر را انتخاب کنید'}</h2>${timeline}`;
   }
 
@@ -284,7 +284,7 @@
       const targets = targetHtml(item.targets);
       const direction = String(item.direction || '').toUpperCase();
       showModal(`Signal ${item.code ? '#' + h(item.code) : ''}`, `
-        <div class="signal-detail-head"><div><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span><h3>${h(item.symbol)}</h3></div>${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}</div>
+        <div class="signal-detail-head"><div class="signal-detail-symbol">${symbolIcon(item.symbol)}<div><span class="badge ${item.access === 'VIP' ? 'vip-badge' : ''}">${h(item.access)}</span><h3>${h(item.symbol)}</h3></div></div>${direction ? `<b class="direction-chip ${h(direction.toLowerCase())}">${h(direction)}</b>` : ''}</div>
         <div class="kv"><span>Status</span><b>${h(item.status)}</b></div>
         ${resultChip(item)}
         ${item.entry_price != null ? `<div class="kv"><span>Entry</span><b>${price(item.entry_price)}</b></div>` : ''}
