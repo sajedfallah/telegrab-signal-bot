@@ -51,6 +51,10 @@
     return String(value ?? '').replace(/[&<>"']/g, (ch) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
   }
 
+  function adminSymbolIcon(symbol) {
+    return window.NexusSymbolVisuals?.icon?.(symbol) || window.NexusSymbolVisuals?.mark?.(symbol) || '';
+  }
+
   function fa(value) {
     return new Intl.NumberFormat('fa-IR', {maximumFractionDigits: 8}).format(Number(value || 0));
   }
@@ -173,7 +177,7 @@
       request_id: requestId(), digits: calc.digits, setup_mode: 'MANUAL', trailing_code: $('trailing').value,
       volume_mode: state.volumeMode, lot_size: lot, risk_percent: riskPercent,
     };
-    $('preview').innerHTML = `<div class="preview-hero"><strong>${esc(calc.symbol)}</strong><em>${esc(calc.direction)}</em></div><div class="preview-grid"><div><span>ورود</span><b>${fa(calc.entry)}</b></div><div><span>منبع ورود</span><b>${esc(state.entrySource)}</b></div><div><span>حد ضرر</span><b>${fa(calc.stop_loss)}</b></div><div><span>Initial R</span><b>${fa(calc.risk)}</b></div><div><span>Timeframe</span><b>${esc($('timeframe').value)}</b></div><div><span>Trailing</span><b>${esc($('trailing').value)}</b></div><div><span>Volume</span><b>${esc(state.volumeMode)} · ${esc(lot ?? riskPercent)}${lot ? ' lot' : '%'}</b></div><div><span>Destination</span><b>${esc(state.destination)}</b></div>${calc.targets.map((value, index) => `<div><span>TP${index + 1}</span><b>${fa(value)}</b></div>`).join('')}<div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div></div>`;
+    $('preview').innerHTML = `<div class="preview-hero"><strong class="admin-symbol-identity">${adminSymbolIcon(calc.symbol)}<span>${esc(calc.symbol)}</span></strong><em>${esc(calc.direction)}</em></div><div class="preview-grid"><div><span>ورود</span><b>${fa(calc.entry)}</b></div><div><span>منبع ورود</span><b>${esc(state.entrySource)}</b></div><div><span>حد ضرر</span><b>${fa(calc.stop_loss)}</b></div><div><span>Initial R</span><b>${fa(calc.risk)}</b></div><div><span>Timeframe</span><b>${esc($('timeframe').value)}</b></div><div><span>Trailing</span><b>${esc($('trailing').value)}</b></div><div><span>Volume</span><b>${esc(state.volumeMode)} · ${esc(lot ?? riskPercent)}${lot ? ' lot' : '%'}</b></div><div><span>Destination</span><b>${esc(state.destination)}</b></div>${calc.targets.map((value, index) => `<div><span>TP${index + 1}</span><b>${fa(value)}</b></div>`).join('')}<div><span>MT5 Admin</span><b>${state.mt5?.online ? 'ONLINE' : 'OFFLINE · WAITING'}</b></div></div>`;
     $('modal').hidden = false;
   }
 
@@ -243,7 +247,7 @@
     const pnlClass = adminSignalPnlClass(item.live);
     const retryable = ['FAILED', 'PUBLISH_FAILED', 'EXPIRED'].includes(status) || (['UPLOADED', 'COMPLETED'].includes(job) && status !== 'PUBLISHED' && stage !== 'PUBLISHED');
     const retry = allowRetry && retryable ? `<button class="outline retry-signal" data-request-id="${esc(item.request_id)}">تلاش مجدد</button>` : '';
-    return `<article class="card ${esc(pnlClass)}"><div class="card-head"><strong>${item.signal?.code ? esc(item.signal.code) + ' · ' : ''}${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
+    return `<article class="card ${esc(pnlClass)}"><div class="card-head"><strong class="admin-symbol-identity">${adminSymbolIcon(payload.symbol || item.signal?.symbol)}<span>${item.signal?.code ? esc(item.signal.code) + ' · ' : ''}${esc(payload.symbol || item.signal?.symbol || '—')} · ${esc(payload.direction || item.signal?.direction || '')}</span></strong><span class="status ${esc(status)}">${esc(status)}</span></div><div class="levels"><span>ENTRY<b>${esc(entry)}</b></span><span>SL<b>${esc(payload.stop_loss ?? item.signal?.stop_loss ?? '—')}</b></span><span>DEST<b>${esc(payload.destination || item.signal?.destination || '—')}</b></span></div>${liveBlock(item.live)}${item.error_message ? `<p class="admin-signal-error">${esc(item.error_message)}</p>` : ''}${retry}</article>`;
   }
 
   async function retrySignal(button) {
@@ -285,7 +289,7 @@
     const age = position.last_seen_at ? Math.max(0, Math.round((Date.now() - new Date(position.last_seen_at).getTime()) / 1000)) : null;
     const freshness = !state.mt5?.online ? 'OFFLINE' : age == null ? 'UNAVAILABLE' : age > 120 ? 'STALE' : isOrder ? 'PENDING' : 'LIVE';
     const actions = signalId ? `<details class="admin-action-sheet"><summary>اقدامات ${isOrder ? 'سفارش' : 'پوزیشن'}</summary><div class="trade-actions" data-signal="${signalId}" data-account="${account}">${isOrder ? '<button data-command="CANCEL_PENDING" class="danger">لغو Pending</button>' : '<button data-command="MOVE_SL_TO_ENTRY" class="safe">Break Even</button><button data-command="PARTIAL_CLOSE">Partial Close</button><button data-command="ACTIVATE_TRAILING">Trailing</button><button data-command="UPDATE_SL">تغییر SL</button><button data-command="UPDATE_TP">تغییر TP</button><button data-command="CLOSE_SIGNAL" class="danger">بستن معامله</button>'}</div></details>` : '';
-    return `<article class="card"><div class="card-head"><strong>${window.NexusSymbolVisuals?.mark?.(position.symbol) || ''}${position.signal_code ? esc(position.signal_code) + ' · ' : ''}${esc(position.symbol || '—')} · ${esc(position.direction || position.type || '')}</strong><span class="status">${freshness}</span></div><div class="levels admin-position-levels"><span>TICKET<b>${esc(position.ticket || '—')}</b></span><span>ENTRY<b>${esc(position.entry_price ?? position.price_open ?? '—')}</b></span><span>CURRENT<b>${esc(position.current_price ?? '—')}</b></span><span>VOLUME<b>${esc(position.volume ?? '—')}</b></span><span>P&amp;L<b class="${profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'flat'}">${rawProfit == null ? '—' : signed(profit)}</b></span><span>SL / TP<b>${esc(position.stop_loss ?? '—')} / ${esc(position.take_profit ?? '—')}</b></span></div><div class="admin-position-sync">Last MT5 Sync: ${age == null ? '—' : esc(age + 's ago')}</div>${actions}</article>`;
+    return `<article class="card"><div class="card-head"><strong>${adminSymbolIcon(position.symbol)}${position.signal_code ? esc(position.signal_code) + ' · ' : ''}${esc(position.symbol || '—')} · ${esc(position.direction || position.type || '')}</strong><span class="status">${freshness}</span></div><div class="levels admin-position-levels"><span>TICKET<b>${esc(position.ticket || '—')}</b></span><span>ENTRY<b>${esc(position.entry_price ?? position.price_open ?? '—')}</b></span><span>CURRENT<b>${esc(position.current_price ?? '—')}</b></span><span>VOLUME<b>${esc(position.volume ?? '—')}</b></span><span>P&amp;L<b class="${profit > 0 ? 'profit' : profit < 0 ? 'loss' : 'flat'}">${rawProfit == null ? '—' : signed(profit)}</b></span><span>SL / TP<b>${esc(position.stop_loss ?? '—')} / ${esc(position.take_profit ?? '—')}</b></span></div><div class="admin-position-sync">Last MT5 Sync: ${age == null ? '—' : esc(age + 's ago')}</div>${actions}</article>`;
   }
 
   async function loadPositions() {
