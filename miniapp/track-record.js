@@ -12,6 +12,10 @@
     return window.NexusIcons?.svg?.(name, className) || '';
   }
 
+  function symbolIcon(symbol) {
+    return window.NexusSymbolVisuals?.icon?.(symbol) || window.NexusSymbolVisuals?.mark?.(symbol) || '';
+  }
+
   function track(name, metadata = {}) {
     window.NexusProduct?.track?.(name, metadata);
   }
@@ -65,7 +69,7 @@
   function symbols(rows) {
     if (!rows?.length) return '<div class="empty-state">داده کافی برای تفکیک نمادها وجود ندارد.</div>';
     return `<div class="track-table">${rows.map(row => `<article>
-      <div class="track-symbol-copy"><b>${h(row.symbol)}</b><span>${h(row.total)} سیگنال</span></div>
+      <div class="track-symbol-copy"><div class="track-symbol-identity">${symbolIcon(row.symbol)}<div><b>${h(row.symbol)}</b><span>${h(row.total)} سیگنال</span></div></div></div>
       <div class="track-winbar" aria-label="Win Rate ${h(row.win_rate)}%"><i style="width:${Math.max(0, Math.min(100, Number(row.win_rate || 0)))}%"></i></div>
       <span class="win">${h(row.wins)} W</span><span class="loss">${h(row.losses)} L</span><span>${h(row.be)} BE</span><em>${h(row.win_rate)}%</em>
     </article>`).join('')}</div>`;
@@ -109,10 +113,10 @@
 
   function tradeRow(item) {
     if (item.locked) {
-      return `<button class="track-trade-row locked" type="button" disabled><div><b>🔒 ${h(item.symbol)}</b><small>${h(dt(item.close_time))}</small></div><span>${item.realized_r == null ? 'CLOSED' : h(num(item.realized_r, 2, 'R'))}</span><em>VIP</em></button>`;
+      return `<button class="track-trade-row locked" type="button" disabled><div class="track-trade-symbol">${symbolIcon(item.symbol)}<div><b>🔒 ${h(item.symbol)}</b><small>${h(dt(item.close_time))}</small></div></div><span>${item.realized_r == null ? 'CLOSED' : h(num(item.realized_r, 2, 'R'))}</span><em>VIP</em></button>`;
     }
     const direction = item.direction ? ` · ${h(item.direction)}` : '';
-    return `<button class="track-trade-row" type="button" data-performance-trade="${h(item.id)}"><div><b>${h(item.symbol)}${direction}</b><small>${h(dt(item.close_time))}</small></div><span>${item.realized_r == null ? h(item.result_value ?? '—') : h(num(item.realized_r, 2, 'R'))}</span><em>${h(item.result_source || 'UNKNOWN')}</em></button>`;
+    return `<button class="track-trade-row" type="button" data-performance-trade="${h(item.id)}"><div class="track-trade-symbol">${symbolIcon(item.symbol)}<div><b>${h(item.symbol)}${direction}</b><small>${h(dt(item.close_time))}</small></div></div><span>${item.realized_r == null ? h(item.result_value ?? '—') : h(num(item.realized_r, 2, 'R'))}</span><em>${h(item.result_source || 'UNKNOWN')}</em></button>`;
   }
 
   async function loadHistory() {
@@ -142,7 +146,7 @@
       setBody(`
         <button class="text-btn track-detail-back" id="performanceBackToHistory">← بازگشت به History</button>
         <section class="track-section track-trade-detail">
-          <div class="section-head"><h2>${h(item.symbol)} · ${h(item.direction)}</h2><span class="badge">${h(item.result_source)}</span></div>
+          <div class="section-head"><h2 class="track-detail-symbol">${symbolIcon(item.symbol)}<span>${h(item.symbol)} · ${h(item.direction)}</span></h2><span class="badge">${h(item.result_source)}</span></div>
           <div class="track-detail-grid">
             <div><span>Entry</span><b>${h(item.initial_entry ?? '—')}</b></div>
             <div><span>Initial SL</span><b>${h(item.initial_sl ?? '—')}</b></div>
