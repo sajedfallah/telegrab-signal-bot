@@ -12,6 +12,10 @@
     return window.NexusIcons?.svg?.(name, className) || '';
   }
 
+  function symbolIcon(symbol) {
+    return window.NexusSymbolVisuals?.icon?.(symbol) || '';
+  }
+
   function track(name, metadata = {}) {
     window.NexusProduct?.track?.(name, metadata);
   }
@@ -127,7 +131,7 @@
     return section('سیگنال‌های اخیر', `<div class="home-signal-list">${items.map(item => `
       <article class="home-signal-card compact ${item.locked ? 'locked' : ''}" data-home-signal="${h(item.id)}">
         <div class="home-signal-compact-main">
-          <div class="home-signal-symbol"><strong>${h(item.symbol)}</strong><small>${h(dt(item.published_at))}</small></div>
+          <div class="home-signal-symbol"><div class="home-signal-identity">${symbolIcon(item.symbol)}<strong>${h(item.symbol)}</strong></div><small>${h(dt(item.published_at))}</small></div>
           <span class="direction-chip ${h(String(item.direction || '').toLowerCase())}">${item.locked ? icon('lock', 'nexus-lock-icon') : h(item.direction || '—')}</span>
           <span class="status-pill ${item.status === 'CLOSED' ? 'neutral' : 'success'}">${h(item.status || 'ACTIVE')}</span>
         </div>
