@@ -11,6 +11,10 @@
     return window.NexusIcons?.svg?.(name, className) || '';
   }
 
+  function symbolIcon(symbol) {
+    return window.NexusSymbolVisuals?.icon?.(symbol) || window.NexusSymbolVisuals?.mark?.(symbol) || '';
+  }
+
   function track(name, metadata = {}) {
     window.NexusProduct?.track?.(name, metadata);
   }
@@ -56,7 +60,7 @@
     const direction = String(item.direction || item.order_type || '').toUpperCase();
     return `<article class="trade-v2-card live-trade-card" data-live-ticket="${h(ticket)}">
       <div class="signal-top"><div><span class="direction-chip ${h(direction.toLowerCase())}">${h(direction || 'TRADE')}</span>${item.signal_code ? `<span class="badge muted">Signal #${h(item.signal_code)}</span>` : ''}</div><span class="status-pill ${pending ? 'neutral' : 'success'}">${h(item.status || (pending ? 'PENDING' : 'OPEN'))}</span></div>
-      <div class="trade-v2-title"><div><h3>${h(item.symbol || '—')}</h3><small>Ticket ${h(ticket || '—')}</small></div><em class="${Number(item.profit || 0) < 0 ? 'negative' : ''}">${pending ? '—' : h(num(item.profit)) + ' $'}</em></div>
+      <div class="trade-v2-title"><div class="trade-symbol-identity">${symbolIcon(item.symbol)}<div><h3>${h(item.symbol || '—')}</h3><small>Ticket ${h(ticket || '—')}</small></div></div><em class="${Number(item.profit || 0) < 0 ? 'negative' : ''}">${pending ? '—' : h(num(item.profit)) + ' $'}</em></div>
       <div class="trade-v2-grid">
         <div><span>Volume</span><b>${h(item.volume ?? '—')}</b></div>
         <div><span>Entry</span><b>${h(item.entry_price ?? '—')}</b></div>
@@ -72,7 +76,7 @@
     const direction = String(item.direction || item.event_type || '').toUpperCase();
     return `<article class="trade-v2-card history" data-trade-detail="${h(item.id)}">
       <div class="signal-top"><div><span class="direction-chip ${h(direction.toLowerCase())}">${h(direction || 'TRADE')}</span>${item.signal_id ? `<span class="badge muted">Signal ${h(item.signal_id)}</span>` : ''}</div><span class="status-pill success">${h(item.status || item.event_type || 'HISTORY')}</span></div>
-      <div class="trade-v2-title"><div><h3>${h(item.symbol || '—')}</h3><small>Ticket ${h(item.ticket || '—')}</small></div><em class="${Number(item.profit || 0) < 0 ? 'negative' : ''}">${h(num(item.profit))} $</em></div>
+      <div class="trade-v2-title"><div class="trade-symbol-identity">${symbolIcon(item.symbol)}<div><h3>${h(item.symbol || '—')}</h3><small>Ticket ${h(item.ticket || '—')}</small></div></div><em class="${Number(item.profit || 0) < 0 ? 'negative' : ''}">${h(num(item.profit))} $</em></div>
       <div class="trade-v2-grid compact"><div><span>Entry</span><b>${h(item.entry_price ?? '—')}</b></div><div><span>Exit</span><b>${h(item.exit_price ?? '—')}</b></div><div><span>Volume</span><b>${h(item.volume ?? '—')}</b></div></div>
       <div class="trade-card-footer"><small class="trade-v2-time">${h(dt(item.created_at))}</small><span>جزئیات ${icon('arrowLeft')}</span></div>
     </article>`;
@@ -114,14 +118,14 @@
 
   function sourceSignal(source) {
     if (!source) return '';
-    return `<button class="source-signal-link" data-source-signal="${h(source.id)}"><span><small>سیگنال مبدا</small><b>${source.code ? '#' + h(source.code) : `#${h(source.id)}`}</b></span><span>${h(source.symbol || '')} ${icon('arrowLeft')}</span></button>`;
+    return `<button class="source-signal-link" data-source-signal="${h(source.id)}"><span class="source-signal-identity">${symbolIcon(source.symbol)}<span><small>سیگنال مبدا</small><b>${source.code ? '#' + h(source.code) : `#${h(source.id)}`}</b></span></span><span class="source-signal-symbol">${h(source.symbol || '')} ${icon('arrowLeft')}</span></button>`;
   }
 
   function detailBody(data) {
     const item = data.trade || {};
     const direction = String(item.direction || item.order_type || item.event_type || '').toUpperCase();
     return `<div class="trade-detail-v3">
-      <div class="signal-detail-head"><div><span class="direction-chip ${h(direction.toLowerCase())}">${h(direction || 'TRADE')}</span><h3>${h(item.symbol || '—')}</h3></div><b>${item.profit != null ? h(num(item.profit)) + ' $' : h(item.status || '')}</b></div>
+      <div class="signal-detail-head"><div class="trade-detail-symbol">${symbolIcon(item.symbol)}<div><span class="direction-chip ${h(direction.toLowerCase())}">${h(direction || 'TRADE')}</span><h3>${h(item.symbol || '—')}</h3></div></div><b>${item.profit != null ? h(num(item.profit)) + ' $' : h(item.status || '')}</b></div>
       <div class="trade-detail-grid">
         <div><span>Broker Ticket</span><b>${h(item.ticket || '—')}</b></div>
         ${item.signal_code ? `<div><span>Signal</span><b>${h(item.signal_code)}</b></div>` : ''}
