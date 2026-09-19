@@ -1,18 +1,63 @@
 # UNIVERSAL_START_PROMPT.md
 
-# Universal Project Master Prompt
+# Universal AI Project Master Prompt
 
-This file defines the standard startup, synchronization, audit, and development workflow for projects managed with AI assistants such as ChatGPT or Codex.
+This file defines the universal operating protocol for AI-assisted software development.
 
-The repository is the primary Source of Truth.
+It is intentionally project-agnostic.
 
-Do not rely on old conversations, filenames, local packages, remembered version numbers, or previous assumptions when repository evidence is available.
+It may be placed in ANY software repository.
+
+Repository-specific architecture, business rules, workstreams, commands, product requirements, and technical decisions must remain in repository-specific documentation and must NOT be hard-coded into this universal file.
 
 ---
 
-# 1. MASTER START COMMAND
+# 1. CORE PRINCIPLE
 
-The universal project entry command is:
+The repository is the primary Source of Truth.
+
+Never assume that information from:
+
+- previous AI conversations
+- memory
+- old ZIP packages
+- local copies
+- screenshots
+- filenames
+- old documentation
+- version labels
+
+is newer or more authoritative than verified repository evidence.
+
+When evidence conflicts, verify before acting.
+
+Never guess when repository evidence can be inspected.
+
+---
+
+# 2. UNIVERSAL COMMANDS
+
+The following commands are available for every repository using this Master Prompt:
+
+```text
+PROJECT-SYNC
+PROJECT-STATUS
+PROJECT-AUDIT
+PROJECT-PLAN
+PROJECT-IMPLEMENT
+PROJECT-VERIFY
+PROJECT-RELEASE
+```
+
+These commands have fixed meanings across all projects.
+
+Repository-specific commands may exist, but they must be defined in repository-specific documentation.
+
+---
+
+# 3. PROJECT IDENTIFICATION
+
+When starting work in a new conversation, use:
 
 ```text
 PROJECT-SYNC
@@ -23,239 +68,318 @@ Example:
 
 ```text
 PROJECT-SYNC
-Repository: sajedfallah/example-project
+Repository: example/project
 ```
 
-`PROJECT-SYNC` is the single universal synchronization command.
+The repository identifier determines which project is being worked on.
 
-Do not introduce alternative project-start commands unless the repository explicitly defines them.
+Never infer the repository from an unrelated previous conversation when an explicit repository identifier is available.
 
 ---
 
-# 2. PROJECT-SYNC BEHAVIOR
+# 4. PROJECT-SYNC
 
-When a new conversation starts with `PROJECT-SYNC`, first synchronize your understanding with the repository.
+## Purpose
+
+Synchronize the AI assistant with the current verified repository state.
+
+## Command
+
+```text
+PROJECT-SYNC
+Repository: owner/repository
+```
+
+Optional:
+
+```text
+PROJECT-SYNC
+Repository: owner/repository
+Task: description
+```
+
+## Required behavior
 
 Before modifying application source code:
 
-1. Identify the requested repository.
-2. Treat the specified repository as the primary Source of Truth.
-3. Read `UNIVERSAL_START_PROMPT.md`.
-4. Read `AI_WORKFLOW.md` if it exists.
-5. Read `PROJECT_MASTER.md` if it exists.
-6. Read repository-specific architecture, workflow, routing, or project-context documentation if it exists.
-7. Inspect the current repository state.
-8. Identify the default/canonical branch.
-9. Inspect relevant active branches.
-10. Inspect relevant open Pull Requests.
-11. Inspect recent commits related to the requested work.
-12. Inspect CI / GitHub Actions status when applicable.
-13. Identify the latest verified implementation state.
-14. Identify unfinished, experimental, candidate, or unmerged work.
-15. Identify known blockers, risks, and unresolved failures.
-16. Determine which project area or workstream the user's request belongs to.
+1. Identify and access the requested repository.
+2. Read `UNIVERSAL_START_PROMPT.md`.
+3. Read `AI_WORKFLOW.md` if it exists.
+4. Read `PROJECT_MASTER.md` if it exists.
+5. Read relevant repository-specific documentation.
+6. Identify the default/canonical branch.
+7. Inspect relevant branches.
+8. Inspect open relevant Pull Requests.
+9. Inspect recent relevant commits.
+10. Inspect CI / GitHub Actions when applicable.
+11. Identify the latest verified implementation state.
+12. Identify unfinished or unmerged work.
+13. Identify known blockers and failures.
+14. Identify repository-specific workstreams or routing rules.
+15. Determine which area the user's task belongs to.
+16. Report the synchronized project state.
 
-Do not modify application source code until enough repository evidence has been gathered to understand the current state and the requested scope.
+`PROJECT-SYNC` does NOT automatically mean "modify the code."
 
-Documentation-only synchronization may be performed when explicitly requested.
+Its primary purpose is synchronization.
 
 ---
 
-# 3. SOURCE-OF-TRUTH HIERARCHY
+# 5. PROJECT-STATUS
 
-When information conflicts, use this priority order:
+## Purpose
 
-1. Current repository state and Git history
-2. Verified production/runtime state
-3. Current canonical documentation on the repository's canonical branch
-4. `PROJECT_MASTER.md`
-5. `AI_WORKFLOW.md`
-6. Repository-specific context/routing documentation
-7. Current user instruction
-8. Previous conversation context
-9. Old packages, exports, ZIP files, local copies, screenshots, or filenames
+Provide a fast current-state report without modifying code.
 
-A filename is not proof of version authority.
-
-Names such as:
+## Command
 
 ```text
-FINAL
-LATEST
-NEW
-MASTER
-PRODUCTION
-READY
-V1
-V2
-V35
-V99
+PROJECT-STATUS
 ```
 
-must never be treated as proof that a file is the latest or canonical version.
+Optional:
 
-Verify using repository evidence.
+```text
+PROJECT-STATUS
+Scope: description
+```
+
+## Required behavior
+
+Report relevant information such as:
+
+- canonical/default branch
+- latest relevant commit
+- active relevant branches
+- open relevant Pull Requests
+- CI status
+- current version/release evidence
+- active work
+- blockers
+- known failures
+- unverified areas
+- next logical action
+
+Do not modify source code.
+
+Do not perform a full audit unless required to determine status.
 
 ---
 
-# 4. REQUIRED INITIAL AUDIT
+# 6. PROJECT-AUDIT
 
-If `AI_WORKFLOW.md` defines a repository audit, follow it completely.
+## Purpose
 
-If no repository-specific audit exists, perform a reasonable audit covering:
+Perform a comprehensive evidence-based project review.
+
+## Command
+
+```text
+PROJECT-AUDIT
+```
+
+Optional:
+
+```text
+PROJECT-AUDIT
+Scope: security
+```
+
+or:
+
+```text
+PROJECT-AUDIT
+Scope: full
+```
+
+## Audit areas
+
+When relevant, inspect:
 
 - repository structure
 - architecture
-- active development state
-- important branches
-- Pull Requests
-- recent relevant commits
-- CI status
-- application entry points
-- configuration
+- code quality
 - dependencies
-- security-sensitive configuration
+- configuration
+- security
+- secrets exposure
 - tests
-- deployment configuration
+- CI
+- performance
+- reliability
+- maintainability
+- observability
+- deployment
+- developer experience
+- user experience
+- scalability
+- automation
+- technical debt
 - documentation
-- known unfinished work
-- obvious dead/duplicate code
-- current release/version evidence
+- duplicate/dead code
+- incomplete features
+- risky areas
+- release process
 
-During the audit:
+During an audit:
 
-- do not guess
-- do not silently fill missing information
-- distinguish facts from assumptions
-- distinguish verified implementation from planned functionality
-- distinguish repository state from production state
+DO NOT modify application source code unless the user explicitly changes the instruction.
 
----
+Clearly separate:
 
-# 5. FACT / REQUIREMENT / RECOMMENDATION SEPARATION
+### VERIFIED FACTS
 
-Always distinguish between:
+Evidence directly supported by repository/runtime/tests/logs.
 
-## VERIFIED FACT
+### CONFIRMED REQUIREMENTS
 
-Directly supported by repository, runtime, CI, logs, tests, or other reliable evidence.
+Requirements explicitly approved by the project owner.
 
-## CONFIRMED REQUIREMENT
+### RECOMMENDATIONS
 
-Explicitly requested or approved by the user/project owner.
+Independent engineering/product recommendations.
 
-## RECOMMENDATION
-
-Your own engineering, product, architecture, security, UX, or development recommendation.
-
-Never present a recommendation as if it already exists.
-
-Never implement a recommendation solely because you recommended it.
-
-Obtain explicit approval when the recommendation materially changes behavior, architecture, strategy, user experience, risk, or production logic.
+Do not present recommendations as existing implementation.
 
 ---
 
-# 6. DEVELOPMENT RULES
+# 7. PROJECT-PLAN
 
-Before making changes:
+## Purpose
 
-1. Identify the exact problem.
-2. Identify the affected workstream/module.
-3. Locate the current implementation.
-4. Inspect related tests.
-5. Inspect relevant recent history.
-6. Determine dependencies and side effects.
-7. Preserve unrelated behavior.
-8. Define expected evidence for success.
+Design an implementation plan without changing code.
 
-Prefer the smallest correct change.
-
-Do not perform broad refactors while fixing an isolated issue unless required.
-
-Do not silently change business rules, trading strategy, risk policy, execution rules, pricing rules, permissions, security rules, or user-facing behavior.
-
-If such a change appears necessary, explain it before implementation.
-
----
-
-# 7. GIT WORKFLOW
-
-GitHub/repository state is authoritative.
-
-For meaningful or risky changes, prefer:
+## Command
 
 ```text
-canonical branch
-    ↓
-feature/fix branch
-    ↓
-implementation
-    ↓
-tests
-    ↓
-review/diff
-    ↓
-Pull Request
-    ↓
-CI
-    ↓
-merge
+PROJECT-PLAN
+Task: description
 ```
 
-Avoid mixing unrelated changes in one Pull Request.
+Example:
 
-Whenever practical:
+```text
+PROJECT-PLAN
+Task: Reduce API response latency.
+```
 
-**one concern / workstream = one PR**
+## Required behavior
 
-Before merging, verify:
+Investigate the current implementation first.
 
-- intended files only
-- no accidental generated files
-- no secrets
-- no `.env`
-- no unrelated code
-- no debug credentials
-- no stale packages
-- no unexpected architecture changes
-- relevant tests
-- CI status
+Then provide, when relevant:
 
----
+1. Problem definition
+2. Current implementation
+3. Likely root cause
+4. Affected modules/files
+5. Proposed solution
+6. Alternative solutions
+7. Dependencies
+8. Risks
+9. Backward-compatibility considerations
+10. Security implications
+11. Required tests
+12. Expected evidence of success
+13. Implementation order
+14. Rollback considerations
 
-# 8. SECURITY RULES
+Do not implement the plan.
 
-Never expose or commit:
-
-- API keys
-- bot tokens
-- access tokens
-- passwords
-- private keys
-- session secrets
-- database credentials
-- authentication cookies
-- production credentials
-- `.env` secrets
-
-If a credential is found in repository history or source code:
-
-1. Do not reproduce it in chat.
-2. Report the location/type without revealing the secret.
-3. Remove it from active source when authorized.
-4. Recommend rotation/revocation if exposure is possible.
-5. Use environment variables or an approved secret-management mechanism.
-
-A secret removed from the latest commit may still be compromised if it exists in Git history.
+Wait for explicit implementation approval.
 
 ---
 
-# 9. TESTING AND VALIDATION
+# 8. PROJECT-IMPLEMENT
 
-Never claim something works solely because the code looks correct.
+## Purpose
 
-Separate these states:
+Implement an explicitly requested or approved change.
+
+## Command
+
+```text
+PROJECT-IMPLEMENT
+Task: description
+```
+
+If a previously approved plan exists:
+
+```text
+PROJECT-IMPLEMENT
+Task: Implement the approved plan.
+```
+
+## Required behavior
+
+Before changing code:
+
+1. Reconfirm current repository state if necessary.
+2. Locate the exact implementation.
+3. Inspect relevant history.
+4. Inspect related tests.
+5. Identify dependencies.
+6. Identify potential regressions.
+7. Preserve unrelated behavior.
+
+Then:
+
+1. Use an appropriate branch when practical.
+2. Make the smallest correct change.
+3. Add/update relevant tests.
+4. Run available validation.
+5. Review the resulting diff.
+6. Check for accidental files.
+7. Check for secrets.
+8. Commit when appropriate.
+9. Create/update a Pull Request when appropriate.
+10. Report evidence.
+
+Do not silently change unrelated behavior.
+
+---
+
+# 9. PROJECT-VERIFY
+
+## Purpose
+
+Verify an implementation or current candidate without automatically adding unrelated changes.
+
+## Command
+
+```text
+PROJECT-VERIFY
+```
+
+Optional:
+
+```text
+PROJECT-VERIFY
+Scope: description
+```
+
+## Required behavior
+
+When applicable, inspect:
+
+- diff
+- intended scope
+- tests
+- CI
+- build/compile evidence
+- lint/static analysis
+- security
+- secrets
+- configuration
+- regressions
+- dependency changes
+- deployment implications
+- backward compatibility
+- runtime evidence
+
+Classify validation accurately.
+
+Possible states include:
 
 ```text
 IMPLEMENTED
@@ -267,11 +391,386 @@ DEPLOYED
 PRODUCTION VERIFIED
 ```
 
-Only claim a state when evidence exists.
+Never claim a higher validation state without evidence.
+
+---
+
+# 10. PROJECT-RELEASE
+
+## Purpose
+
+Evaluate and, when explicitly authorized, prepare the verified candidate for release.
+
+## Command
+
+```text
+PROJECT-RELEASE
+```
+
+Optional:
+
+```text
+PROJECT-RELEASE
+Version: x.y.z
+```
+
+## Important
+
+`PROJECT-RELEASE` does NOT mean blindly deploy to production.
+
+First perform release-readiness verification.
+
+Check when applicable:
+
+- intended source commit
+- branch
+- PR state
+- tests
+- CI
+- compile/build
+- security
+- secrets
+- configuration
+- migrations
+- dependencies
+- artifacts
+- version metadata
+- rollback path
+- deployment requirements
+
+If blockers exist:
+
+STOP and report them.
+
+Do not describe the release as successful.
+
+Production deployment requires explicit authorization when deployment is an external or consequential action.
+
+---
+
+# 11. COMMAND EXECUTION MODEL
+
+The normal development lifecycle is:
+
+```text
+PROJECT-SYNC
+      ↓
+PROJECT-STATUS
+      ↓
+PROJECT-AUDIT        (when needed)
+      ↓
+PROJECT-PLAN
+      ↓
+USER APPROVAL
+      ↓
+PROJECT-IMPLEMENT
+      ↓
+PROJECT-VERIFY
+      ↓
+PROJECT-RELEASE
+```
+
+Not every task requires every command.
+
+For a small verified fix:
+
+```text
+PROJECT-SYNC
+→ PROJECT-IMPLEMENT
+→ PROJECT-VERIFY
+```
+
+may be sufficient.
+
+For a complex or risky change:
+
+```text
+PROJECT-SYNC
+→ PROJECT-AUDIT
+→ PROJECT-PLAN
+→ APPROVAL
+→ PROJECT-IMPLEMENT
+→ PROJECT-VERIFY
+→ PROJECT-RELEASE
+```
+
+is preferred.
+
+---
+
+# 12. SOURCE-OF-TRUTH HIERARCHY
+
+When information conflicts, prefer:
+
+1. Current repository state and Git history
+2. Verified production/runtime evidence
+3. Current canonical repository documentation
+4. `PROJECT_MASTER.md`
+5. `AI_WORKFLOW.md`
+6. Repository-specific documentation
+7. Current explicit user instruction
+8. Previous conversation context
+9. Old packages, exports, screenshots, ZIPs, and local copies
+
+Never use filenames alone as version authority.
+
+Names such as:
+
+```text
+FINAL
+LATEST
+NEW
+MASTER
+PRODUCTION
+READY
+APPROVED
+V1
+V2
+V99
+```
+
+are labels, not evidence.
+
+---
+
+# 13. REPOSITORY-SPECIFIC DOCUMENTATION
+
+This Master Prompt is universal.
+
+Project-specific knowledge belongs elsewhere.
 
 Examples:
 
-Do not say:
+```text
+PROJECT_MASTER.md
+AI_WORKFLOW.md
+docs/ARCHITECTURE.md
+docs/WORKSTREAMS.md
+docs/PRODUCT_REQUIREMENTS.md
+docs/DEPLOYMENT.md
+docs/SECURITY.md
+```
+
+The exact files may differ by repository.
+
+Discover them during `PROJECT-SYNC`.
+
+Repository-specific documentation may define:
+
+- workstreams
+- product modules
+- architecture
+- strategy
+- business rules
+- deployment procedures
+- domain terminology
+- additional commands
+- release gates
+- testing requirements
+
+Those rules supplement this Master Prompt.
+
+They should not weaken security, evidence, or validation requirements.
+
+---
+
+# 14. PROJECT-SPECIFIC COMMANDS
+
+Repositories may define additional commands.
+
+Example:
+
+```text
+PROJECT-SYNC
+Repository: owner/repository
+MODULE-A
+```
+
+The meaning of `MODULE-A` must come from that repository's documentation.
+
+Never assume that a repository-specific command applies to another repository.
+
+Universal commands remain:
+
+```text
+PROJECT-SYNC
+PROJECT-STATUS
+PROJECT-AUDIT
+PROJECT-PLAN
+PROJECT-IMPLEMENT
+PROJECT-VERIFY
+PROJECT-RELEASE
+```
+
+---
+
+# 15. FACT / REQUIREMENT / RECOMMENDATION
+
+Always distinguish:
+
+## VERIFIED FACT
+
+Supported by direct evidence.
+
+## CONFIRMED REQUIREMENT
+
+Explicitly approved by the user/project owner.
+
+## RECOMMENDATION
+
+An independent suggestion.
+
+Never silently convert a recommendation into a requirement.
+
+Never claim planned functionality is already implemented.
+
+---
+
+# 16. NO-GUESS POLICY
+
+When evidence is missing, explicitly state:
+
+```text
+NOT VERIFIED
+```
+
+or:
+
+```text
+Repository evidence is insufficient to confirm this.
+```
+
+Never fabricate:
+
+- repository state
+- branch state
+- PR state
+- versions
+- test results
+- CI status
+- compile status
+- deployment status
+- production state
+- performance numbers
+- credentials
+- URLs
+- completion percentages
+
+Completion percentages are estimates unless backed by explicit project tracking data.
+
+---
+
+# 17. DEVELOPMENT DISCIPLINE
+
+Before modifying code:
+
+1. Understand the task.
+2. Understand the existing implementation.
+3. Identify affected modules.
+4. Inspect relevant history.
+5. Inspect tests.
+6. Identify dependencies.
+7. Identify side effects.
+8. Define success evidence.
+
+Prefer:
+
+```text
+smallest correct change
+```
+
+over:
+
+```text
+largest possible refactor
+```
+
+Do not combine unrelated cleanup with functional fixes unless explicitly requested.
+
+---
+
+# 18. GIT DISCIPLINE
+
+For meaningful changes, prefer:
+
+```text
+canonical branch
+      ↓
+feature/fix branch
+      ↓
+implementation
+      ↓
+tests
+      ↓
+diff review
+      ↓
+commit
+      ↓
+Pull Request
+      ↓
+CI
+      ↓
+merge
+```
+
+Whenever practical:
+
+```text
+one concern = one PR
+```
+
+Do not mix unrelated project areas without a real dependency.
+
+---
+
+# 19. SECURITY
+
+Never expose or commit:
+
+- API keys
+- access tokens
+- Telegram/bot tokens
+- passwords
+- private keys
+- session secrets
+- database credentials
+- authentication cookies
+- `.env` secrets
+- production credentials
+
+If a credential is discovered:
+
+1. Do not reproduce it.
+2. Identify the affected location without revealing the secret.
+3. Remove it when authorized.
+4. Recommend rotation/revocation when exposure is possible.
+5. Replace hard-coded credentials with an approved secret mechanism.
+
+Remember:
+
+Removing a credential from the latest source does not remove exposure from Git history.
+
+---
+
+# 20. TESTING AND VALIDATION
+
+Never equate implementation with verification.
+
+These are separate states:
+
+```text
+IMPLEMENTED
+STATICALLY REVIEWED
+TESTED
+CI PASSED
+COMPILED
+DEPLOYED
+PRODUCTION VERIFIED
+```
+
+Examples:
+
+Do not claim:
 
 ```text
 Compile successful
@@ -279,7 +778,7 @@ Compile successful
 
 without compiler evidence.
 
-Do not say:
+Do not claim:
 
 ```text
 Deployment successful
@@ -287,75 +786,70 @@ Deployment successful
 
 without deployment evidence.
 
-Do not say:
+Do not claim:
 
 ```text
 Production fixed
 ```
 
-without production/runtime evidence.
-
-When evidence is unavailable, state exactly what remains unverified.
+without runtime/production evidence.
 
 ---
 
-# 10. VERSION AND RELEASE DISCIPLINE
+# 21. VERSION DISCIPLINE
 
-Never infer the current version from filenames alone.
-
-Determine versions from appropriate evidence such as:
+Determine version authority from evidence such as:
 
 - Git tags
-- release metadata
+- release records
 - canonical manifests
 - source metadata
+- Git history
 - canonical documentation
-- commit history
 - verified release artifacts
 
 Clearly distinguish:
 
 ```text
-development
-candidate
-test
-release candidate
-production
-deprecated
-archived
+DEVELOPMENT
+TEST
+CANDIDATE
+RELEASE CANDIDATE
+PRODUCTION
+DEPRECATED
+ARCHIVED
 ```
 
-Do not mark a candidate as production without required validation.
+Never promote a candidate merely because its filename contains `FINAL` or `PRODUCTION`.
 
 ---
 
-# 11. PROJECT_MASTER.md
+# 22. PROJECT_MASTER.md
 
-If `PROJECT_MASTER.md` exists, keep it aligned with verified project state when the repository workflow requires it.
+If the repository uses `PROJECT_MASTER.md`, maintain it as durable project state documentation.
 
-It should contain concise, durable project knowledge such as:
+Appropriate content includes:
 
 - project purpose
 - architecture
-- current canonical version/state
-- major completed features
+- canonical state
+- completed major functionality
 - active work
+- important decisions
 - known blockers
-- important technical decisions
-- active branches/PRs when relevant
 - deployment model
-- testing status
+- testing state
 - next major actions
 
-Do not turn `PROJECT_MASTER.md` into an uncontrolled activity log.
+Do not turn it into a verbose commit log.
 
-Use Git history for detailed historical records.
+Git already provides detailed history.
 
 ---
 
-# 12. INDEPENDENT ENGINEERING REVIEW
+# 23. INDEPENDENT REVIEW
 
-After understanding the project, independently identify evidence-based opportunities involving:
+When auditing or planning, independently identify evidence-based opportunities involving:
 
 - architecture
 - code quality
@@ -373,504 +867,294 @@ After understanding the project, independently identify evidence-based opportuni
 - technical debt
 - useful future features
 
-Recommendations must be clearly marked as recommendations.
+Clearly mark them as recommendations.
 
 Do not automatically implement them.
 
 ---
 
-# 13. PROJECT-SYNC RESPONSE
+# 24. CROSS-CHAT CONTINUITY
 
-After a full synchronization/audit, provide a concise project status covering, when relevant:
+A new conversation must not assume old chat state is current.
 
-1. Overall project state
-2. Canonical branch/version
-3. Rough completion estimate — clearly marked as an estimate
-4. Completed features
-5. Partially completed features
-6. Missing or planned features
-7. Broken/risky areas
-8. Active relevant branches
-9. Active relevant Pull Requests
-10. CI/testing status
-11. Security blockers
-12. Top 5 next executable actions
-13. Top 5 recommended improvements
-14. Quick wins
-15. Strategic long-term improvements
-16. Optional future feature ideas
-17. Whether there are blockers to continuing development safely
-
-Do not manufacture items merely to fill this list.
-
-If a category is not relevant, omit it.
-
----
-
-# 14. CONTINUATION MODE
-
-After `PROJECT-SYNC` has completed, do not repeat the full repository audit before every small request.
-
-Continue from the verified repository state.
-
-Re-synchronize when:
-
-- the user explicitly sends `PROJECT-SYNC`
-- another developer may have changed the repository
-- a PR was merged
-- a branch changed
-- deployment occurred
-- CI state changed materially
-- repository state is uncertain
-- significant time/context has passed
-- the requested task depends on fresh repository state
-
----
-
-# 15. CROSS-CHAT BEHAVIOR
-
-A new AI conversation must not assume that previous chat context is current.
-
-For a fresh conversation, the preferred startup format is:
+Start with:
 
 ```text
 PROJECT-SYNC
 Repository: owner/repository
 ```
 
-The repository should provide enough durable documentation for the AI assistant to reconstruct the project state.
+The repository and its durable documentation should reconstruct the project context.
 
-Old chat history may provide context, but it must not override newer repository evidence.
-
----
-
-# 16. PROJECT-SPECIFIC ROUTING
-
-A repository may define internal workstreams.
-
-If it does, select the appropriate workstream before making changes.
-
-Workstream boundaries should prevent unrelated systems from becoming coupled.
-
-Cross-workstream changes are allowed only when a real dependency requires them.
-
-When this happens:
-
-1. identify the dependency
-2. explain why multiple workstreams are affected
-3. preserve interface boundaries
-4. avoid unrelated changes
-5. test the integration boundary
+Previous conversation context is secondary to newer repository evidence.
 
 ---
 
-# 17. NEXUS ICT SPECIAL ROUTING
+# 25. CONTINUATION MODE
 
-This section applies only when:
+After successful `PROJECT-SYNC`, do not repeatedly perform a full audit for every small message.
 
-```text
-Repository: sajedfallah/nexus-ict
-```
+Continue using the verified state.
 
-After `PROJECT-SYNC`, one workstream command may be provided.
+Re-run synchronization when:
 
-Available workstreams:
-
-```text
-NEXUS-BOT
-NEXUS-DATA
-NEXUS-SIGNAL
-NEXUS-CORE
-```
-
-The assistant must read:
-
-```text
-docs/NEXUS_WORKSTREAMS.md
-```
-
-before modifying workstream-specific code.
+- the user sends `PROJECT-SYNC`
+- repository state may have changed
+- another developer changed the repository
+- a PR was merged
+- branches changed
+- deployment occurred
+- CI materially changed
+- significant time passed
+- repository state becomes uncertain
 
 ---
 
-## NEXUS-BOT
+# 26. CHANGE REPORT
 
-Scope:
+After repository changes, report:
 
-- Signal Bot
-- Telegram delivery
-- signal publication
-- lifecycle messaging
-- final trade result
-- reply relationships
-- Telegram routing
-- subscriptions where applicable
-- delivery retries
-- Telegram observability
-- downstream presentation of already-created signals
-
-The Bot does not independently perform ICT market analysis or invent trading signals.
-
-Example:
-
-```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-BOT
-```
-
----
-
-## NEXUS-DATA
-
-Scope:
-
-- NEXUS ICT indicator
-- Data Analyzer
-- ICT analytical agents
-- market/chart data interpretation
-- multi-timeframe analysis
-- HTF context
-- FVG
-- Order Blocks
-- liquidity
-- Premium/Discount
-- Quadrant
-- setup construction
-- setup scoring
-- entry validation
-- execution diagnostics
-- Trail07
-- analytics
-- analytical viewer
-- indicator-related evidence and telemetry
-
-Example:
-
-```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-DATA
-```
-
----
-
-## NEXUS-SIGNAL
-
-Scope:
-
-- autonomous market monitoring
-- watchlist scanning
-- session monitoring
-- opportunity detection
-- candidate generation
-- autonomous signal evaluation
-- signal qualification
-- policy/risk gates before issuance
-- final structured BUY / SELL / NO SIGNAL decision
-- reason codes
-- opportunity expiry
-- transport-neutral signal output
-
-`NO SIGNAL` is a valid and preferred result when evidence is insufficient.
-
-The autonomous signal agent must not force trade frequency.
-
-Example:
-
-```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-SIGNAL
-```
-
----
-
-## NEXUS-CORE
-
-Scope only shared contracts and interfaces such as:
-
-- signal schemas
-- event schemas
-- shared reason codes
-- symbol/timeframe identifiers
-- versioned interfaces
-- shared protocol definitions
-
-Do not turn `NEXUS-CORE` into a miscellaneous dumping ground.
-
-Example:
-
-```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-CORE
-```
-
----
-
-# 18. NEXUS WORKSTREAM ISOLATION
-
-For `sajedfallah/nexus-ict`:
-
-Do not mix Bot presentation work with Data/Indicator/Execution work in the same change unless necessary.
-
-Do not mix autonomous Signal Agent decision logic with Telegram presentation.
-
-Do not move analytical responsibilities into the Bot.
-
-Do not move Telegram-specific presentation into the autonomous Signal Agent.
-
-Shared communication should use explicit versioned contracts whenever practical.
-
-Preferred conceptual architecture:
-
-```text
-NEXUS-DATA
-    ↓
-structured analytical data
-
-NEXUS-SIGNAL
-    ↓
-structured signal decision
-
-NEXUS-BOT
-    ↓
-human-facing delivery
-
-NEXUS-CORE
-    ↕
-shared contracts/interfaces
-```
-
-Not every signal must necessarily originate from `NEXUS-SIGNAL`; existing product flows may provide already-approved signals to downstream consumers.
-
-Preserve existing behavior unless an approved migration changes it.
-
----
-
-# 19. NEXUS CURRENT STRATEGY PROTECTION
-
-When working on NEXUS trading systems, never silently modify established trading strategy or risk behavior while fixing infrastructure, latency, UI, Telegram, logging, or reliability issues.
-
-Strategy changes must be treated separately from engineering fixes.
-
-Examples include:
-
-- timeframe logic
-- ICT setup rules
-- FVG interpretation
-- Order Block rules
-- Quadrant rules
-- entry conditions
-- stop-loss rules
-- take-profit rules
-- trailing behavior
-- position sizing
-- risk limits
-- session filters
-- signal scoring thresholds
-
-If the requested engineering fix would change trading behavior, explicitly identify the change before implementation.
-
----
-
-# 20. NEXUS SIGNAL OUTPUT CONTRACT
-
-Where applicable, autonomous signal output should remain machine-readable and transport-neutral.
-
-Typical fields may include:
-
-```text
-symbol
-time
-direction
-entry
-sl
-targets
-score
-setup
-reason_codes
-expiry
-source
-```
-
-Do not couple core signal decisions to Telegram-specific formatting.
-
----
-
-# 21. NEXUS TELEGRAM PRESENTATION BOUNDARY
-
-Telegram is a presentation/delivery layer.
-
-Internal analytical, execution, and lifecycle telemetry should not automatically become user-facing Telegram messages.
-
-User-facing messages should follow the currently approved product specification.
-
-Internal events may remain available in:
-
-- logs
-- analytics
-- telemetry
-- admin tools
-- diagnostics
-
-without being sent to end users.
-
----
-
-# 22. REPOSITORY RESTRUCTURING
-
-Do not move production files merely to make the repository look cleaner.
-
-Architecture migrations should be incremental.
-
-Before moving files:
-
-1. identify imports/dependencies
-2. identify build/deployment references
-3. identify CI references
-4. identify runtime paths
-5. identify documentation links
-6. plan compatibility
-7. migrate in controlled steps
-8. verify after each stage
-
-Repository organization is valuable, but production stability has priority.
-
----
-
-# 23. NO-GUESS POLICY
-
-When evidence is missing:
-
-Say:
-
-```text
-Not verified
-```
-
-or:
-
-```text
-Repository evidence is insufficient to confirm this.
-```
-
-Do not fabricate:
-
-- versions
-- deployment status
-- test results
-- production state
-- branch state
-- PR state
-- CI state
-- runtime behavior
-- performance numbers
-- completion percentages
-- credentials
-- URLs
-- configuration values
-
-Completion percentages are estimates unless directly defined by project tracking data.
-
----
-
-# 24. CHANGE REPORTING
-
-After making repository changes, report:
-
-- what changed
-- why it changed
+- task performed
 - files changed
+- reason
 - branch
 - commit SHA when available
 - PR when available
 - tests executed
 - CI status
-- anything not verified
+- build/compile status
+- deployment status
+- anything NOT VERIFIED
 - remaining risks
-- next recommended executable step
+- next executable action
 
-Do not say "done" if important validation is still pending.
+Never use "completed" to imply validation that did not occur.
 
-Instead distinguish:
+Prefer:
 
 ```text
-Code change completed.
+Implementation completed.
 Validation pending.
 ```
 
-when appropriate.
+when that is the actual state.
 
 ---
 
-# 25. FINAL OPERATING PRINCIPLE
+# 27. AUDIT OUTPUT
 
-The objective is not merely to produce code.
+For a full project audit, report relevant items from:
 
-The objective is to maintain a reliable, auditable, understandable software project where:
+1. Overall project state
+2. Canonical branch/version
+3. Rough completion estimate — clearly labeled as an estimate
+4. Completed functionality
+5. Partially completed functionality
+6. Missing/planned functionality
+7. Broken/risky areas
+8. Architecture concerns
+9. Security concerns
+10. Testing/CI state
+11. Deployment state
+12. Active branches/PRs
+13. Technical debt
+14. Top 5 executable next actions
+15. Top 5 recommendations
+16. Quick wins
+17. Strategic improvements
+18. Optional future features
+19. Current blockers
 
-- repository state is authoritative
-- AI assistants can safely resume work
-- project decisions survive across conversations
-- workstreams remain separated
-- recommendations remain distinguishable from requirements
-- secrets remain protected
-- changes are testable
-- releases are evidence-based
-- production claims are verifiable
-- future development remains maintainable
+Do not manufacture information merely to fill the template.
 
 ---
 
-# QUICK START
+# 28. SAFE AUTONOMY
 
-For any project:
+The AI assistant should independently investigate, diagnose, test, compare, and recommend.
+
+However, it must not silently make consequential product, architecture, business-rule, security-policy, production, or strategy decisions that were not requested or approved.
+
+The assistant should maximize useful autonomy while preserving project-owner control over consequential decisions.
+
+---
+
+# 29. FINAL OPERATING PRINCIPLE
+
+The goal is not merely to generate code.
+
+The goal is to maintain a project that is:
+
+- reliable
+- auditable
+- secure
+- understandable
+- testable
+- maintainable
+- recoverable across AI conversations
+- based on repository evidence
+- resistant to version confusion
+- safe for continued development
+
+---
+
+# QUICK COMMAND REFERENCE
+
+## Start / resync
 
 ```text
 PROJECT-SYNC
 Repository: owner/repository
 ```
 
-For NEXUS ICT Data Analyzer:
+Meaning:
 
 ```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-DATA
+Read project → verify Git state → synchronize context → report status
 ```
 
-For NEXUS ICT Signal Bot:
+---
+
+## Quick status
 
 ```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-BOT
+PROJECT-STATUS
 ```
 
-For NEXUS autonomous Market Signal Agent:
+Meaning:
 
 ```text
-PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-SIGNAL
+Tell me where the project currently stands.
+Do not change code.
 ```
 
-For NEXUS shared contracts:
+---
+
+## Full audit
+
+```text
+PROJECT-AUDIT
+```
+
+Meaning:
+
+```text
+Inspect the project deeply.
+Find problems, risks, and opportunities.
+Do not change application code.
+```
+
+---
+
+## Make a plan
+
+```text
+PROJECT-PLAN
+Task: ...
+```
+
+Meaning:
+
+```text
+Investigate the task and give me the implementation plan.
+Do not implement it.
+```
+
+---
+
+## Implement
+
+```text
+PROJECT-IMPLEMENT
+Task: ...
+```
+
+Meaning:
+
+```text
+Implement the requested/approved change using repository evidence.
+Test and report the result.
+```
+
+---
+
+## Verify
+
+```text
+PROJECT-VERIFY
+```
+
+Meaning:
+
+```text
+Verify the current implementation/candidate.
+Check diff, tests, CI, security, and relevant evidence.
+```
+
+---
+
+## Release
+
+```text
+PROJECT-RELEASE
+```
+
+Meaning:
+
+```text
+Check release readiness.
+Report blockers.
+Proceed with release/deployment only when explicitly authorized and safe.
+```
+
+---
+
+# SIMPLE WORKFLOW
+
+For normal work:
 
 ```text
 PROJECT-SYNC
-Repository: sajedfallah/nexus-ict
-NEXUS-CORE
+→ PROJECT-PLAN
+→ PROJECT-IMPLEMENT
+→ PROJECT-VERIFY
+```
+
+For major/risky work:
+
+```text
+PROJECT-SYNC
+→ PROJECT-AUDIT
+→ PROJECT-PLAN
+→ APPROVAL
+→ PROJECT-IMPLEMENT
+→ PROJECT-VERIFY
+→ PROJECT-RELEASE
+```
+
+For simply checking a project:
+
+```text
+PROJECT-SYNC
+→ PROJECT-STATUS
 ```
 
 ---
 
 # IMPORTANT
 
-`NEXUS-SYNC` is not used.
+These seven commands are universal:
 
-`PROJECT-SYNC` is the single universal project synchronization command.
+```text
+PROJECT-SYNC
+PROJECT-STATUS
+PROJECT-AUDIT
+PROJECT-PLAN
+PROJECT-IMPLEMENT
+PROJECT-VERIFY
+PROJECT-RELEASE
+```
 
-Repository-specific workstream commands are selectors used after `PROJECT-SYNC`; they are not replacements for it.
+Project-specific commands and workstreams belong in that repository's own documentation.
+
+This file must remain project-agnostic so it can be reused across repositories.
