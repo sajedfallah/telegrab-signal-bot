@@ -239,6 +239,31 @@
       'community', 'autotrade_teaser'];
   }
 
+  function renderHomeLayout(order, payload) {
+    const rendered = new Map(order.map(key => [key, renderSection(key, payload)]));
+    const used = new Set(['spotlight', 'performance', 'recent_signals', 'vip_conversion', 'community', 'autotrade_teaser']);
+    const extras = order.filter(key => !used.has(key)).map(key => rendered.get(key) || '').join('');
+
+    const fullWidth = ['spotlight', 'performance']
+      .map(key => rendered.get(key) || '')
+      .join('');
+
+    const rightColumn = ['recent_signals', 'community']
+      .map(key => rendered.get(key) || '')
+      .join('');
+
+    const leftColumn = ['vip_conversion', 'autotrade_teaser']
+      .map(key => rendered.get(key) || '')
+      .join('');
+
+    return `${fullWidth}
+      <div class="home-v2-columns">
+        <div class="home-v2-column home-v2-column-primary">${rightColumn}</div>
+        <div class="home-v2-column home-v2-column-secondary">${leftColumn}</div>
+      </div>
+      ${extras}`;
+  }
+
   async function switchPerformance(period) {
     try {
       const data = await api(`/performance?period=${encodeURIComponent(period)}`);
@@ -292,7 +317,7 @@
       state.experience = payload.experience || state.experience;
       window.NexusExperience?.renderNavigation?.(state.experience?.navigation || []);
       const order = normalizedOrder(payload);
-      view.innerHTML = `<div class="home-v2">${order.map(key => renderSection(key, payload)).join('')}</div>`;
+      view.innerHTML = `<div class="home-v2">${renderHomeLayout(order, payload)}</div>`;
       bindHomeActions();
       track('home_view', { segment: payload.experience?.segment, lifecycle: payload.experience?.lifecycle, sections: order });
     } catch (err) {
