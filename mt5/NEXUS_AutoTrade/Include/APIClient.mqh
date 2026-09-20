@@ -241,6 +241,18 @@ public:
       return Request("POST","/api/v1/autotrade/history-reconcile",body,true,response,true);
      }
 
+   bool Observation(const long signal_db_id,const string decision_status,const string reason_code,const string reason_detail,
+                    const string config_snapshot_json="{}")
+     {
+      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"signal_db_id\":%I64d,\"decision_status\":\"%s\",\"reason_code\":%s,\"reason_detail\":%s,\"ea_version\":\"%s\",\"config_snapshot\":%s}",
+         NexusJsonEscape(m_license),NexusJsonEscape(m_account),signal_db_id,NexusJsonEscape(decision_status),
+         reason_code==""?"null":"\""+NexusJsonEscape(reason_code)+"\"",
+         reason_detail==""?"null":"\""+NexusJsonEscape(reason_detail)+"\"",
+         NexusJsonEscape(m_ea_version),config_snapshot_json==""?"{}":config_snapshot_json);
+      string response;
+      return Request("POST","/api/v1/autotrade/observation",body,true,response);
+     }
+
    bool CommandReceipt(const long command_id,const string status,const string error_text)
      {
       string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"command_id\":%I64d,\"status\":\"%s\",\"error\":%s}",
