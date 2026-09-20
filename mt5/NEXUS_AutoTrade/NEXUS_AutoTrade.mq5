@@ -1043,7 +1043,7 @@ void ProcessPendingAttempts()
       if(now<g_pending_attempts[i].next_try) continue;
       // The matching observation is sent first in this timer cycle; backend resolves id=0
       // to the newest observation for this authenticated account.
-      if(g_api.ExecutionAttempt(0,1,g_pending_attempts[i].requested_price,g_pending_attempts[i].bid,g_pending_attempts[i].ask,
+      if(g_api.ExecutionAttempt(0,g_pending_attempts[i].signal_db_id,1,g_pending_attempts[i].requested_price,g_pending_attempts[i].bid,g_pending_attempts[i].ask,
                                 g_pending_attempts[i].spread,g_pending_attempts[i].requested_volume,g_pending_attempts[i].executed_volume,
                                 g_pending_attempts[i].executed_price,g_pending_attempts[i].slippage,g_pending_attempts[i].latency_ms,
                                 g_pending_attempts[i].status,g_pending_attempts[i].reason_code,g_pending_attempts[i].broker_retcode,
@@ -1083,16 +1083,20 @@ void QueueObservation(const NexusSignal &s,const string status,const string deta
 void ProcessPendingObservations()
   {
    datetime now=TimeCurrent();
-   for(int i=ArraySize(g_pending_observations)-1;i>=0;i--)
+   // FIFO is intentional: RECEIVED must reach the backend before terminal
+   // EXECUTED/REJECTED state for the same signal.
+   int i=0;
+   while(i<ArraySize(g_pending_observations))
      {
-      if(now<g_pending_observations[i].next_try) continue;
+      if(now<g_pending_observations[i].next_try) { i++; continue; }
       if(g_api.Observation(g_pending_observations[i].signal_db_id,g_pending_observations[i].status,
                            g_pending_observations[i].reason_code,g_pending_observations[i].detail,
                            g_pending_observations[i].snapshot))
         { ArrayRemove(g_pending_observations,i,1); continue; }
       g_pending_observations[i].attempts++;
       g_pending_observations[i].next_try=now+(int)MathMin(60.0,MathPow(2.0,MathMin(g_pending_observations[i].attempts,5)));
-      if(g_pending_observations[i].attempts>20) ArrayRemove(g_pending_observations,i,1);
+      if(g_pending_observations[i].attempts>20) { ArrayRemove(g_pending_observations,i,1); continue; }
+      i++;
      }
   }
 
