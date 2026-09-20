@@ -46,5 +46,35 @@ class ResultFlowStaticTests(unittest.TestCase):
         self.assertNotIn('Flow.signal_close_chart', segment)
         self.assertNotIn('final result chart', segment)
 
+    def test_root_signal_publication_is_text_only(self):
+        fn = self._function('_publish_one_channel')
+        segment = ast.get_source_segment(self.source, fn) or ''
+        self.assertIn('send_message', segment)
+        self.assertNotIn('send_photo', segment)
+        self.assertNotIn('BufferedInputFile', segment)
+
+    def test_root_signal_caption_preserves_canonical_legacy_fields(self):
+        fn = self._function('_signal_caption')
+        segment = ast.get_source_segment(self.source, fn) or ''
+        required = [
+            'NEXUS SIGNAL',
+            "row['code']",
+            'Symbol:',
+            'Direction:',
+            'Timeframe:',
+            'Entry:',
+            'Stop Loss:',
+            'TP',
+            'Risk:',
+            'Volume:',
+            'R:R:',
+            'Status:',
+            'Trailing:',
+        ]
+        for token in required:
+            self.assertIn(token, segment)
+        self.assertNotIn('امتیاز سیگنال', segment)
+        self.assertNotIn('سیگنال جدید NEXUS', segment)
+
 if __name__ == '__main__':
     unittest.main()

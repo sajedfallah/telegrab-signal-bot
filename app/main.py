@@ -2863,82 +2863,88 @@ def _copy_price(value) -> str:
     return f"<code>{escape(_format_price(value))}</code>"
 
 
-def _signal_caption(row, lang: str = "fa", *, status: str | None = None) -> str:
-    """Canonical Persian text-only NEXUS signal card."""
+def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
+    """Canonical text-only NEXUS signal card.
 
-    def value(key: str, default=None):
-        try:
-            if key in row.keys():
-                current = row[key]
-                return default if current is None else current
-        except Exception:
-            pass
-        return default
+    Keep the approved legacy field set and ordering while Telegram publication
+    remains text-only. This formatter is shared by manual and MT5 AutoTrade
+    publication paths so both destinations stay identical.
+    """
+    order_type = str(
+        row["order_type"]
+        if "order_type" in row.keys() and row["order_type"]
+        else "MARKET"
+    ).upper()
+    direction = str(row["direction"] or "").upper()
+    symbol = str(row["symbol"] or "").upper()
+    tf = str(
+        row["timeframe"]
+        if "timeframe" in row.keys() and row["timeframe"]
+        else "M5"
+    ).upper()
+    state = str(status or row["status"] or "SIGNAL").upper()
 
-    symbol = str(value("symbol", "--")).upper()
-    direction = str(value("direction", "")).upper()
-    tf = str(value("timeframe", "M5")).upper()
-
-    if direction in {"BUY", "LONG"}:
-        direction_fa = "\u062e\u0631\u06cc\u062f \U0001F4C8"
-    else:
-        direction_fa = "\u0641\u0631\u0648\u0634 \U0001F4C9"
+    type_labels = {
+        "MARKET": "MARKET",
+        "BUY_LIMIT": "BUY LIMIT",
+        "SELL_LIMIT": "SELL LIMIT",
+        "BUY_STOP": "BUY STOP",
+        "SELL_STOP": "SELL STOP",
+        "BUY_STOP_LIMIT": "BUY STOP LIMIT",
+        "SELL_STOP_LIMIT": "SELL STOP LIMIT",
+        "LIMIT": "LIMIT",
+    }
+    state_labels = {
+        "ACTIVE": "ACTIVE",
+        "PENDING": "PENDING",
+        "CLOSED": "CLOSED",
+        "CANCELLED": "CANCELLED",
+        "EXPIRED": "EXPIRED",
+        "DRAFT": "DRAFT",
+    }
 
     targets = db.get_signal_targets(int(row["id"]))
-
     if not targets:
-        legacy = [
-            value("tp1"),
-            value("tp2"),
-            value("tp3"),
-        ]
+        legacy = [row["tp1"], row["tp2"], row["tp3"]]
         targets = [
-            {"target_no": i + 1, "price": price}
-            for i, price in enumerate(legacy)
-            if price is not None
+            {"target_no": i + 1, "price": value}
+            for i, value in enumerate(legacy)
+            if value is not None
         ]
+
+    rr = ("1:" + format(float(row["rr_ratio"]), "g")) if row["rr_ratio"] else "—"
+    volume_mode = str(row["volume_mode"] or "RISK").upper()
+    if volume_mode == "FIXED" and row["lot_size"] is not None:
+        size_line = f"📦 Volume: <b>{float(row['lot_size']):g} lots</b>"
+    else:
+        size_line = f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>"
 
     tp_lines = "\n".join(
-        f"TP{int(t['target_no'])}: {_copy_price(t['price'])}"
+        f"🎯 TP{int(t['target_no'])}: {_copy_price(t['price'])}"
         for t in targets
-    ) or "TP: --"
+    ) or "🎯 TP: —"
 
-    entry = _copy_price(value("entry_price", "--"))
-    stop_loss = _copy_price(value("stop_loss", "--"))
-
-    rr_raw = value("rr_ratio")
-    if rr_raw not in (None, "", "--"):
-        try:
-            rr = f"1:{float(rr_raw):g}"
-        except (TypeError, ValueError):
-            rr = str(rr_raw)
-    else:
-        rr = "--"
-
-    score = value("score")
-    if score is None:
-        score = value("signal_score")
-    if score is None:
-        score = value("setup_score")
-
-    if score in (None, ""):
-        score_text = "--"
-    else:
-        score_text = str(score)
-        if not score_text.endswith("/100") and not score_text.endswith("%"):
-            score_text = f"{score_text}/100"
+    stop_limit = ""
+    if (
+        order_type in {"BUY_STOP_LIMIT", "SELL_STOP_LIMIT"}
+        and "stop_limit_price" in row.keys()
+        and row["stop_limit_price"]
+    ):
+        stop_limit = f"\n🔹 Stop-Limit Price: {_copy_price(row['stop_limit_price'])}"
 
     return (
-        "\U0001F6A8 <b>\u0633\u06cc\u06af\u0646\u0627\u0644 \u062c\u062f\u06cc\u062f NEXUS</b>\n\n"
-        f"\U0001F4CA \u0646\u0645\u0627\u062f: <b>{escape(symbol)}</b>\n"
-        f"\U0001F4CC \u062c\u0647\u062a: <b>{direction_fa}</b>\n"
-        f"\u23F1 \u062a\u0627\u06cc\u0645\u200c\u0641\u0631\u06cc\u0645: <b>{escape(tf)}</b>\n\n"
-        f"\U0001F4B0 \u0648\u0631\u0648\u062f: {entry}\n"
-        f"\U0001F6D1 \u062d\u062f \u0636\u0631\u0631: {stop_loss}\n\n"
-        "\U0001F3AF <b>\u0627\u0647\u062f\u0627\u0641:</b>\n"
-        f"{tp_lines}\n\n"
-        f"\U0001F4C8 \u0631\u06cc\u0633\u06a9 \u0628\u0647 \u0631\u06cc\u0648\u0627\u0631\u062f: <b>{escape(rr)}</b>\n"
-        f"\u2B50 \u0627\u0645\u062a\u06cc\u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644: <b>{escape(score_text)}</b>"
+        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
+        f"<b>{escape(str(row['code']))}</b>  🟦 {escape(type_labels.get(order_type, order_type))}\n\n"
+        f"📌 Symbol: <b>{escape(symbol)}</b>\n"
+        f"↕️ Direction: <b>{escape(direction)}</b>\n"
+        f"⏱ Timeframe: <b>{escape(tf)}</b>\n"
+        f"📍 Entry: {_copy_price(row['entry_price'])}{stop_limit}\n"
+        f"🛑 Stop Loss: {_copy_price(row['stop_loss'])}\n"
+        f"{tp_lines}\n"
+        f"{size_line}\n"
+        f"📐 R:R: <b>{escape(rr)}</b>\n"
+        f"📌 Status: <b>{escape(state_labels.get(state, state))}</b>\n"
+        f"🔧 Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>"
     )
 
 
