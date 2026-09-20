@@ -1,0 +1,68 @@
+import json
+from pathlib import Path
+
+def _fresh_db(monkeypatch, tmp_path):
+    from app import db
+    monkeypatch.setattr(db, "DB_PATH", tmp_path / "obs.db")
+    db.init_db()
+    db.upsert_user(1001, "obs", "Observer")
+    return db
+
+def _signal(db):
+    return db.create_signal(
+        market_type="FOREX", symbol="XAUUSD", direction="BUY", entry_price=2500,
+        stop_loss=2490, targets=[2520], risk_percent=1, rr_ratio=2,
+        destination="VIP", chart_file_id=None, created_by=1001,
+    )
+
+def test_observation_is_idempotent_and_snapshot_is_immutable(monkeypatch, tmp_path):
+    db=_fresh_db(monkeypatch,tmp_path); sig=_signal(db)
+    first=db.upsert_autotrade_observation(1001,sig["id"],"ACC-1",broker="Demo",ea_version="0.6.5",
+        config_snapshot={"risk_percent":1.0},decision_status="RECEIVED")
+    second=db.upsert_autotrade_observation(1001,sig["id"],"ACC-1",decision_status="REJECTED",
+        reason_code="ENTRY_DEVIATION",reason_detail="too far",config_snapshot={"risk_percent":9.0})
+    assert first["id"]==second["id"]
+    assert second["decision_status"]=="REJECTED"
+    assert second["reason_code"]=="ENTRY_DEVIATION"
+    assert json.loads(second["config_snapshot_json"])["risk_percent"]==1.0
+
+def test_same_signal_can_have_multiple_account_observations(monkeypatch,tmp_path):
+    db=_fresh_db(monkeypatch,tmp_path); sig=_signal(db)
+    a=db.upsert_autotrade_observation(1001,sig["id"],"ACC-A")
+    b=db.upsert_autotrade_observation(1001,sig["id"],"ACC-B")
+    assert a["id"] != b["id"]
+
+def test_execution_attempt_is_idempotent_and_keeps_telemetry(monkeypatch,tmp_path):
+    db=_fresh_db(monkeypatch,tmp_path); sig=_signal(db)
+    obs=db.upsert_autotrade_observation(1001,sig["id"],"ACC-1")
+    a=db.add_autotrade_execution_attempt(obs["id"],attempt_no=1,requested_price=2500,market_bid=2500.1,
+        market_ask=2500.3,spread=0.2,requested_volume=0.1,status="ATTEMPTED")
+    b=db.add_autotrade_execution_attempt(obs["id"],attempt_no=1,executed_price=2500.4,executed_volume=0.1,
+        slippage=0.4,latency_ms=83,status="EXECUTED")
+    assert a["id"]==b["id"]
+    assert b["status"]=="EXECUTED"
+    assert b["slippage"]==0.4
+    assert b["latency_ms"]==83
+
+def test_unknown_reason_is_normalized(monkeypatch,tmp_path):
+    db=_fresh_db(monkeypatch,tmp_path); sig=_signal(db)
+    obs=db.upsert_autotrade_observation(1001,sig["id"],"ACC-1",decision_status="REJECTED",
+        reason_code="some broker prose",reason_detail="raw diagnostic")
+    assert obs["reason_code"]=="UNKNOWN"
+    assert obs["reason_detail"]=="raw diagnostic"
+
+def test_release_a_schema_contains_lifecycle_metric_columns(monkeypatch,tmp_path):
+    db=_fresh_db(monkeypatch,tmp_path)
+    with db.conn() as con:
+        cols={r[1] for r in con.execute("PRAGMA table_info(autotrade_trade_executions)").fetchall()}
+    required={"observation_id","attempt_id","event_subtype","event_time_ms","remaining_volume",
+              "sl_before","sl_after","tp_before","tp_after","spread","latency_ms",
+              "mfe_price","mae_price","mfe_r","mae_r","config_snapshot_json"}
+    assert required <= cols
+
+def test_release_a_api_contract_is_present():
+    root=Path(__file__).resolve().parents[1]
+    api=(root/"app/autotrade/api.py").read_text(encoding="utf-8")
+    assert '/api/v1/autotrade/observation' in api
+    assert '/api/v1/autotrade/execution-attempt' in api
+    assert "ObservationRequest" in api and "ExecutionAttemptRequest" in api
