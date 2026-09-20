@@ -16,7 +16,7 @@ CORE PRINCIPLE
 
 The repository is the primary Source of Truth.
 
-Never assume previous conversations, memory, old screenshots, ZIP files,
+Never assume previous conversations, memory, screenshots, ZIP files,
 local copies, old versions, filenames, or labels such as
 FINAL/LATEST/PRODUCTION are authoritative.
 
@@ -36,13 +36,206 @@ assume. - Do not start implementation without scope confirmation.
 
 INFORMATION DISCOVERY RULE
 
-The user does not need to know technical details such as Version,
-Branch, Commit SHA, Build status, Deployment status, or File paths.
+Discover technical state from:
 
-Discover them from: 1. Repository 2. Git history 3. Current branch 4.
-Source code 5. Configuration files 6. Deployment environment 7.
+Repository
+
+Git history
+
+Current branch
+
+Source code
+
+Configuration files
+
+Deployment environment
+
 Documentation
 
-If unavailable: UNKNOWN
+If unavailable:
+
+UNKNOWN
 
 Never invent technical information.
+
+COMMAND SYSTEM
+
+شروع کار پروژه = PROJECT-BOOTSTRAP
+
+وضعیت پروژه = PROJECT-STATUS
+
+ممیزی پروژه = PROJECT-AUDIT
+
+برنامه پروژه = PROJECT-PLAN
+
+اجرا کن / پیاده‌سازی کن = PROJECT-IMPLEMENT
+
+بررسی نهایی / تأیید نهایی = PROJECT-VERIFY
+
+انتشار نسخه = PROJECT-RELEASE
+
+بستن جلسه پروژه / سینک پروژه = PROJECT-SYNC
+
+پایان روز پروژه = PROJECT-DAY-END
+
+بستن پروژه = PROJECT-CLOSE
+
+PROJECT-SYNC RULE
+
+When requested:
+
+بستن جلسه پروژه
+
+Perform:
+
+Review changes
+
+Review final diff
+
+Check Git status
+
+Detect version
+
+Verify commit state
+
+Update documentation if required
+
+Check deployment status if available
+
+Output:
+
+PROJECT SESSION REPORT
+
+Repository: Branch: Latest Commit: Version: Changed Files: Completed
+Tasks: Validation: Tests: Deployment: Pending Issues: Next Action:
+
+PROJECT-DAY-END RULE
+
+Command:
+
+پایان روز پروژه
+
+Purpose:
+
+Save daily progress and prepare continuation without closing the
+project.
+
+Actions:
+
+Capture current project state
+
+Review completed tasks
+
+Review changed files
+
+Record decisions
+
+Identify open issues
+
+Check Git status
+
+Identify pending commit/push actions
+
+Create next session continuation point
+
+Output:
+
+PROJECT DAILY REPORT
+
+Project: Repository: Branch: Latest Commit: Version: Completed Tasks:
+Changed Files: Decisions: Issues: Validation: Pending Actions: Next
+Session Starting Point:
+
+PROJECT-CLOSE RULE
+
+Command:
+
+بستن پروژه
+
+Perform:
+
+Final audit
+
+Final validation
+
+Documentation review
+
+Release information
+
+Final version
+
+Final status
+
+SESSION CONTINUATION RULE
+
+Every new session continues from:
+
+Last completed task: Latest decision: Latest commit: Current phase: Open
+issues: Next action:
+
+Do not restart previous work unless requested.
+
+NEXT COMMAND RULE
+
+After every completed stage provide:
+
+RESULT: Completed: Changes: Issues: Status:
+
+NEXT COMMAND: [Copy/Paste executable command]
+
+MULTI MODULE RULE
+
+A repository may contain multiple products, applications, modules,
+services, and agents.
+
+Never assume all files belong to one scope.
+
+Before changing anything identify:
+
+Product: Module: Path: Purpose:
+
+SECURITY RULE
+
+Never expose or commit:
+
+API keys
+
+Passwords
+
+Tokens
+
+Private keys
+
+Credentials
+
+Secrets
+
+GIT DISCIPLINE
+
+For significant changes review:
+
+Branch
+
+Diff
+
+Commit
+
+Pull Request
+
+CI status
+
+Keep unrelated changes separated.
+
+FINAL OPERATING PRINCIPLE
+
+Continue from the real current project state.
+
+Work only inside the confirmed scope.
+
+Maintain full traceability.
+
+Document changes.
+
+Validate before claiming success.
+
+Always provide the next correct action.
