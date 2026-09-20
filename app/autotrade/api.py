@@ -78,6 +78,7 @@ class ExecutionAttemptRequest(BaseModel):
     license_key: str = ""
     account_number: str = ""
     observation_id: int = Field(default=0, ge=0)
+    signal_db_id: int | None = Field(default=None, ge=1)
     attempt_no: int = Field(default=1, ge=1, le=100)
     requested_at: str | None = Field(default=None, max_length=64)
     broker_response_at: str | None = Field(default=None, max_length=64)
@@ -1109,10 +1110,10 @@ def autotrade_execution_attempt(
     observation_id = int(req.observation_id)
     with db.conn() as con:
         obs = con.execute("SELECT telegram_id,account_number FROM autotrade_signal_observations WHERE id=?", (observation_id,)).fetchone() if observation_id > 0 else None
-        if obs is None and observation_id == 0:
+        if obs is None and observation_id == 0 and req.signal_db_id:
             obs = con.execute("""SELECT id,telegram_id,account_number FROM autotrade_signal_observations
-                                 WHERE telegram_id=? AND account_number=? ORDER BY id DESC LIMIT 1""",
-                              (int(auth["telegram_id"]), str(account))).fetchone()
+                                 WHERE telegram_id=? AND signal_id=? AND account_number=? ORDER BY id DESC LIMIT 1""",
+                              (int(auth["telegram_id"]), int(req.signal_db_id), str(account))).fetchone()
             if obs is not None:
                 observation_id = int(obs["id"])
     if not obs or int(obs["telegram_id"]) != int(auth["telegram_id"]) or str(obs["account_number"]) != str(account):
