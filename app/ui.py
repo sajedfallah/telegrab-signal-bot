@@ -317,17 +317,17 @@ def admin_menu(lang: str) -> InlineKeyboardMarkup:
     if lang == "fa":
         rows = [
             [("👥 کاربران و اشتراک‌ها", "admin_group_users"), ("💳 مالی و پرداخت", "admin_group_finance")],
-            [("🎁 رفرال و وفاداری", "admin_group_rewards"), ("📈 مرکز سیگنال", "admin_signals")],
-            [("📣 کمپین و پیام‌رسانی", "admin_group_marketing"), ("📊 گزارشات", "admin_group_reports")],
-            [("⚙️ تنظیمات سیستم", "admin_group_system")],
+            [("🎁 رفرال و وفاداری", "admin_group_rewards"), ("📢 محتوا و کانال‌ها", "admin_group_content")],
+            [("📈 مرکز سیگنال", "admin_signals"), ("📣 کمپین و پیام‌رسانی", "admin_group_marketing")],
+            [("📊 گزارشات", "admin_group_reports"), ("⚙️ تنظیمات سیستم", "admin_group_system")],
             [("🌐 تغییر زبان", "change_language"), ("🏠 منوی اصلی", "main")],
         ]
     else:
         rows = [
             [("👥 Users & Subscriptions", "admin_group_users"), ("💳 Finance & Payments", "admin_group_finance")],
-            [("🎁 Referral & Loyalty", "admin_group_rewards"), ("📈 Signal Center", "admin_signals")],
-            [("📣 Campaigns & Messaging", "admin_group_marketing"), ("📊 Reports", "admin_group_reports")],
-            [("⚙️ System Settings", "admin_group_system")],
+            [("🎁 Referral & Loyalty", "admin_group_rewards"), ("📢 Content & Channels", "admin_group_content")],
+            [("📈 Signal Center", "admin_signals"), ("📣 Campaigns & Messaging", "admin_group_marketing")],
+            [("📊 Reports", "admin_group_reports"), ("⚙️ System Settings", "admin_group_system")],
             [("🌐 Change Language", "change_language"), ("🏠 Main Menu", "main")],
         ]
     return kb(rows)
@@ -444,7 +444,7 @@ def signal_center_menu(lang: str) -> InlineKeyboardMarkup:
         rows = [
             [("📋 سیگنال‌های فعال", "signal_active"), ("🏁 نتایج بسته‌شده", "signal_closed")],
             [("🔄 همگام‌سازی زنده", "signal_refresh"), ("📊 آمار سیگنال", "signal_stats")],
-            [("🧠 داشبورد تحلیلی", "admin_dashboard")],
+            [("🧠 داشبورد تحلیلی", "signal_analytics")],
         ]
     else:
         rows = [
