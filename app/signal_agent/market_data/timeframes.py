@@ -1,10 +1,13 @@
 from __future__ import annotations
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from .models import Candle
 
 _SECONDS={"M5":300,"M15":900,"H1":3600,"H4":14400,"D1":86400}
 def bucket_start(ts:datetime,timeframe:str)->datetime:
-    sec=_SECONDS[timeframe.upper()]; u=ts.astimezone(timezone.utc); epoch=int(u.timestamp()); return datetime.fromtimestamp(epoch-epoch%sec,timezone.utc)
+    key=timeframe.upper()
+    if key not in _SECONDS: raise ValueError(f"unsupported timeframe: {timeframe}")
+    sec=_SECONDS[key]; u=ts.astimezone(timezone.utc); epoch=int(u.timestamp())
+    return datetime.fromtimestamp(epoch-epoch%sec,timezone.utc)
 def aggregate(symbol:str,timeframe:str,source:list[Candle])->list[Candle]:
     groups={}
     for c in sorted(source,key=lambda x:x.open_time):
