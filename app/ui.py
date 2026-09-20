@@ -439,18 +439,20 @@ def admin_system_group(lang: str) -> InlineKeyboardMarkup:
 
 
 def signal_center_menu(lang: str) -> InlineKeyboardMarkup:
-    """Read-only MT5 signal reporting for admins."""
+    """Admin signal hub: creation, live state, lifecycle actions and reports."""
     if lang == "fa":
         rows = [
+            [("➕ صدور سیگنال", "signal_create")],
             [("📋 سیگنال‌های فعال", "signal_active"), ("🏁 نتایج بسته‌شده", "signal_closed")],
             [("🔄 همگام‌سازی زنده", "signal_refresh"), ("📊 آمار سیگنال", "signal_stats")],
             [("🧠 داشبورد تحلیلی", "admin_dashboard")],
         ]
     else:
         rows = [
+            [("➕ Create Signal", "signal_create")],
             [("📋 Active Signals", "signal_active"), ("🏁 Closed Results", "signal_closed")],
             [("🔄 Live Sync", "signal_refresh"), ("📊 Signal Stats", "signal_stats")],
-            [("🧠 Analytics Dashboard", "signal_analytics")],
+            [("🧠 Analytics Dashboard", "admin_dashboard")],
         ]
     rows += nav(lang, "admin")
     return kb(rows)
@@ -551,8 +553,23 @@ def signal_confirm_menu(lang: str) -> InlineKeyboardMarkup:
 
 
 def signal_manage_menu(signal_id: int, lang: str) -> InlineKeyboardMarkup:
-    """Compatibility name: Telegram signal details are read-only in v0.6.0."""
-    return signal_readonly_menu(lang)
+    """Lifecycle actions available to Telegram admins for an active signal."""
+    if lang == "fa":
+        rows = [
+            [("✅ فعال‌شدن Limit", f"sigact:limitactive:{signal_id}"), ("🛡 سر‌به‌سر", f"sigact:be:{signal_id}")],
+            [("📦 بستن بخشی", f"sigact:partial:{signal_id}"), ("🎯 تغییر TP", f"sigact:tp:{signal_id}")],
+            [("🛑 تغییر SL", f"sigact:sl:{signal_id}"), ("🔄 فعال‌سازی Trailing", f"sigact:trailing:{signal_id}")],
+            [("❌ بستن معامله", f"sigact:close:{signal_id}")],
+        ]
+    else:
+        rows = [
+            [("✅ Limit Activated", f"sigact:limitactive:{signal_id}"), ("🛡 Break Even", f"sigact:be:{signal_id}")],
+            [("📦 Partial Close", f"sigact:partial:{signal_id}"), ("🎯 Update TP", f"sigact:tp:{signal_id}")],
+            [("🛑 Update SL", f"sigact:sl:{signal_id}"), ("🔄 Activate Trailing", f"sigact:trailing:{signal_id}")],
+            [("❌ Close Trade", f"sigact:close:{signal_id}")],
+        ]
+    rows += nav(lang, "signal_active")
+    return kb(rows)
 
 
 def admin_user_actions(target_id: int, lang: str) -> InlineKeyboardMarkup:
@@ -591,6 +608,23 @@ def admin_plan_edit_menu(lang: str, code: str, active: bool) -> InlineKeyboardMa
         [(toggle, f"plantoggle:{code}")],
         *nav(lang, "admin_plans"),
     ])
+
+
+def admin_plan_access_menu(lang: str, code: str, vip_enabled: bool, autotrade_enabled: bool, renewal_percent: float) -> InlineKeyboardMarkup:
+    vip_icon = "✅" if vip_enabled else "⛔"
+    auto_icon = "✅" if autotrade_enabled else "⛔"
+    if lang == "fa":
+        rows = [
+            [(f"{vip_icon} دسترسی VIP", f"planent:vip:{code}"), (f"{auto_icon} دسترسی AutoTrade", f"planent:auto:{code}")],
+            [(f"🔁 تخفیف تمدید: {renewal_percent:g}٪", f"planrenew:{code}")],
+        ]
+    else:
+        rows = [
+            [(f"{vip_icon} VIP Access", f"planent:vip:{code}"), (f"{auto_icon} AutoTrade Access", f"planent:auto:{code}")],
+            [(f"🔁 Renewal Discount: {renewal_percent:g}%", f"planrenew:{code}")],
+        ]
+    rows += nav(lang, f"planadm:{code}")
+    return kb(rows)
 
 
 def discounts_menu(lang: str) -> InlineKeyboardMarkup:

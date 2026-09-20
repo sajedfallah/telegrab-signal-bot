@@ -94,6 +94,7 @@ from .ui import (
     signal_manage_menu,
     admin_plan_list_menu,
     admin_plan_edit_menu,
+    admin_plan_access_menu,
 )
 
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -1983,6 +1984,87 @@ async def admin_plan_edit(cb: CallbackQuery, bot: Bot, state: FSMContext):
     await screen(bot,cb.from_user.id,cb.message.chat.id,prompt,kb(nav(lang,f"planadm:{code}")))
 
 
+@router.callback_query(F.data.startswith("planaccess:"))
+async def admin_plan_access(cb: CallbackQuery, bot: Bot):
+    if not is_admin(cb.from_user.id): return
+    code=cb.data.split(":",1)[1]; p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p:
+        await cb.answer(tr(lang,"پلن پیدا نشد.","Plan not found."),show_alert=True); return
+    await cb.answer()
+    text=tr(
+        lang,
+        f"<b>🔐 دسترسی و تمدید — {escape(code)}</b>\n\nدسترسی‌های این پلن و تخفیف تمدید را از گزینه‌های زیر مدیریت کنید.",
+        f"<b>🔐 Access & Renewal — {escape(code)}</b>\n\nManage this plan's entitlements and renewal discount below.",
+    )
+    await screen(bot,cb.from_user.id,cb.message.chat.id,text,admin_plan_access_menu(
+        lang,code,bool(p["vip_access"]),bool(p["autotrade_access"]),float(p["renewal_discount_percent"] or 0)
+    ))
+
+
+@router.callback_query(F.data.startswith("planent:"))
+async def admin_plan_entitlement_toggle(cb: CallbackQuery, bot: Bot):
+    if not is_admin(cb.from_user.id): return
+    try:
+        _, entitlement, code = cb.data.split(":",2)
+    except ValueError:
+        return
+    p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p or entitlement not in {"vip","auto"}:
+        await cb.answer(tr(lang,"درخواست نامعتبر است.","Invalid request."),show_alert=True); return
+    current=bool(p["vip_access"]) if entitlement=="vip" else bool(p["autotrade_access"])
+    db.update_plan_entitlement(code,entitlement,not current)
+    db.add_audit(cb.from_user.id,"plan_entitlement_toggle",None,f"{code}:{entitlement}:{int(not current)}")
+    fresh=db.get_plan(code)
+    await cb.answer(tr(lang,"دسترسی پلن به‌روزرسانی شد ✅","Plan entitlement updated ✅"),show_alert=True)
+    await screen(
+        bot,cb.from_user.id,cb.message.chat.id,
+        tr(lang,f"<b>🔐 دسترسی و تمدید — {escape(code)}</b>",f"<b>🔐 Access & Renewal — {escape(code)}</b>"),
+        admin_plan_access_menu(lang,code,bool(fresh["vip_access"]),bool(fresh["autotrade_access"]),float(fresh["renewal_discount_percent"] or 0)),
+    )
+
+
+@router.callback_query(F.data.startswith("planrenew:"))
+async def admin_plan_renewal_input(cb: CallbackQuery, bot: Bot, state: FSMContext):
+    if not is_admin(cb.from_user.id): return
+    code=cb.data.split(":",1)[1]; p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p:
+        await cb.answer(tr(lang,"پلن پیدا نشد.","Plan not found."),show_alert=True); return
+    await state.clear()
+    await state.update_data(plan_renew_code=code)
+    await state.set_state(Flow.admin_plan_renewal)
+    await cb.answer()
+    await screen(
+        bot,cb.from_user.id,cb.message.chat.id,
+        tr(lang,"درصد تخفیف تمدید را بین 0 تا 100 وارد کنید. مثال: <code>10</code>","Enter renewal discount percent from 0 to 100. Example: <code>10</code>"),
+        kb(nav(lang,f"planaccess:{code}")),
+    )
+
+
+@router.message(Flow.admin_plan_renewal)
+async def admin_plan_renewal_save(message: Message, bot: Bot, state: FSMContext):
+    if not is_admin(message.from_user.id): return
+    lang=get_lang(message.from_user.id); data=await state.get_data(); code=str(data.get("plan_renew_code") or "")
+    await clean_user_message(message)
+    try:
+        percent=float((message.text or "").strip().translate(_DIGIT_TRANSLATION).replace("٪","").replace("%","").replace(",","."))
+        if percent < 0 or percent > 100: raise ValueError
+    except Exception:
+        await screen(bot,message.from_user.id,message.chat.id,tr(lang,"❌ درصد باید بین 0 تا 100 باشد.","❌ Percentage must be between 0 and 100."),kb(nav(lang,f"planaccess:{code}" if code else "admin_plans"))); return
+    p=db.get_plan(code)
+    if not p:
+        await state.clear()
+        await screen(bot,message.from_user.id,message.chat.id,tr(lang,"پلن پیدا نشد.","Plan not found."),admin_plan_list_menu(lang)); return
+    db.update_plan_renewal_discount(code,percent)
+    db.add_audit(message.from_user.id,"plan_renewal_discount",None,f"{code}:{percent:g}")
+    await state.clear()
+    fresh=db.get_plan(code)
+    await screen(
+        bot,message.from_user.id,message.chat.id,
+        tr(lang,f"✅ تخفیف تمدید روی <b>{percent:g}٪</b> تنظیم شد.",f"✅ Renewal discount set to <b>{percent:g}%</b>."),
+        admin_plan_access_menu(lang,code,bool(fresh["vip_access"]),bool(fresh["autotrade_access"]),float(fresh["renewal_discount_percent"] or 0)),
+    )
+
+
 @router.callback_query(F.data.startswith("plantoggle:"))
 async def admin_plan_toggle(cb: CallbackQuery, bot: Bot):
     if not is_admin(cb.from_user.id): return
@@ -3076,8 +3158,8 @@ async def admin_signals(cb: CallbackQuery, bot: Bot, state: FSMContext):
     await screen(
         bot, cb.from_user.id, cb.message.chat.id,
         tr(lang,
-           "<b>📊 گزارش سیگنال‌های MT5</b>\n\nصدور، ویرایش و لغو فقط از MT5 Admin انجام می‌شود. این بخش فقط وضعیت سیگنال‌های فعال، نتایج بسته‌شده و آمار را نمایش می‌دهد.",
-           "<b>📊 MT5 Signal Reports</b>\n\nIssuing, editing and cancelling are MT5-only. This section is read-only and shows active signals, closed results and statistics."),
+           "<b>📊 مرکز سیگنال NEXUS</b>\n\nاز این بخش می‌توانید سیگنال جدید صادر کنید، وضعیت زنده MT5 را ببینید و اکشن‌های چرخه معامله را مدیریت کنید.",
+           "<b>📊 NEXUS Signal Center</b>\n\nCreate signals, inspect live MT5 state and manage signal lifecycle actions from this section."),
         signal_center_menu(lang),
     )
 
@@ -3595,8 +3677,22 @@ async def _render_admin_signal_center(bot: Bot, user_id: int, chat_id: int) -> N
         if row: sid=int(row["id"])
         if sid: buttons.append([(label,f"sigmanage:{sid}")])
         else: lines.append(escape(label))
-    if not positions and not orders:
-        lines.append(tr(lang,"هیچ معامله یا سفارش فعالی در MT5 وجود ندارد.","No active MT5 position or pending order."))
+
+    live_signal_ids={int(r["id"]) for r in (db.get_signal_by_code(str(x.get("signal_code") or "")) for x in positions+orders) if r}
+    telegram_active=[]
+    for row in db.list_active_signals(50):
+        issuer=str(row["issuer_type"] or "LEGACY_TELEGRAM").upper() if "issuer_type" in row.keys() else "LEGACY_TELEGRAM"
+        if issuer=="MT5_ADMIN" or int(row["id"]) in live_signal_ids:
+            continue
+        telegram_active.append(row)
+    if telegram_active:
+        lines.append("")
+        lines.append(tr(lang,"<b>📨 سیگنال‌های فعال صادرشده از Telegram Admin</b>","<b>📨 Active Telegram Admin Signals</b>"))
+        for row in telegram_active:
+            label=f"{row['code']} | {row['symbol']} {row['direction']} | {row['status']}"
+            buttons.append([(label,f"sigmanage:{int(row['id'])}")])
+    if not positions and not orders and not telegram_active:
+        lines.append(tr(lang,"هیچ سیگنال، معامله یا سفارش فعالی وجود ندارد.","No active signal, MT5 position or pending order."))
     lines.append("")
     lines.append(tr(lang,"🔒 منبع: MT5 Live Snapshot؛ تاریخچه سیگنال نمایش داده نمی‌شود.","🔒 Source: MT5 Live Snapshot; signal history is not shown."))
     buttons.append([(tr(lang,"🔄 همگام‌سازی زنده","🔄 Live Sync"),"signal_refresh")])
@@ -3635,37 +3731,43 @@ async def signal_active(cb: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("sigmanage:"))
 async def signal_manage(cb: CallbackQuery, bot: Bot):
-    """Read-only MT5 signal detail view; Telegram cannot mutate signals."""
+    """Admin signal detail view for both MT5 and Telegram-issued signals."""
     if not is_admin(cb.from_user.id): return
     sid=int(cb.data.split(":",1)[1]); row=db.get_signal(sid); lang=get_lang(cb.from_user.id); await cb.answer()
-    if not row or str(row["issuer_type"] or "").upper() != "MT5_ADMIN":
-        await screen(bot, cb.from_user.id, cb.message.chat.id, tr(lang,"سیگنال MT5 پیدا نشد.","MT5 signal not found."), kb(nav(lang,"signal_active")))
+    if not row:
+        await screen(bot, cb.from_user.id, cb.message.chat.id, tr(lang,"سیگنال پیدا نشد.","Signal not found."), kb(nav(lang,"signal_active")))
         return
     targets=db.get_signal_targets(sid)
     tp_text=" / ".join(_format_price(t["price"]) for t in targets) if targets else "—"
-    status_map={"ACTIVE":"فعال","CLOSED":"بسته","BREAK_EVEN":"سر به سر","PARTIAL":"بخشی بسته شده","TRAILING":"تریلینگ","REJECTED":"رد شده","CANCELLED":"لغو شده","EXPIRED":"منقضی شده"}
+    status_map={"ACTIVE":"فعال","DRAFT":"پیش‌نویس","CLOSED":"بسته","BREAK_EVEN":"سر به سر","PARTIAL":"بخشی بسته شده","TRAILING":"تریلینگ","REJECTED":"رد شده","CANCELLED":"لغو شده","EXPIRED":"منقضی شده"}
     status=str(row["status"] or "—")
-    live = db.mt5_signal_live_state(sid)
-    live_rows = db.mt5_live_for_signal(str(row["code"]), str(row["issuer_account"] or ""))
-    receipt_status = str(live.get("receipt_status") or "NOT_RECEIVED")
-    trade_status = str(live.get("trade_status") or "NO_TRADE")
-    ticket = str(live.get("ticket") or "")
-    live_error = str(live.get("receipt_error") or "")
-    if live_rows:
-        lr=live_rows[0]
-        trade_status=str(lr.get("status") or trade_status).upper()
-        ticket=str(lr.get("ticket") or ticket)
-        live_fa=(f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>\n"
-                  f"Ticket: <code>{escape(ticket)}</code>\nحجم واقعی: <b>{float(lr.get('volume') or 0):g}</b>\n"
-                  f"قیمت ورود واقعی: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
-                  f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
-        live_en=(f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>\n"
-                  f"Ticket: <code>{escape(ticket)}</code>\nExecuted Volume: <b>{float(lr.get('volume') or 0):g}</b>\n"
-                  f"Executed Entry: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
-                  f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+    issuer_type=str(row["issuer_type"] or "LEGACY_TELEGRAM").upper() if "issuer_type" in row.keys() else "LEGACY_TELEGRAM"
+    issuer_label="MT5 ADMIN" if issuer_type=="MT5_ADMIN" else "TELEGRAM ADMIN"
+    if issuer_type=="MT5_ADMIN":
+        live = db.mt5_signal_live_state(sid)
+        live_rows = db.mt5_live_for_signal(str(row["code"]), str(row["issuer_account"] or ""))
+        receipt_status = str(live.get("receipt_status") or "NOT_RECEIVED")
+        trade_status = str(live.get("trade_status") or "NO_TRADE")
+        ticket = str(live.get("ticket") or "")
+        live_error = str(live.get("receipt_error") or "")
+        if live_rows:
+            lr=live_rows[0]
+            trade_status=str(lr.get("status") or trade_status).upper()
+            ticket=str(lr.get("ticket") or ticket)
+            live_fa=(f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>\n"
+                     f"Ticket: <code>{escape(ticket)}</code>\nحجم واقعی: <b>{float(lr.get('volume') or 0):g}</b>\n"
+                     f"قیمت ورود واقعی: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
+                     f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+            live_en=(f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>\n"
+                     f"Ticket: <code>{escape(ticket)}</code>\nExecuted Volume: <b>{float(lr.get('volume') or 0):g}</b>\n"
+                     f"Executed Entry: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
+                     f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+        else:
+            live_fa = f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>" + (f"\nخطا: <code>{escape(live_error[:500])}</code>" if live_error else "")
+            live_en = f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>" + (f"\nError: <code>{escape(live_error[:500])}</code>" if live_error else "")
     else:
-        live_fa = f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>" + (f"\nخطا: <code>{escape(live_error[:500])}</code>" if live_error else "")
-        live_en = f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>" + (f"\nError: <code>{escape(live_error[:500])}</code>" if live_error else "")
+        live_fa="منبع صدور: <b>Telegram Admin</b>"
+        live_en="Issuer: <b>Telegram Admin</b>"
     if lang == "fa":
         text=(f"<b>📈 {escape(row['code'])}</b>\n\n"
               f"نماد: <b>{escape(row['symbol'])}</b>\nجهت: <b>{escape(row['direction'])}</b>\n"
@@ -3673,15 +3775,16 @@ async def signal_manage(cb: CallbackQuery, bot: Bot):
               f"نوع سفارش: <b>{escape(str(row['order_type'] or 'MARKET'))}</b>\n"
               f"Entry: <code>{_format_price(row['entry_price'])}</code>\nSL: <code>{_format_price(row['stop_loss'])}</code>\n"
               f"TPها: <code>{escape(tp_text)}</code>\nمقصد: <b>{escape(row['destination'])}</b>\n"
-              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>MT5 ADMIN</b>\n\n{live_fa}")
+              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>{escape(issuer_label)}</b>\n\n{live_fa}")
     else:
         text=(f"<b>📈 {escape(row['code'])}</b>\n\n"
               f"Symbol: <b>{escape(row['symbol'])}</b>\nDirection: <b>{escape(row['direction'])}</b>\n"
               f"Status: <b>{escape(status)}</b>\nOrder Type: <b>{escape(str(row['order_type'] or 'MARKET'))}</b>\n"
               f"Entry: <code>{_format_price(row['entry_price'])}</code>\nSL: <code>{_format_price(row['stop_loss'])}</code>\n"
               f"TPs: <code>{escape(tp_text)}</code>\nDestination: <b>{escape(row['destination'])}</b>\n"
-              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>MT5 ADMIN</b>\n\n{live_en}")
-    await screen(bot,cb.from_user.id,cb.message.chat.id,text,signal_readonly_menu(lang))
+              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>{escape(issuer_label)}</b>\n\n{live_en}")
+    markup=signal_manage_menu(sid,lang) if status.upper()!="CLOSED" else signal_readonly_menu(lang)
+    await screen(bot,cb.from_user.id,cb.message.chat.id,text,markup)
 
 
 @router.callback_query(F.data.startswith("sigact:"))
@@ -3698,8 +3801,9 @@ async def signal_action(cb: CallbackQuery, bot: Bot, state: FSMContext):
         return
 
     if action == "limitactive":
-        if str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper() != "LIMIT":
-            await cb.answer(tr(lang,"این سیگنال لیمیت نیست.","This signal is not a Limit order."),show_alert=True); return
+        pending_type=str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper()
+        if pending_type not in {"LIMIT","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"}:
+            await cb.answer(tr(lang,"این سیگنال سفارش Pending نیست.","This signal is not a pending order."),show_alert=True); return
         if row["limit_activated_at"] if "limit_activated_at" in row.keys() else None:
             await cb.answer(tr(lang,"این لیمیت قبلاً فعال اعلام شده است.","This Limit was already marked activated."),show_alert=True); return
         await cb.answer(tr(lang,"در حال اعلام فعال شدن لیمیت…","Publishing Limit activation…"))
@@ -4907,29 +5011,6 @@ async def clean_unhandled_message(message: Message, bot: Bot):
             pass
 
 
-def _disable_telegram_signal_authority() -> None:
-    """v0.6 policy: Telegram is reporting/subscription only; no signal CRUD.
-
-    We deliberately leave the legacy handlers in source for migration/audit
-    traceability, but they are not registered with the Dispatcher. This makes
-    the cutover reversible while enforcing the new authority at runtime.
-    """
-    blocked_callback = {
-        name for name in (
-            "signal_create", "signal_market", "signal_chart",
-            "signal_chart_invalid", "signal_symbol_pick", "signal_symbol",
-            "signal_direction", "signal_timeframe_pick", "signal_order_type_pick",
-            "signal_entry", "signal_stop_limit", "signal_sl", "signal_tp_count",
-            "signal_tp_value", "signal_volume_mode_pick", "signal_position_input",
-            "signal_risk", "signal_trailing_pick", "signal_destination",
-            "signal_publish", "signal_retry_publish",
-            "signal_action",
-        )
-    }
-    router.callback_query.handlers[:] = [h for h in router.callback_query.handlers if getattr(h.callback, "__name__", "") not in blocked_callback]
-    router.message.handlers[:] = [h for h in router.message.handlers if not getattr(h.callback, "__name__", "").startswith("signal_") and getattr(h.callback, "__name__", "") not in {"_publish_result_to_channel", "_publish_result_with_fallback"}]
-
-
 async def main():
     global BOT_USERNAME
     db.init_db()
@@ -4946,9 +5027,6 @@ async def main():
     bot = Bot(settings.bot_token, session=telegram_session)
     fsm_path = Path(__file__).resolve().parent.parent / "nexus_fsm.db"
     dp = Dispatcher(storage=SQLiteStorage(fsm_path))
-    # v0.6.0: Telegram has no signal authority. Legacy signal handlers remain
-    # in source for migration traceability but are removed from the Dispatcher.
-    _disable_telegram_signal_authority()
     dp.include_router(analytics_router)
     dp.include_router(subscriptions_router)
     dp.include_router(router)
