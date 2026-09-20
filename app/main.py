@@ -2864,17 +2864,25 @@ def _copy_price(value) -> str:
 
 
 def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
-    """Canonical LTR English signal card used by every publication path.
+    """Canonical text-only NEXUS signal card."""
 
-    Signal cards are deliberately language-neutral. Telegram channel posts must
-    remain stable across clients and must never contain Persian BiDi fragments or
-    literal ``\\n`` sequences.
-    """
-    order_type = str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper()
+    order_type = str(
+        row["order_type"]
+        if "order_type" in row.keys() and row["order_type"]
+        else "MARKET"
+    ).upper()
+
     direction = str(row["direction"] or "").upper()
     symbol = str(row["symbol"] or "").upper()
-    tf = str(row["timeframe"] if "timeframe" in row.keys() and row["timeframe"] else "M5").upper()
+
+    tf = str(
+        row["timeframe"]
+        if "timeframe" in row.keys() and row["timeframe"]
+        else "M5"
+    ).upper()
+
     state = str(status or row["status"] or "SIGNAL").upper()
+
     type_labels = {
         "MARKET": "MARKET",
         "BUY_LIMIT": "BUY LIMIT",
@@ -2885,62 +2893,99 @@ def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
         "SELL_STOP_LIMIT": "SELL STOP LIMIT",
         "LIMIT": "LIMIT",
     }
+
     state_labels = {
-        "ACTIVE": "ACTIVE", "PENDING": "PENDING", "CLOSED": "CLOSED",
-        "CANCELLED": "CANCELLED", "EXPIRED": "EXPIRED", "DRAFT": "DRAFT",
+        "ACTIVE": "ACTIVE",
+        "PENDING": "PENDING",
+        "CLOSED": "CLOSED",
+        "CANCELLED": "CANCELLED",
+        "EXPIRED": "EXPIRED",
+        "DRAFT": "DRAFT",
     }
+
     targets = db.get_signal_targets(int(row["id"]))
+
     if not targets:
         legacy = [row["tp1"], row["tp2"], row["tp3"]]
-        targets = [{"target_no": i + 1, "price": value} for i, value in enumerate(legacy) if value is not None]
-    rr = ("1:" + format(float(row["rr_ratio"]), "g")) if row["rr_ratio"] else "—"
+        targets = [
+            {"target_no": i + 1, "price": value}
+            for i, value in enumerate(legacy)
+            if value is not None
+        ]
+
+    rr = (
+        "1:" + format(float(row["rr_ratio"]), "g")
+        if row["rr_ratio"]
+        else "\u2014"
+    )
+
     volume_mode = str(row["volume_mode"] or "RISK").upper()
+
     if volume_mode == "FIXED" and row["lot_size"] is not None:
-        size_line = f"📦 Volume: <b>{float(row['lot_size']):g} lots</b>"
+        size_line = f"\U0001F4E6 Volume: <b>{float(row['lot_size']):g} lots</b>"
     else:
-        size_line = f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>"
+        size_line = f"\U0001F4CA Risk: <b>{float(row['risk_percent']):g}%</b>"
+
     tp_lines = "\n".join(
-        f"🎯 TP{int(t['target_no'])}: {_copy_price(t['price'])}" for t in targets
-    ) or "🎯 TP: —"
+        f"\U0001F3AF TP{int(t['target_no'])}: {_copy_price(t['price'])}"
+        for t in targets
+    ) or "\U0001F3AF TP: \u2014"
+
     stop_limit = ""
-    if order_type in {"BUY_STOP_LIMIT", "SELL_STOP_LIMIT"} and "stop_limit_price" in row.keys() and row["stop_limit_price"]:
-        stop_limit = f"\n🔹 Stop-Limit Price: {_copy_price(row['stop_limit_price'])}"
+
+    if (
+        order_type in {"BUY_STOP_LIMIT", "SELL_STOP_LIMIT"}
+        and "stop_limit_price" in row.keys()
+        and row["stop_limit_price"]
+    ):
+        stop_limit = (
+            f"\n\U0001F539 Stop-Limit Price: {_copy_price(row['stop_limit_price'])}"
+        )
+
     return (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{escape(str(row['code']))}</b>  🟦 {escape(type_labels.get(order_type, order_type))}\n\n"
-        f"📌 Symbol: <b>{escape(symbol)}</b>\n"
-        f"↕️ Direction: <b>{escape(direction)}</b>\n"
-        f"⏱ Timeframe: <b>{escape(tf)}</b>\n"
-        f"📍 Entry: {_copy_price(row['entry_price'])}{stop_limit}\n"
-        f"🛑 Stop Loss: {_copy_price(row['stop_loss'])}\n"
+        "<b>\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501 NEXUS SIGNAL \u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501</b>\n"
+        f"<b>{escape(str(row['code']))}</b>  \U0001F7E6 "
+        f"{escape(type_labels.get(order_type, order_type))}\n\n"
+        f"\U0001F4CC Symbol: <b>{escape(symbol)}</b>\n"
+        f"\u2195\ufe0f Direction: <b>{escape(direction)}</b>\n"
+        f"\u23f1 Timeframe: <b>{escape(tf)}</b>\n"
+        f"\U0001F4CD Entry: {_copy_price(row['entry_price'])}{stop_limit}\n"
+        f"\U0001F6D1 Stop Loss: {_copy_price(row['stop_loss'])}\n"
         f"{tp_lines}\n"
         f"{size_line}\n"
-        f"📐 R:R: <b>{escape(rr)}</b>\n"
-        f"📌 Status: <b>{escape(state_labels.get(state, state))}</b>\n"
-        f"🔧 Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>"
+        f"\U0001F4D0 R:R: <b>{escape(rr)}</b>\n"
+        f"\U0001F4CC Status: <b>{escape(state_labels.get(state, state))}</b>\n"
+        f"\U0001F527 Trailing: <b>{escape(str(row['trailing_code'] or '\u2014'))}</b>"
     )
 
 
+async def _publish_one_channel(
+    bot: Bot,
+    target,
+    row,
+    chart_frame: bytes | None,
+    caption: str,
+) -> int:
+    """Publish exactly one text-only signal flash card."""
 
-async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes, caption: str) -> int:
-    """Publish exactly one signal post: framed chart + compact copyable caption."""
     try:
         await bot.get_chat(target)
     except Exception as exc:
-        raise RuntimeError(f"Channel {target!s} is not accessible to the bot: {exc}") from exc
+        raise RuntimeError(
+            f"Channel {target!s} is not accessible to the bot: {exc}"
+        ) from exc
 
-    msg = await bot.send_photo(
+    msg = await bot.send_message(
         target,
-        BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-        caption=caption,
+        caption,
         parse_mode=ParseMode.HTML,
     )
+
     return msg.message_id
 
 
 async def _publish_signal(bot: Bot, row, *, only_missing: bool = False) -> tuple[int | None, int | None, list[str]]:
-    chart = await _download_bytes(bot, row["chart_file_id"])
-    chart_frame = await asyncio.to_thread(build_chart_frame, chart)
+    chart_frame = None
     caption = _signal_caption(row, get_lang(int(row["created_by"])))
     # Publication is idempotent: an already delivered channel message is the
     # canonical signal post and must never be published again for the same Signal.
