@@ -30,7 +30,7 @@
   height:218px;
   z-index:-2;
   pointer-events:none;
-  background:url("./assets/brand/home-header.jpg") center center / cover no-repeat;
+  background:url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat;
 
   /* Real alpha fade on the lower part of the image itself. */
   -webkit-mask-image:linear-gradient(
@@ -58,8 +58,8 @@
   position:absolute;
   left:0;
   right:0;
-  top:132px;
-  height:116px;
+  top:112px;
+  height:136px;
   z-index:-1;
   pointer-events:none;
   background:
@@ -129,7 +129,7 @@
     background-position:top center!important;
   }
   .app-shell .home-v2 > .home-v2-spotlight::before{height:210px}
-  .app-shell .home-v2 > .home-v2-spotlight::after{top:126px;height:116px}
+  .app-shell .home-v2 > .home-v2-spotlight::after{top:106px;height:136px}
   .app-shell .home-v2-spotlight h1{max-width:16ch!important}
   .app-shell .home-v2-spotlight p{
     max-width:34ch!important;
