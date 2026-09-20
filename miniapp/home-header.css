@@ -14,7 +14,6 @@
   justify-content:flex-end;
   border:1px solid rgba(92,174,255,.24)!important;
   background:
-    url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat,
     #07111d!important;
   box-shadow:
     0 16px 30px -12px rgba(0,0,0,.72),
@@ -26,37 +25,37 @@
   content:"";
   position:absolute;
   inset:0;
-  z-index:-1;
+  z-index:-2;
   pointer-events:none;
   background:
-    radial-gradient(ellipse at 50% 58%,rgba(65,157,230,.09),transparent 44%),
     linear-gradient(180deg,
       rgba(7,17,29,0) 0%,
-      rgba(7,17,29,.02) 40%,
-      rgba(7,17,29,.12) 50%,
-      rgba(7,17,29,.38) 60%,
-      rgba(7,17,29,.72) 70%,
-      rgba(7,17,29,.94) 79%,
-      #07111d 88%,
-      #07111d 100%);
+      rgba(7,17,29,0) 42%,
+      rgba(7,17,29,.10) 52%,
+      rgba(7,17,29,.34) 62%,
+      rgba(7,17,29,.68) 72%,
+      rgba(7,17,29,.92) 82%,
+      #07111d 94%,
+      #07111d 100%),
+    url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat;
 }
 
 .app-shell .home-v2 > .home-v2-spotlight::after{
   content:"";
   position:absolute;
-  left:-1px;
-  right:-1px;
-  bottom:-1px;
-  height:132px;
+  left:0;
+  right:0;
+  top:92px;
+  height:150px;
   z-index:-1;
   pointer-events:none;
   background:
-    radial-gradient(ellipse at 50% 22%,rgba(58,151,224,.085),transparent 66%),
+    radial-gradient(ellipse at 50% 18%,rgba(58,151,224,.075),transparent 62%),
     linear-gradient(180deg,
       rgba(7,17,29,0) 0%,
-      rgba(7,17,29,.18) 24%,
-      rgba(7,17,29,.56) 52%,
-      rgba(7,17,29,.88) 76%,
+      rgba(7,17,29,.10) 22%,
+      rgba(7,17,29,.42) 48%,
+      rgba(7,17,29,.78) 72%,
       #07111d 100%);
 }
 
