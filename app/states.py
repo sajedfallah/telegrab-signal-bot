@@ -34,6 +34,7 @@ class Flow(StatesGroup):
     admin_plan_irr = State()
     admin_plan_usdt = State()
     admin_plan_setup = State()
+    admin_plan_renewal = State()
     admin_usdt_rate = State()
     admin_invoice_ttl = State()
     admin_rate_source = State()
