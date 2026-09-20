@@ -3027,8 +3027,10 @@ def enqueue_autotrade_trade_event(telegram_id: int, event_name: str, payload: di
         con.execute(
             """INSERT OR IGNORE INTO autotrade_trade_executions
                (telegram_id,signal_id,ticket,event_id,event_type,destination,symbol,direction,volume,
-                entry_price,stop_loss,take_profit,exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,cycle_id,status,created_at,updated_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                entry_price,stop_loss,take_profit,exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,cycle_id,
+                observation_id,attempt_id,event_subtype,event_time_ms,remaining_volume,sl_before,sl_after,tp_before,tp_after,spread,latency_ms,
+                mfe_price,mae_price,mfe_r,mae_r,config_snapshot_json,status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 int(telegram_id), None, ticket, event_id, event_name,
                 str(payload.get("destination") or "BOTH").upper(),
@@ -3049,6 +3051,21 @@ def enqueue_autotrade_trade_event(telegram_id: int, event_name: str, payload: di
                 str(payload.get("position_id") or "") or None,
                 str(payload.get("deal_id") or ticket) or None,
                 str(payload.get("cycle_id") or get_setting("current_cycle_id", "CYCLE-LEGACY", con=con)),
+                int(payload["observation_id"]) if payload.get("observation_id") is not None else None,
+                int(payload["attempt_id"]) if payload.get("attempt_id") is not None else None,
+                str(payload.get("event_subtype") or "") or None,
+                int(payload.get("event_time_ms") or 0),
+                float(payload["remaining_volume"]) if payload.get("remaining_volume") is not None else None,
+                float(payload["sl_before"]) if payload.get("sl_before") is not None else None,
+                float(payload["sl_after"]) if payload.get("sl_after") is not None else None,
+                float(payload["tp_before"]) if payload.get("tp_before") is not None else None,
+                float(payload["tp_after"]) if payload.get("tp_after") is not None else None,
+                float(payload.get("spread") or 0), int(payload.get("latency_ms") or 0),
+                float(payload["mfe_price"]) if payload.get("mfe_price") is not None else None,
+                float(payload["mae_price"]) if payload.get("mae_price") is not None else None,
+                float(payload["mfe_r"]) if payload.get("mfe_r") is not None else None,
+                float(payload["mae_r"]) if payload.get("mae_r") is not None else None,
+                json.dumps(payload.get("config_snapshot") or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
                 "QUEUED", now, now,
             ),
         )
