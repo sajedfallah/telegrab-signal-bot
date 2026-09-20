@@ -1164,8 +1164,8 @@ bool ProcessIncomingSignal(const NexusSignal &s)
       long obs_latency=(long)(GetTickCount64()-obs_started);
       // observation_id=0 means backend resolves/ignores until the queued observation is persisted;
       // execution-attempt transport is timer-safe follow-up and must never gate order execution.
-      QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,0,0,0,0,obs_latency,
-                            retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),"",err);
+      QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,g_trade.LastRequestedVolume(),0,0,0,obs_latency,
+                            retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),(string)g_trade.LastRetcode(),err);
       QueueObservation(s,retryable?"EVALUATING":"REJECTED",err);
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
@@ -1176,9 +1176,9 @@ bool ProcessIncomingSignal(const NexusSignal &s)
     double obs_executed=0.0;
     if(ticket>0 && PositionSelectByTicket(ticket)) obs_executed=PositionGetDouble(POSITION_PRICE_OPEN);
     double obs_slippage=(obs_executed>0.0 ? MathAbs(obs_executed-obs_requested) : 0.0);
-    QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,0,
-                          (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):0.0),
-                          obs_executed,obs_slippage,obs_latency,"EXECUTED","","","");
+    QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,g_trade.LastRequestedVolume(),
+                          (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):g_trade.LastRequestedVolume()),
+                          obs_executed,obs_slippage,obs_latency,"EXECUTED","",(string)g_trade.LastRetcode(),"");
     CompleteNexusSignalClaim(s.signal_id);
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
