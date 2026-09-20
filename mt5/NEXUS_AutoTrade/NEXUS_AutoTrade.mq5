@@ -1612,6 +1612,8 @@ struct NEXUSPositionState
    ulong ticket;
    double sl;
    double tp;
+   double mfe_price;
+   double mae_price;
   };
 NEXUSPositionState g_position_states[];
 
@@ -1916,6 +1918,8 @@ void SyncPositionState(const long identifier,const ulong ticket,const double sl,
    g_position_states[idx].ticket=ticket;
    g_position_states[idx].sl=sl;
    g_position_states[idx].tp=tp;
+   if(g_position_states[idx].mfe_price<0) g_position_states[idx].mfe_price=0;
+   if(g_position_states[idx].mae_price<0) g_position_states[idx].mae_price=0;
    if(PositionSelectByTicket(ticket))
      {
       double p=PositionGetDouble(POSITION_PRICE_CURRENT);
