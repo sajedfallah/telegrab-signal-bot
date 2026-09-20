@@ -15,6 +15,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Release A test dependency
+        run: python -m pip install pytest
+
+      - name: Run Signal Agent Release A tests
+        run: python -m pytest -q tests/test_signal_agent_market_data_a.py
+
       - name: Verify repository contract
         shell: python
         run: |
@@ -44,17 +55,12 @@ jobs:
               lower = path.lower()
               name = pathlib.PurePosixPath(path).name
               if name == ".env":
-                  bad.append(path)
-                  continue
+                  bad.append(path); continue
               if name.startswith(".env.") and name != ".env.example":
-                  bad.append(path)
-                  continue
+                  bad.append(path); continue
               if lower.endswith((".db", ".sqlite", ".sqlite3")):
                   bad.append(path)
 
           if bad:
-              print("Forbidden tracked runtime files:")
-              print("\n".join(bad))
-              sys.exit(1)
-
+              print("Forbidden tracked runtime files:"); print("\n".join(bad)); sys.exit(1)
           print("Repository governance contract: PASS")
