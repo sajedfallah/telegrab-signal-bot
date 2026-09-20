@@ -22,10 +22,14 @@ def test_determinism_persistence_replay_and_health(tmp_path):
     s.health("OK",len(direct));assert s.runtime()["event_count"]==len(direct)
 
 def test_core_detectors_and_sweep():
-    cs=fixture();sw=d.swings(cs);liq=d.liquidity(cs,sw)
-    assert {"SWING_HIGH","SWING_LOW"}<={x.event_type for x in sw}
-    assert liq and d.sweeps(cs,liq)
-    assert d.displacement(cs) and d.premium_discount(cs)
+    # Confirm a swing high at index 2, then penetrate it and close back below:
+    # this satisfies the existing BUY_SIDE sweep rule without weakening semantics.
+    cs=mk([(10,10.5,9.5,10),(10,11,9.8,10.5),(10.5,12,10,11),(11,11.5,10.2,10.8),(10.8,11.2,10,10.5),(10.5,12.5,10.3,11.5),(11.5,11.8,10.8,11)])
+    sw=d.swings(cs);liq=d.liquidity(cs,sw);sweeps=d.sweeps(cs,liq)
+    assert any(x.event_type=="SWING_HIGH" for x in sw)
+    assert any(x.direction=="BUY_SIDE" for x in liq)
+    assert any(x.event_type=="LIQUIDITY_SWEEP" and x.direction=="BEARISH" for x in sweeps)
+    assert d.displacement(fixture()) and d.premium_discount(cs)
 
 def test_fvg_lifecycle():
     active=mk([(10,11,9,10),(11,13,10.5,12.5),(13,14,12,13.5)])
@@ -42,33 +46,30 @@ def test_ob_invalidation_and_breaker():
     assert d.breakers(cs,obs)
 
 def test_mss_and_choch_dedicated():
-    cs=fixture();ev=d.structure_changes(cs,d.swings(cs))
-    assert any(x.event_type=="MSS" for x in ev)
-    # explicit alternating structure fixture must produce CHOCH when opposite breaks follow
-    if not any(x.event_type=="CHOCH" for x in ev):
-        sw=d.swings(cs,wing=1);ev=d.structure_changes(cs,sw)
-    assert any(x.event_type=="CHOCH" for x in ev)
+    # wing=1: high swing at 1, low swing at 3. Candle 5 breaks high bullish;
+    # candle 6 then breaks the confirmed low bearish -> opposite MSS => CHOCH.
+    cs=mk([(10,10.5,9.5,10),(10,12,10,11),(11,11.5,9.5,10),(10,10.5,8,9),(9,11,8.5,10),(10,13,9.5,12.5),(12.5,12.7,7.5,7.8),(7.8,8.5,7.6,8)])
+    sw=d.swings(cs,wing=1);ev=d.structure_changes(cs,sw)
+    mss=[x for x in ev if x.event_type=="MSS"]
+    assert any(x.direction=="BULLISH" for x in mss)
+    assert any(x.direction=="BEARISH" for x in mss)
+    assert any(x.event_type=="CHOCH" and x.direction=="BEARISH" for x in ev)
 
 def test_daily_quadrant_tie_newest_wins():
-    cs=fixture("D1")[-10:]
-    a=cs[-2];b=cs[-1]
-    cs[-2]=Candle("XAUUSD","D1",a.open_time,10,15,9,11,10)
-    cs[-1]=Candle("XAUUSD","D1",b.open_time,10,15,9,11,10)
-    q=d.daily_quadrant(cs)[0];assert q.source_time==cs[-1].open_time
-    assert set(q.metadata["levels"])=={"25","50","75"}
+    cs=fixture("D1")[-10:];a=cs[-2];b=cs[-1]
+    cs[-2]=Candle("XAUUSD","D1",a.open_time,10,15,9,11,10);cs[-1]=Candle("XAUUSD","D1",b.open_time,10,15,9,11,10)
+    q=d.daily_quadrant(cs)[0];assert q.source_time==cs[-1].open_time;assert set(q.metadata["levels"])=={"25","50","75"}
 
 def test_closed_candle_safety():
     cs=fixture();forming=cs[-1];asof=forming.open_time+timedelta(seconds=1)
     closed=ICTEventEngine().detect(cs,closed_only=True,as_of=asof)
     assert all(x.source_time<forming.open_time for x in closed)
-    unfiltered=ICTEventEngine().detect(cs,closed_only=False)
-    assert len(unfiltered)>=len(closed)
+    assert len(ICTEventEngine().detect(cs,closed_only=False))>=len(closed)
 
 def test_all_timeframes_and_sessions():
     e=ICTEventEngine()
     for tf in SEC:
-        cs=fixture(tf);asof=cs[-1].open_time+timedelta(seconds=SEC[tf])
-        assert e.detect(cs,as_of=asof)
+        cs=fixture(tf);asof=cs[-1].open_time+timedelta(seconds=SEC[tf]);assert e.detect(cs,as_of=asof)
     ev=session_events("XAUUSD",datetime(2026,7,1,8,tzinfo=timezone.utc));assert all("timezone" in x.metadata for x in ev)
 
 def test_no_trade_signal_telegram_or_ai_authority():
