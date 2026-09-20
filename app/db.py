@@ -444,6 +444,54 @@ def init_db() -> None:
                 FOREIGN KEY(telegram_id) REFERENCES users(telegram_id)
             );
 
+            CREATE TABLE IF NOT EXISTS autotrade_signal_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id INTEGER NOT NULL,
+                signal_id INTEGER NOT NULL,
+                account_number TEXT NOT NULL,
+                broker TEXT,
+                server TEXT,
+                ea_version TEXT,
+                received_at TEXT NOT NULL,
+                evaluated_at TEXT,
+                completed_at TEXT,
+                decision_status TEXT NOT NULL DEFAULT 'RECEIVED',
+                reason_code TEXT,
+                reason_detail TEXT,
+                config_snapshot_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(telegram_id, signal_id, account_number),
+                FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_autotrade_obs_signal ON autotrade_signal_observations(signal_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_autotrade_obs_user ON autotrade_signal_observations(telegram_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS autotrade_execution_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                observation_id INTEGER NOT NULL,
+                attempt_no INTEGER NOT NULL DEFAULT 1,
+                requested_at TEXT NOT NULL,
+                broker_response_at TEXT,
+                requested_price REAL,
+                market_bid REAL,
+                market_ask REAL,
+                spread REAL,
+                requested_volume REAL,
+                executed_volume REAL,
+                executed_price REAL,
+                slippage REAL,
+                latency_ms INTEGER,
+                status TEXT NOT NULL DEFAULT 'ATTEMPTED',
+                reason_code TEXT,
+                broker_retcode TEXT,
+                error_text TEXT,
+                created_at TEXT NOT NULL,
+                UNIQUE(observation_id, attempt_no),
+                FOREIGN KEY(observation_id) REFERENCES autotrade_signal_observations(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_autotrade_attempt_obs ON autotrade_execution_attempts(observation_id, requested_at);
+
             CREATE TABLE IF NOT EXISTS autotrade_trade_executions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER NOT NULL,
@@ -471,6 +519,22 @@ def init_db() -> None:
                 cycle_id TEXT,
                 status TEXT NOT NULL DEFAULT 'RECEIVED',
                 error_text TEXT,
+                observation_id INTEGER,
+                attempt_id INTEGER,
+                event_subtype TEXT,
+                event_time_ms INTEGER NOT NULL DEFAULT 0,
+                remaining_volume REAL,
+                sl_before REAL,
+                sl_after REAL,
+                tp_before REAL,
+                tp_after REAL,
+                spread REAL NOT NULL DEFAULT 0,
+                latency_ms INTEGER NOT NULL DEFAULT 0,
+                mfe_price REAL,
+                mae_price REAL,
+                mfe_r REAL,
+                mae_r REAL,
+                config_snapshot_json TEXT NOT NULL DEFAULT '{}',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 UNIQUE(telegram_id, ticket, event_id),
@@ -2839,6 +2903,66 @@ def mark_command_receipt(command_id: int, telegram_id: int, *, status: str, erro
                     (telegram_id,event_key,"COMMAND_RECEIPT",int(cmd["signal_id"]) if cmd else None,command_id,payload,now))
 
 
+
+AUTOTRADE_REASON_CODES = {
+    "SPREAD_TOO_HIGH", "ENTRY_DEVIATION", "SIGNAL_EXPIRED", "RISK_LIMIT",
+    "INVALID_VOLUME", "INSUFFICIENT_MARGIN", "MARKET_CLOSED", "TRADING_DISABLED",
+    "SYMBOL_UNAVAILABLE", "BROKER_REJECT", "CONNECTION_ERROR", "TIMEOUT",
+    "DUPLICATE", "CONFIG_BLOCK", "LICENSE_BLOCK", "INTERNAL_ERROR", "UNKNOWN",
+}
+
+def normalize_autotrade_reason_code(value: str | None) -> str | None:
+    if value is None or not str(value).strip():
+        return None
+    code = str(value).strip().upper()
+    return code if code in AUTOTRADE_REASON_CODES else "UNKNOWN"
+
+def upsert_autotrade_observation(telegram_id: int, signal_id: int, account_number: str, *,
+        broker: str = "", server: str = "", ea_version: str = "", decision_status: str = "RECEIVED",
+        reason_code: str | None = None, reason_detail: str | None = None,
+        config_snapshot: dict | None = None):
+    now = now_iso()
+    snapshot = json.dumps(config_snapshot or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    with conn() as con:
+        con.execute("""INSERT INTO autotrade_signal_observations
+            (telegram_id,signal_id,account_number,broker,server,ea_version,received_at,decision_status,reason_code,reason_detail,config_snapshot_json,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(telegram_id,signal_id,account_number) DO UPDATE SET
+              broker=COALESCE(NULLIF(excluded.broker,''),broker),
+              server=COALESCE(NULLIF(excluded.server,''),server),
+              ea_version=COALESCE(NULLIF(excluded.ea_version,''),ea_version),
+              evaluated_at=CASE WHEN excluded.decision_status<>'RECEIVED' THEN excluded.updated_at ELSE evaluated_at END,
+              completed_at=CASE WHEN excluded.decision_status IN ('EXECUTED','NOT_EXECUTED','REJECTED','EXPIRED') THEN excluded.updated_at ELSE completed_at END,
+              decision_status=excluded.decision_status,
+              reason_code=excluded.reason_code, reason_detail=excluded.reason_detail,
+              updated_at=excluded.updated_at""",
+            (int(telegram_id),int(signal_id),str(account_number),broker,server,ea_version,now,
+             str(decision_status).upper(),normalize_autotrade_reason_code(reason_code),
+             (str(reason_detail)[:2000] if reason_detail else None),snapshot,now,now))
+        return con.execute("SELECT * FROM autotrade_signal_observations WHERE telegram_id=? AND signal_id=? AND account_number=?",
+                           (int(telegram_id),int(signal_id),str(account_number))).fetchone()
+
+def add_autotrade_execution_attempt(observation_id: int, *, attempt_no: int = 1, requested_at: str | None = None,
+        broker_response_at: str | None = None, requested_price: float | None = None, market_bid: float | None = None,
+        market_ask: float | None = None, spread: float | None = None, requested_volume: float | None = None,
+        executed_volume: float | None = None, executed_price: float | None = None, slippage: float | None = None,
+        latency_ms: int | None = None, status: str = "ATTEMPTED", reason_code: str | None = None,
+        broker_retcode: str | None = None, error_text: str | None = None):
+    now = now_iso()
+    with conn() as con:
+        con.execute("""INSERT INTO autotrade_execution_attempts
+            (observation_id,attempt_no,requested_at,broker_response_at,requested_price,market_bid,market_ask,spread,
+             requested_volume,executed_volume,executed_price,slippage,latency_ms,status,reason_code,broker_retcode,error_text,created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(observation_id,attempt_no) DO UPDATE SET
+              broker_response_at=excluded.broker_response_at,executed_volume=excluded.executed_volume,
+              executed_price=excluded.executed_price,slippage=excluded.slippage,latency_ms=excluded.latency_ms,
+              status=excluded.status,reason_code=excluded.reason_code,broker_retcode=excluded.broker_retcode,error_text=excluded.error_text""",
+            (int(observation_id),int(attempt_no),requested_at or now,broker_response_at,requested_price,market_bid,market_ask,
+             spread,requested_volume,executed_volume,executed_price,slippage,latency_ms,str(status).upper(),
+             normalize_autotrade_reason_code(reason_code),broker_retcode,(str(error_text)[:2000] if error_text else None),now))
+        return con.execute("SELECT * FROM autotrade_execution_attempts WHERE observation_id=? AND attempt_no=?",
+                           (int(observation_id),int(attempt_no))).fetchone()
 
 def enqueue_autotrade_trade_event(telegram_id: int, event_name: str, payload: dict, ticket: str) -> None:
     """Queue an MT5 lifecycle event with durable idempotency.
