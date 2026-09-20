@@ -836,6 +836,22 @@ def init_db() -> None:
             "position_id": "ALTER TABLE autotrade_trade_executions ADD COLUMN position_id TEXT",
             "deal_id": "ALTER TABLE autotrade_trade_executions ADD COLUMN deal_id TEXT",
             "cycle_id": "ALTER TABLE autotrade_trade_executions ADD COLUMN cycle_id TEXT",
+            "observation_id": "ALTER TABLE autotrade_trade_executions ADD COLUMN observation_id INTEGER",
+            "attempt_id": "ALTER TABLE autotrade_trade_executions ADD COLUMN attempt_id INTEGER",
+            "event_subtype": "ALTER TABLE autotrade_trade_executions ADD COLUMN event_subtype TEXT",
+            "event_time_ms": "ALTER TABLE autotrade_trade_executions ADD COLUMN event_time_ms INTEGER NOT NULL DEFAULT 0",
+            "remaining_volume": "ALTER TABLE autotrade_trade_executions ADD COLUMN remaining_volume REAL",
+            "sl_before": "ALTER TABLE autotrade_trade_executions ADD COLUMN sl_before REAL",
+            "sl_after": "ALTER TABLE autotrade_trade_executions ADD COLUMN sl_after REAL",
+            "tp_before": "ALTER TABLE autotrade_trade_executions ADD COLUMN tp_before REAL",
+            "tp_after": "ALTER TABLE autotrade_trade_executions ADD COLUMN tp_after REAL",
+            "spread": "ALTER TABLE autotrade_trade_executions ADD COLUMN spread REAL NOT NULL DEFAULT 0",
+            "latency_ms": "ALTER TABLE autotrade_trade_executions ADD COLUMN latency_ms INTEGER NOT NULL DEFAULT 0",
+            "mfe_price": "ALTER TABLE autotrade_trade_executions ADD COLUMN mfe_price REAL",
+            "mae_price": "ALTER TABLE autotrade_trade_executions ADD COLUMN mae_price REAL",
+            "mfe_r": "ALTER TABLE autotrade_trade_executions ADD COLUMN mfe_r REAL",
+            "mae_r": "ALTER TABLE autotrade_trade_executions ADD COLUMN mae_r REAL",
+            "config_snapshot_json": "ALTER TABLE autotrade_trade_executions ADD COLUMN config_snapshot_json TEXT NOT NULL DEFAULT '{}'",
         }
         for name, ddl in execution_migrations.items():
             if name not in ecols:
