@@ -2099,10 +2099,26 @@ bool SendManualOrClosedTradeEvent(const string event_name,const long position_id
         }
      }
    double realized_r=(risk_cash>0.0 ? profit/risk_cash : 0.0);
+   // remaining_volume is the broker-truth volume still open after this lifecycle event.
+   // A final CLOSE is zero; a partial exit reports the live residual position volume.
+   double remaining_volume=0.0;
+   ulong live_ticket=PositionTicketByIdentifier(position_id);
+   if(live_ticket>0 && PositionSelectByTicket(live_ticket))
+      remaining_volume=PositionGetDouble(POSITION_VOLUME);
+   string event_subtype="";
+   if(event_name=="CLOSE")
+      event_subtype=(remaining_volume>0.0 ? "PARTIAL_CLOSE" : "FINAL_CLOSE");
+   int state_idx=FindPositionState(position_id);
+   double mfe_price=(state_idx>=0 ? g_position_states[state_idx].mfe_price : 0.0);
+   double mae_price=(state_idx>=0 ? g_position_states[state_idx].mae_price : 0.0);
+   double initial_risk_price=MathAbs(entry_price-GlobalVariableGet("NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"."+signal_id+".initial_sl"));
+   double mfe_r=(initial_risk_price>0.0 && mfe_price>0.0 ? MathAbs(mfe_price-entry_price)/initial_risk_price : 0.0);
+   double mae_r=(initial_risk_price>0.0 && mae_price>0.0 ? -MathAbs(mae_price-entry_price)/initial_risk_price : 0.0);
    if(!g_api.TradeEvent(event_name,(string)deal_ticket,signal_id,symbol,direction,volume,
                         entry_price,sl,tp,exit_price,profit,shot,event_id,destination,
                         gross_profit,commission,swap,0.0,risk_cash,realized_r,(string)position_id,(string)deal_ticket,"",
-                        "MARKET",0,close_reason,(long)HistoryDealGetInteger(deal_ticket,DEAL_TIME)*1000))
+                        "MARKET",0,close_reason,(long)HistoryDealGetInteger(deal_ticket,DEAL_TIME)*1000,
+                        0,0,event_subtype,remaining_volume,sl,sl,tp,tp,0.0,0,mfe_price,mae_price,mfe_r,mae_r))
      {
       Print("NEXUS trade event failed: ",g_api.LastError());
       return false;
