@@ -274,8 +274,36 @@
     }));
   }
 
+  function previewHomePayload() {
+    return {
+      performance: { period: '30', total: 42, win_rate: 71.4, wins: 30, losses: 9, be: 3, avg_rr: 1.8, disclaimer_fa: 'داده‌های این صفحه فقط برای پیش‌نمایش رابط کاربری هستند.' },
+      recent_signals: [
+        { id: 'preview-1', symbol: 'XAUUSD', direction: 'BUY', status: 'ACTIVE', published_at: new Date().toISOString(), locked: false },
+        { id: 'preview-2', symbol: 'EURUSD', direction: 'SELL', status: 'CLOSED', result: 'WIN', result_label_fa: 'سود', published_at: new Date(Date.now() - 3600000).toISOString(), locked: false }
+      ],
+      subscription: { vip: false, autotrade: false },
+      experience: { segment: 'PREVIEW', lifecycle: 'PREVIEW', navigation: [] }
+    };
+  }
+
+  function isUiPreviewMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('ui_preview') === '1';
+  }
+
   async function hydrateNexusHome() {
     if (state.route !== 'home') return;
+
+    // Preview-only browser mode. It is opt-in via ?ui_preview=1 and never
+    // bypasses Telegram authentication for normal visits.
+    if (isUiPreviewMode()) {
+      const payload = previewHomePayload();
+      state.home = payload;
+      const order = normalizedOrder(payload);
+      view.innerHTML = `<div class="home-v2">${order.map(key => renderSection(key, payload)).join('')}</div>`;
+      bindHomeActions();
+      return;
+    }
     if (!window.Telegram?.WebApp?.initData) {
       console.warn('[NEXUS][HOME] missing Telegram initData');
       renderAuthUnavailable();
