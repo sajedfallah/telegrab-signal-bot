@@ -1004,31 +1004,63 @@ string ObservationReasonCode(const string detail)
    if(StringFind(x,"TRADE")>=0 && StringFind(x,"DISABLED")>=0) return "TRADING_DISABLED";
    if(StringFind(x,"MARKET")>=0 && StringFind(x,"CLOSED")>=0) return "MARKET_CLOSED";
    if(StringFind(x,"DUPLICATE")>=0) return "DUPLICATE";
-   if(StringFind(x,"TIMEOUT")>=0 || StringFind(x,"WEBREQUEST")>=0) return "CONNECTION_ERROR";
+   if(StringFind(x,"TIMEOUT")>=0) return "TIMEOUT";
+   if(StringFind(x,"WEBREQUEST")>=0 || StringFind(x,"CONNECTION")>=0) return "CONNECTION_ERROR";
    return "UNKNOWN";
   }
 
-void ObserveSignal(const NexusSignal &s,const string status,const string detail="")
+struct NEXUSPendingObservation
+  {
+   long signal_db_id;
+   string status;
+   string reason_code;
+   string detail;
+   string snapshot;
+   int attempts;
+   datetime next_try;
+  };
+NEXUSPendingObservation g_pending_observations[];
+
+void QueueObservation(const NexusSignal &s,const string status,const string detail="")
   {
    string snapshot=StringFormat("{\"risk_mode\":%d,\"fixed_lot\":%s,\"user_risk_percent\":%s,\"default_max_entry_deviation_pct\":%s,\"trailing_code\":\"%s\",\"order_type\":\"%s\"}",
       (int)g_risk_mode,DoubleToString(g_fixed_lot,8),DoubleToString(g_user_risk_percent,4),
       DoubleToString(InpDefaultMaxEntryDeviationPct,6),NexusJsonEscape(s.trailing_code),NexusJsonEscape(s.order_type));
    string code=(status=="REJECTED" || status=="NOT_EXECUTED" ? ObservationReasonCode(detail) : "");
-   if(!g_api.Observation(s.db_id,status,code,detail,snapshot))
-      Print("NEXUS observation telemetry failed: ",g_api.LastError());
+   int idx=ArraySize(g_pending_observations); ArrayResize(g_pending_observations,idx+1);
+   g_pending_observations[idx].signal_db_id=s.db_id; g_pending_observations[idx].status=status;
+   g_pending_observations[idx].reason_code=code; g_pending_observations[idx].detail=detail;
+   g_pending_observations[idx].snapshot=snapshot; g_pending_observations[idx].attempts=0;
+   g_pending_observations[idx].next_try=TimeCurrent();
+  }
+
+void ProcessPendingObservations()
+  {
+   datetime now=TimeCurrent();
+   for(int i=ArraySize(g_pending_observations)-1;i>=0;i--)
+     {
+      if(now<g_pending_observations[i].next_try) continue;
+      if(g_api.Observation(g_pending_observations[i].signal_db_id,g_pending_observations[i].status,
+                           g_pending_observations[i].reason_code,g_pending_observations[i].detail,
+                           g_pending_observations[i].snapshot))
+        { ArrayRemove(g_pending_observations,i,1); continue; }
+      g_pending_observations[i].attempts++;
+      g_pending_observations[i].next_try=now+(int)MathMin(60.0,MathPow(2.0,MathMin(g_pending_observations[i].attempts,5)));
+      if(g_pending_observations[i].attempts>20) ArrayRemove(g_pending_observations,i,1);
+     }
   }
 
 bool ProcessIncomingSignal(const NexusSignal &s)
   {
    SetExecutionStatus("RECEIVED",s,s.symbol,"order_type="+s.order_type+" entry="+DoubleToString(s.entry,8));
-   ObserveSignal(s,"RECEIVED");
+   QueueObservation(s,"RECEIVED");
    if(s.order_type!="MARKET" && s.order_type!="LIMIT" &&
       s.order_type!="BUY_LIMIT" && s.order_type!="SELL_LIMIT" &&
       s.order_type!="BUY_STOP" && s.order_type!="SELL_STOP" &&
       s.order_type!="BUY_STOP_LIMIT" && s.order_type!="SELL_STOP_LIMIT")
      {
       string bad="unsupported order type: "+s.order_type;
-      ObserveSignal(s,"REJECTED",bad);
+      QueueObservation(s,"REJECTED",bad);
       SendSignalReceiptReliable(s.db_id,"rejected","",bad);
       SetExecutionStatus("REJECTED",s,s.symbol,bad); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1051,7 +1083,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(symbol=="")
      {
       string reason="symbol not available/tradable on broker";
-      ObserveSignal(s,"REJECTED",reason);
+      QueueObservation(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,s.symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1059,7 +1091,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    string reason="";
    if(!g_trade.ValidateEntry(s,symbol,InpDefaultMaxEntryDeviationPct,reason))
      {
-      ObserveSignal(s,"REJECTED",reason);
+      QueueObservation(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1067,25 +1099,40 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(!ClaimNexusSignal(s.signal_id))
      {
       string duplicate="duplicate signal execution blocked by NEXUS idempotency lock";
-      ObserveSignal(s,"REJECTED",duplicate);
+      QueueObservation(s,"REJECTED",duplicate);
       SendSignalReceiptReliable(s.db_id,"rejected","",duplicate);
       SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
      }
    ulong ticket=0;
+   double obs_bid=SymbolInfoDouble(symbol,SYMBOL_BID), obs_ask=SymbolInfoDouble(symbol,SYMBOL_ASK);
+   double obs_requested=(s.order_type=="MARKET" ? (s.direction=="BUY"||s.direction=="LONG"?obs_ask:obs_bid) : s.entry);
+   ulong obs_started=GetTickCount64();
     if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
      {
       ReleaseNexusSignalClaim(s.signal_id);
       string err=g_trade.LastError(); bool retryable=g_trade.LastFailureRetryable();
-      ObserveSignal(s,retryable?"EVALUATING":"REJECTED",err);
+      long obs_latency=(long)(GetTickCount64()-obs_started);
+      // observation_id=0 means backend resolves/ignores until the queued observation is persisted;
+      // execution-attempt transport is timer-safe follow-up and must never gate order execution.
+      g_api.ExecutionAttempt(0,1,obs_requested,obs_bid,obs_ask,MathMax(0.0,obs_ask-obs_bid),0,0,0,0,obs_latency,
+                             retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),"",err);
+      QueueObservation(s,retryable?"EVALUATING":"REJECTED",err);
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
       if(retryable) return false;
        AdvanceSignalCursor(s.db_id); return true;
       }
+    long obs_latency=(long)(GetTickCount64()-obs_started);
+    double obs_executed=0.0;
+    if(ticket>0 && PositionSelectByTicket(ticket)) obs_executed=PositionGetDouble(POSITION_PRICE_OPEN);
+    double obs_slippage=(obs_executed>0.0 ? MathAbs(obs_executed-obs_requested) : 0.0);
+    g_api.ExecutionAttempt(0,1,obs_requested,obs_bid,obs_ask,MathMax(0.0,obs_ask-obs_bid),0,
+                           (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):0.0),
+                           obs_executed,obs_slippage,obs_latency,"EXECUTED","","","");
     CompleteNexusSignalClaim(s.signal_id);
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
-   ObserveSignal(s,"EXECUTED");
+   QueueObservation(s,"EXECUTED");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
    AdvanceSignalCursor(s.db_id);
    return true;
@@ -2352,6 +2399,7 @@ void OnTimer()
    if(g_setup_required) return;
    DoHeartbeat();
    ProcessPendingReceipts();
+   ProcessPendingObservations();
    DoLiveSync();
    ReconcileMT5History();
    ProcessPendingOrders();
