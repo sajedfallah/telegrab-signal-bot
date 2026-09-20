@@ -110,3 +110,13 @@ def test_observation_queue_is_fifo_and_position_state_tracks_excursions():
     assert "while(i<ArraySize(g_pending_observations))" in ea
     assert "double mfe_price;" in ea
     assert "double mae_price;" in ea
+
+
+def test_execution_attempt_captures_volume_and_broker_retcode():
+    root=Path(__file__).resolve().parents[1]
+    manager=(root/"mt5/NEXUS_AutoTrade/Include/TradeManager.mqh").read_text(encoding="utf-8")
+    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    assert "LastRequestedVolume()" in manager
+    assert "LastRetcode()" in manager
+    assert "g_trade.LastRequestedVolume()" in ea
+    assert "g_trade.LastRetcode()" in ea
