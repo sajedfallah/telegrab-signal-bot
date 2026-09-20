@@ -24,20 +24,33 @@
 .app-shell .home-v2 > .home-v2-spotlight::before{
   content:"";
   position:absolute;
-  inset:0;
+  left:0;
+  right:0;
+  top:0;
+  height:178px;
   z-index:-2;
   pointer-events:none;
-  background:
-    linear-gradient(180deg,
-      rgba(7,17,29,0) 0%,
-      rgba(7,17,29,0) 42%,
-      rgba(7,17,29,.10) 52%,
-      rgba(7,17,29,.34) 62%,
-      rgba(7,17,29,.68) 72%,
-      rgba(7,17,29,.92) 82%,
-      #07111d 94%,
-      #07111d 100%),
-    url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat;
+  background:url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat;
+
+  /* Real alpha fade on the lower part of the image itself. */
+  -webkit-mask-image:linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 58%,
+    rgba(0,0,0,.92) 66%,
+    rgba(0,0,0,.68) 76%,
+    rgba(0,0,0,.34) 87%,
+    transparent 100%
+  );
+  mask-image:linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 58%,
+    rgba(0,0,0,.92) 66%,
+    rgba(0,0,0,.68) 76%,
+    rgba(0,0,0,.34) 87%,
+    transparent 100%
+  );
 }
 
 .app-shell .home-v2 > .home-v2-spotlight::after{
@@ -45,18 +58,19 @@
   position:absolute;
   left:0;
   right:0;
-  top:92px;
-  height:150px;
+  top:104px;
+  height:104px;
   z-index:-1;
   pointer-events:none;
   background:
-    radial-gradient(ellipse at 50% 18%,rgba(58,151,224,.075),transparent 62%),
-    linear-gradient(180deg,
+    radial-gradient(ellipse at 50% 22%,rgba(58,151,224,.075),transparent 64%),
+    linear-gradient(
+      to bottom,
       rgba(7,17,29,0) 0%,
-      rgba(7,17,29,.10) 22%,
-      rgba(7,17,29,.42) 48%,
-      rgba(7,17,29,.78) 72%,
-      #07111d 100%);
+      rgba(7,17,29,.16) 30%,
+      rgba(7,17,29,.58) 66%,
+      #07111d 100%
+    );
 }
 
 .app-shell .home-v2-spotlight .nexus-motion-orb,
@@ -114,6 +128,8 @@
     background-size:100% auto!important;
     background-position:top center!important;
   }
+  .app-shell .home-v2 > .home-v2-spotlight::before{height:170px}
+  .app-shell .home-v2 > .home-v2-spotlight::after{top:98px;height:106px}
   .app-shell .home-v2-spotlight h1{max-width:16ch!important}
   .app-shell .home-v2-spotlight p{
     max-width:34ch!important;
