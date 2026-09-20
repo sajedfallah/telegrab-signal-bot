@@ -490,6 +490,46 @@ Never assume a workstream from one repository applies to another.
 
 ---
 
+## 12.1. RESERVED ANALYSIS SCOPES
+
+When a repository contains NEXUS signal-generation or AutoTrade analysis components, the following scope names have fixed and distinct meanings:
+
+```text
+SIGNAL-AGENT
+AUTOTRADE-DATA-ANALYSIS
+```
+
+### SIGNAL-AGENT
+
+Use `SIGNAL-AGENT` only for the autonomous market/signal analysis agent: market analysis, setup evaluation, signal/no-signal decisions, NO-TRADE decisions, decision reasons, signal-generation logic, and the agent's own analysis/decision telemetry.
+
+Do NOT route AutoTrade execution/performance analytics to this scope.
+
+### AUTOTRADE-DATA-ANALYSIS
+
+Use `AUTOTRADE-DATA-ANALYSIS` only for data analysis belonging to the AutoTrade system: trade/execution data, lifecycle/performance analytics, execution outcomes, AutoTrade statistics/telemetry, and analytical reporting derived from AutoTrade data.
+
+Do NOT route autonomous market/signal-generation analysis to this scope.
+
+These scopes are intentionally separate even if both use the word "analysis". When the user explicitly supplies one of these names in `Workstream:` or `Scope:`, preserve it exactly and do not reinterpret it as the other scope.
+
+Examples:
+
+```text
+PROJECT-BOOTSTRAP
+Repository: owner/repository
+Workstream: SIGNAL-AGENT
+```
+
+```text
+PROJECT-AUDIT
+Scope: AUTOTRADE-DATA-ANALYSIS
+```
+
+If the selected repository does not contain the requested scope, report that repository evidence does not define/contain it instead of silently mapping it to another component.
+
+---
+
 # 13. GIT DISCIPLINE
 
 For meaningful changes prefer:
