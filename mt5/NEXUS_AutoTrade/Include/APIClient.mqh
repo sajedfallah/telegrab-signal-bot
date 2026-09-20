@@ -250,13 +250,13 @@ public:
       return Request("POST","/api/v1/autotrade/history-reconcile",body,true,response,true);
      }
 
-   bool ExecutionAttempt(const long observation_id,const int attempt_no,const double requested_price,const double market_bid,
+   bool ExecutionAttempt(const long observation_id,const long signal_db_id,const int attempt_no,const double requested_price,const double market_bid,
                          const double market_ask,const double spread,const double requested_volume,const double executed_volume,
                          const double executed_price,const double slippage,const long latency_ms,const string status,
                          const string reason_code,const string broker_retcode,const string error_text)
      {
-      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"observation_id\":%I64d,\"attempt_no\":%d,\"requested_price\":%s,\"market_bid\":%s,\"market_ask\":%s,\"spread\":%s,\"requested_volume\":%s,\"executed_volume\":%s,\"executed_price\":%s,\"slippage\":%s,\"latency_ms\":%I64d,\"status\":\"%s\",\"reason_code\":%s,\"broker_retcode\":%s,\"error_text\":%s}",
-         NexusJsonEscape(m_license),NexusJsonEscape(m_account),observation_id,attempt_no,
+      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"observation_id\":%I64d,\"signal_db_id\":%I64d,\"attempt_no\":%d,\"requested_price\":%s,\"market_bid\":%s,\"market_ask\":%s,\"spread\":%s,\"requested_volume\":%s,\"executed_volume\":%s,\"executed_price\":%s,\"slippage\":%s,\"latency_ms\":%I64d,\"status\":\"%s\",\"reason_code\":%s,\"broker_retcode\":%s,\"error_text\":%s}",
+         NexusJsonEscape(m_license),NexusJsonEscape(m_account),observation_id,signal_db_id,attempt_no,
          DoubleToString(requested_price,8),DoubleToString(market_bid,8),DoubleToString(market_ask,8),DoubleToString(spread,8),
          DoubleToString(requested_volume,8),DoubleToString(executed_volume,8),DoubleToString(executed_price,8),
          DoubleToString(slippage,8),latency_ms,NexusJsonEscape(status),
