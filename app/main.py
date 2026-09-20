@@ -94,6 +94,7 @@ from .ui import (
     signal_manage_menu,
     admin_plan_list_menu,
     admin_plan_edit_menu,
+    admin_plan_access_menu,
 )
 
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -1983,6 +1984,87 @@ async def admin_plan_edit(cb: CallbackQuery, bot: Bot, state: FSMContext):
     await screen(bot,cb.from_user.id,cb.message.chat.id,prompt,kb(nav(lang,f"planadm:{code}")))
 
 
+@router.callback_query(F.data.startswith("planaccess:"))
+async def admin_plan_access(cb: CallbackQuery, bot: Bot):
+    if not is_admin(cb.from_user.id): return
+    code=cb.data.split(":",1)[1]; p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p:
+        await cb.answer(tr(lang,"پلن پیدا نشد.","Plan not found."),show_alert=True); return
+    await cb.answer()
+    text=tr(
+        lang,
+        f"<b>🔐 دسترسی و تمدید — {escape(code)}</b>\n\nدسترسی‌های این پلن و تخفیف تمدید را از گزینه‌های زیر مدیریت کنید.",
+        f"<b>🔐 Access & Renewal — {escape(code)}</b>\n\nManage this plan's entitlements and renewal discount below.",
+    )
+    await screen(bot,cb.from_user.id,cb.message.chat.id,text,admin_plan_access_menu(
+        lang,code,bool(p["vip_access"]),bool(p["autotrade_access"]),float(p["renewal_discount_percent"] or 0)
+    ))
+
+
+@router.callback_query(F.data.startswith("planent:"))
+async def admin_plan_entitlement_toggle(cb: CallbackQuery, bot: Bot):
+    if not is_admin(cb.from_user.id): return
+    try:
+        _, entitlement, code = cb.data.split(":",2)
+    except ValueError:
+        return
+    p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p or entitlement not in {"vip","auto"}:
+        await cb.answer(tr(lang,"درخواست نامعتبر است.","Invalid request."),show_alert=True); return
+    current=bool(p["vip_access"]) if entitlement=="vip" else bool(p["autotrade_access"])
+    db.update_plan_entitlement(code,entitlement,not current)
+    db.add_audit(cb.from_user.id,"plan_entitlement_toggle",None,f"{code}:{entitlement}:{int(not current)}")
+    fresh=db.get_plan(code)
+    await cb.answer(tr(lang,"دسترسی پلن به‌روزرسانی شد ✅","Plan entitlement updated ✅"),show_alert=True)
+    await screen(
+        bot,cb.from_user.id,cb.message.chat.id,
+        tr(lang,f"<b>🔐 دسترسی و تمدید — {escape(code)}</b>",f"<b>🔐 Access & Renewal — {escape(code)}</b>"),
+        admin_plan_access_menu(lang,code,bool(fresh["vip_access"]),bool(fresh["autotrade_access"]),float(fresh["renewal_discount_percent"] or 0)),
+    )
+
+
+@router.callback_query(F.data.startswith("planrenew:"))
+async def admin_plan_renewal_input(cb: CallbackQuery, bot: Bot, state: FSMContext):
+    if not is_admin(cb.from_user.id): return
+    code=cb.data.split(":",1)[1]; p=db.get_plan(code); lang=get_lang(cb.from_user.id)
+    if not p:
+        await cb.answer(tr(lang,"پلن پیدا نشد.","Plan not found."),show_alert=True); return
+    await state.clear()
+    await state.update_data(plan_renew_code=code)
+    await state.set_state(Flow.admin_plan_renewal)
+    await cb.answer()
+    await screen(
+        bot,cb.from_user.id,cb.message.chat.id,
+        tr(lang,"درصد تخفیف تمدید را بین 0 تا 100 وارد کنید. مثال: <code>10</code>","Enter renewal discount percent from 0 to 100. Example: <code>10</code>"),
+        kb(nav(lang,f"planaccess:{code}")),
+    )
+
+
+@router.message(Flow.admin_plan_renewal)
+async def admin_plan_renewal_save(message: Message, bot: Bot, state: FSMContext):
+    if not is_admin(message.from_user.id): return
+    lang=get_lang(message.from_user.id); data=await state.get_data(); code=str(data.get("plan_renew_code") or "")
+    await clean_user_message(message)
+    try:
+        percent=float((message.text or "").strip().translate(_DIGIT_TRANSLATION).replace("٪","").replace("%","").replace(",","."))
+        if percent < 0 or percent > 100: raise ValueError
+    except Exception:
+        await screen(bot,message.from_user.id,message.chat.id,tr(lang,"❌ درصد باید بین 0 تا 100 باشد.","❌ Percentage must be between 0 and 100."),kb(nav(lang,f"planaccess:{code}" if code else "admin_plans"))); return
+    p=db.get_plan(code)
+    if not p:
+        await state.clear()
+        await screen(bot,message.from_user.id,message.chat.id,tr(lang,"پلن پیدا نشد.","Plan not found."),admin_plan_list_menu(lang)); return
+    db.update_plan_renewal_discount(code,percent)
+    db.add_audit(message.from_user.id,"plan_renewal_discount",None,f"{code}:{percent:g}")
+    await state.clear()
+    fresh=db.get_plan(code)
+    await screen(
+        bot,message.from_user.id,message.chat.id,
+        tr(lang,f"✅ تخفیف تمدید روی <b>{percent:g}٪</b> تنظیم شد.",f"✅ Renewal discount set to <b>{percent:g}%</b>."),
+        admin_plan_access_menu(lang,code,bool(fresh["vip_access"]),bool(fresh["autotrade_access"]),float(fresh["renewal_discount_percent"] or 0)),
+    )
+
+
 @router.callback_query(F.data.startswith("plantoggle:"))
 async def admin_plan_toggle(cb: CallbackQuery, bot: Bot):
     if not is_admin(cb.from_user.id): return
@@ -3076,8 +3158,8 @@ async def admin_signals(cb: CallbackQuery, bot: Bot, state: FSMContext):
     await screen(
         bot, cb.from_user.id, cb.message.chat.id,
         tr(lang,
-           "<b>📊 گزارش سیگنال‌های MT5</b>\n\nصدور، ویرایش و لغو فقط از MT5 Admin انجام می‌شود. این بخش فقط وضعیت سیگنال‌های فعال، نتایج بسته‌شده و آمار را نمایش می‌دهد.",
-           "<b>📊 MT5 Signal Reports</b>\n\nIssuing, editing and cancelling are MT5-only. This section is read-only and shows active signals, closed results and statistics."),
+           "<b>📊 مرکز سیگنال NEXUS</b>\n\nاز این بخش می‌توانید سیگنال جدید صادر کنید، وضعیت زنده MT5 را ببینید و اکشن‌های چرخه معامله را مدیریت کنید.",
+           "<b>📊 NEXUS Signal Center</b>\n\nCreate signals, inspect live MT5 state and manage signal lifecycle actions from this section."),
         signal_center_menu(lang),
     )
 
@@ -3698,8 +3780,9 @@ async def signal_action(cb: CallbackQuery, bot: Bot, state: FSMContext):
         return
 
     if action == "limitactive":
-        if str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper() != "LIMIT":
-            await cb.answer(tr(lang,"این سیگنال لیمیت نیست.","This signal is not a Limit order."),show_alert=True); return
+        pending_type=str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper()
+        if pending_type not in {"LIMIT","BUY_LIMIT","SELL_LIMIT","BUY_STOP","SELL_STOP","BUY_STOP_LIMIT","SELL_STOP_LIMIT"}:
+            await cb.answer(tr(lang,"این سیگنال سفارش Pending نیست.","This signal is not a pending order."),show_alert=True); return
         if row["limit_activated_at"] if "limit_activated_at" in row.keys() else None:
             await cb.answer(tr(lang,"این لیمیت قبلاً فعال اعلام شده است.","This Limit was already marked activated."),show_alert=True); return
         await cb.answer(tr(lang,"در حال اعلام فعال شدن لیمیت…","Publishing Limit activation…"))
@@ -4907,29 +4990,6 @@ async def clean_unhandled_message(message: Message, bot: Bot):
             pass
 
 
-def _disable_telegram_signal_authority() -> None:
-    """v0.6 policy: Telegram is reporting/subscription only; no signal CRUD.
-
-    We deliberately leave the legacy handlers in source for migration/audit
-    traceability, but they are not registered with the Dispatcher. This makes
-    the cutover reversible while enforcing the new authority at runtime.
-    """
-    blocked_callback = {
-        name for name in (
-            "signal_create", "signal_market", "signal_chart",
-            "signal_chart_invalid", "signal_symbol_pick", "signal_symbol",
-            "signal_direction", "signal_timeframe_pick", "signal_order_type_pick",
-            "signal_entry", "signal_stop_limit", "signal_sl", "signal_tp_count",
-            "signal_tp_value", "signal_volume_mode_pick", "signal_position_input",
-            "signal_risk", "signal_trailing_pick", "signal_destination",
-            "signal_publish", "signal_retry_publish",
-            "signal_action",
-        )
-    }
-    router.callback_query.handlers[:] = [h for h in router.callback_query.handlers if getattr(h.callback, "__name__", "") not in blocked_callback]
-    router.message.handlers[:] = [h for h in router.message.handlers if not getattr(h.callback, "__name__", "").startswith("signal_") and getattr(h.callback, "__name__", "") not in {"_publish_result_to_channel", "_publish_result_with_fallback"}]
-
-
 async def main():
     global BOT_USERNAME
     db.init_db()
@@ -4946,9 +5006,6 @@ async def main():
     bot = Bot(settings.bot_token, session=telegram_session)
     fsm_path = Path(__file__).resolve().parent.parent / "nexus_fsm.db"
     dp = Dispatcher(storage=SQLiteStorage(fsm_path))
-    # v0.6.0: Telegram has no signal authority. Legacy signal handlers remain
-    # in source for migration traceability but are removed from the Dispatcher.
-    _disable_telegram_signal_authority()
     dp.include_router(analytics_router)
     dp.include_router(subscriptions_router)
     dp.include_router(router)
