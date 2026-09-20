@@ -107,7 +107,7 @@ def test_execution_attempt_contract_supports_exact_signal_linkage():
     client=(root/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
     assert "signal_db_id: int | None" in api
     assert "WHERE telegram_id=? AND signal_id=? AND account_number=?" in api
-    assert '\"signal_db_id\":%I64d' in client
+    assert '\\\"signal_db_id\\\":%I64d' in client
 
 def test_observation_queue_is_fifo_and_position_state_tracks_excursions():
     root=Path(__file__).resolve().parents[1]
