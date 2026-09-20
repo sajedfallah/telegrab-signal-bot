@@ -62,6 +62,40 @@ class SignalReceiptRequest(BaseModel):
     error: str | None = None
 
 
+class ObservationRequest(BaseModel):
+    license_key: str = ""
+    account_number: str = ""
+    signal_db_id: int
+    decision_status: str = Field(default="RECEIVED", pattern="^(?:RECEIVED|EVALUATING|EXECUTED|NOT_EXECUTED|REJECTED|EXPIRED)$")
+    reason_code: str | None = Field(default=None, max_length=64)
+    reason_detail: str | None = Field(default=None, max_length=2000)
+    broker: str = Field(default="", max_length=128)
+    server: str = Field(default="", max_length=128)
+    ea_version: str = Field(default="", max_length=32)
+    config_snapshot: dict = Field(default_factory=dict)
+
+class ExecutionAttemptRequest(BaseModel):
+    license_key: str = ""
+    account_number: str = ""
+    observation_id: int
+    attempt_no: int = Field(default=1, ge=1, le=100)
+    requested_at: str | None = Field(default=None, max_length=64)
+    broker_response_at: str | None = Field(default=None, max_length=64)
+    requested_price: float | None = None
+    market_bid: float | None = None
+    market_ask: float | None = None
+    spread: float | None = None
+    requested_volume: float | None = None
+    executed_volume: float | None = None
+    executed_price: float | None = None
+    slippage: float | None = None
+    latency_ms: int | None = Field(default=None, ge=0, le=3_600_000)
+    status: str = Field(default="ATTEMPTED", max_length=32)
+    reason_code: str | None = Field(default=None, max_length=64)
+    broker_retcode: str | None = Field(default=None, max_length=128)
+    error_text: str | None = Field(default=None, max_length=2000)
+
+
 class MT5AdminSignalRequest(BaseModel):
     market_type: str = Field(default="GOLD", pattern="^(?:FOREX|CRYPTO|GOLD|INDEX|OTHER)$")
     symbol: str = Field(min_length=1, max_length=64)
@@ -1012,6 +1046,65 @@ def history_reconcile(
     items = [i.model_dump() for i in req.items]
     result = db.reconcile_mt5_history(int(auth["telegram_id"]), items)
     return {"ok": True, "reconciled": result}
+
+@app.post("/api/v1/autotrade/observation")
+def autotrade_observation(
+    req: ObservationRequest,
+    x_license_key: str | None = Header(None),
+    x_mt5_account: str | None = Header(None),
+    x_broker: str | None = Header(None),
+    x_server: str | None = Header(None),
+    x_ea_version: str | None = Header(None),
+    x_admin_mode: str | None = Header(None, alias="X-NEXUS-Admin-Mode"),
+    x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
+):
+    key = x_license_key or req.license_key
+    account = x_mt5_account or req.account_number
+    admin = _admin_auth(x_admin_mode, x_admin_token, account)
+    try:
+        auth = _resolve_ea_auth(key, account, admin=admin, broker=x_broker or req.broker,
+                                server=x_server or req.server, ea_version=x_ea_version or req.ea_version)
+    except AutoTradeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    if not db.get_signal(req.signal_db_id):
+        raise HTTPException(status_code=404, detail="signal not found")
+    row = db.upsert_autotrade_observation(
+        int(auth["telegram_id"]), req.signal_db_id, account,
+        broker=x_broker or req.broker, server=x_server or req.server, ea_version=x_ea_version or req.ea_version,
+        decision_status=req.decision_status, reason_code=req.reason_code, reason_detail=req.reason_detail,
+        config_snapshot=req.config_snapshot,
+    )
+    return {"ok": True, "observation_id": int(row["id"]), "decision_status": str(row["decision_status"])}
+
+@app.post("/api/v1/autotrade/execution-attempt")
+def autotrade_execution_attempt(
+    req: ExecutionAttemptRequest,
+    x_license_key: str | None = Header(None),
+    x_mt5_account: str | None = Header(None),
+    x_admin_mode: str | None = Header(None, alias="X-NEXUS-Admin-Mode"),
+    x_admin_token: str | None = Header(None, alias="X-NEXUS-Admin-Token"),
+):
+    key = x_license_key or req.license_key
+    account = x_mt5_account or req.account_number
+    admin = _admin_auth(x_admin_mode, x_admin_token, account)
+    try:
+        auth = _resolve_ea_auth(key, account, admin=admin)
+    except AutoTradeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    with db.conn() as con:
+        obs = con.execute("SELECT telegram_id,account_number FROM autotrade_signal_observations WHERE id=?", (req.observation_id,)).fetchone()
+    if not obs or int(obs["telegram_id"]) != int(auth["telegram_id"]) or str(obs["account_number"]) != str(account):
+        raise HTTPException(status_code=404, detail="observation not found")
+    row = db.add_autotrade_execution_attempt(
+        req.observation_id, attempt_no=req.attempt_no, requested_at=req.requested_at,
+        broker_response_at=req.broker_response_at, requested_price=req.requested_price,
+        market_bid=req.market_bid, market_ask=req.market_ask, spread=req.spread,
+        requested_volume=req.requested_volume, executed_volume=req.executed_volume,
+        executed_price=req.executed_price, slippage=req.slippage, latency_ms=req.latency_ms,
+        status=req.status, reason_code=req.reason_code, broker_retcode=req.broker_retcode, error_text=req.error_text,
+    )
+    return {"ok": True, "attempt_id": int(row["id"]), "status": str(row["status"])}
+
 
 @app.post("/api/v1/autotrade/signal-receipt")
 def signal_receipt(
