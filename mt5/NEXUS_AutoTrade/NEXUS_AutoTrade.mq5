@@ -1009,6 +1009,52 @@ string ObservationReasonCode(const string detail)
    return "UNKNOWN";
   }
 
+struct NEXUSPendingAttempt
+  {
+   long signal_db_id;
+   double requested_price,bid,ask,spread,requested_volume,executed_volume,executed_price,slippage;
+   long latency_ms;
+   string status,reason_code,broker_retcode,error_text;
+   int attempts;
+   datetime next_try;
+  };
+NEXUSPendingAttempt g_pending_attempts[];
+
+void QueueExecutionAttempt(const long signal_db_id,const double requested_price,const double bid,const double ask,
+                           const double requested_volume,const double executed_volume,const double executed_price,
+                           const double slippage,const long latency_ms,const string status,const string reason_code,
+                           const string broker_retcode,const string error_text)
+  {
+   int idx=ArraySize(g_pending_attempts); ArrayResize(g_pending_attempts,idx+1);
+   g_pending_attempts[idx].signal_db_id=signal_db_id; g_pending_attempts[idx].requested_price=requested_price;
+   g_pending_attempts[idx].bid=bid; g_pending_attempts[idx].ask=ask; g_pending_attempts[idx].spread=MathMax(0.0,ask-bid);
+   g_pending_attempts[idx].requested_volume=requested_volume; g_pending_attempts[idx].executed_volume=executed_volume;
+   g_pending_attempts[idx].executed_price=executed_price; g_pending_attempts[idx].slippage=slippage;
+   g_pending_attempts[idx].latency_ms=latency_ms; g_pending_attempts[idx].status=status;
+   g_pending_attempts[idx].reason_code=reason_code; g_pending_attempts[idx].broker_retcode=broker_retcode;
+   g_pending_attempts[idx].error_text=error_text; g_pending_attempts[idx].attempts=0; g_pending_attempts[idx].next_try=TimeCurrent();
+  }
+
+void ProcessPendingAttempts()
+  {
+   datetime now=TimeCurrent();
+   for(int i=ArraySize(g_pending_attempts)-1;i>=0;i--)
+     {
+      if(now<g_pending_attempts[i].next_try) continue;
+      // The matching observation is sent first in this timer cycle; backend resolves id=0
+      // to the newest observation for this authenticated account.
+      if(g_api.ExecutionAttempt(0,1,g_pending_attempts[i].requested_price,g_pending_attempts[i].bid,g_pending_attempts[i].ask,
+                                g_pending_attempts[i].spread,g_pending_attempts[i].requested_volume,g_pending_attempts[i].executed_volume,
+                                g_pending_attempts[i].executed_price,g_pending_attempts[i].slippage,g_pending_attempts[i].latency_ms,
+                                g_pending_attempts[i].status,g_pending_attempts[i].reason_code,g_pending_attempts[i].broker_retcode,
+                                g_pending_attempts[i].error_text))
+        { ArrayRemove(g_pending_attempts,i,1); continue; }
+      g_pending_attempts[i].attempts++;
+      g_pending_attempts[i].next_try=now+(int)MathMin(60.0,MathPow(2.0,MathMin(g_pending_attempts[i].attempts,5)));
+      if(g_pending_attempts[i].attempts>20) ArrayRemove(g_pending_attempts,i,1);
+     }
+  }
+
 struct NEXUSPendingObservation
   {
    long signal_db_id;
@@ -1114,8 +1160,8 @@ bool ProcessIncomingSignal(const NexusSignal &s)
       long obs_latency=(long)(GetTickCount64()-obs_started);
       // observation_id=0 means backend resolves/ignores until the queued observation is persisted;
       // execution-attempt transport is timer-safe follow-up and must never gate order execution.
-      g_api.ExecutionAttempt(0,1,obs_requested,obs_bid,obs_ask,MathMax(0.0,obs_ask-obs_bid),0,0,0,0,obs_latency,
-                             retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),"",err);
+      QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,0,0,0,0,obs_latency,
+                            retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),"",err);
       QueueObservation(s,retryable?"EVALUATING":"REJECTED",err);
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
@@ -1126,9 +1172,9 @@ bool ProcessIncomingSignal(const NexusSignal &s)
     double obs_executed=0.0;
     if(ticket>0 && PositionSelectByTicket(ticket)) obs_executed=PositionGetDouble(POSITION_PRICE_OPEN);
     double obs_slippage=(obs_executed>0.0 ? MathAbs(obs_executed-obs_requested) : 0.0);
-    g_api.ExecutionAttempt(0,1,obs_requested,obs_bid,obs_ask,MathMax(0.0,obs_ask-obs_bid),0,
-                           (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):0.0),
-                           obs_executed,obs_slippage,obs_latency,"EXECUTED","","","");
+    QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,0,
+                          (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):0.0),
+                          obs_executed,obs_slippage,obs_latency,"EXECUTED","","","");
     CompleteNexusSignalClaim(s.signal_id);
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
@@ -2400,6 +2446,7 @@ void OnTimer()
    DoHeartbeat();
    ProcessPendingReceipts();
    ProcessPendingObservations();
+   ProcessPendingAttempts();
    DoLiveSync();
    ReconcileMT5History();
    ProcessPendingOrders();
