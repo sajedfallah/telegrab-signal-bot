@@ -1912,6 +1912,14 @@ void SyncPositionState(const long identifier,const ulong ticket,const double sl,
    g_position_states[idx].ticket=ticket;
    g_position_states[idx].sl=sl;
    g_position_states[idx].tp=tp;
+   if(PositionSelectByTicket(ticket))
+     {
+      double p=PositionGetDouble(POSITION_PRICE_CURRENT);
+      long pt=PositionGetInteger(POSITION_TYPE);
+      if(g_position_states[idx].mfe_price<=0) { g_position_states[idx].mfe_price=p; g_position_states[idx].mae_price=p; }
+      if(pt==POSITION_TYPE_BUY) { g_position_states[idx].mfe_price=MathMax(g_position_states[idx].mfe_price,p); g_position_states[idx].mae_price=MathMin(g_position_states[idx].mae_price,p); }
+      else { g_position_states[idx].mfe_price=MathMin(g_position_states[idx].mfe_price,p); g_position_states[idx].mae_price=MathMax(g_position_states[idx].mae_price,p); }
+     }
   }
 
 void RemovePositionState(const long identifier)
@@ -1944,10 +1952,18 @@ void DetectPositionModifications()
          string signal_id=PositionSignalId(identifier);
          if(signal_id=="") signal_id="MT5MANUAL-POS-"+(string)identifier;
          string event_id="UPDATE-"+(string)identifier+"-"+(string)GetTickCount64();
+         double entry_px=PositionGetDouble(POSITION_PRICE_OPEN);
+         double initial_risk=MathAbs(entry_px-GlobalVariableGet("NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"."+signal_id+".initial_sl"));
+         double mfe_r=(initial_risk>0 ? MathAbs(g_position_states[idx].mfe_price-entry_px)/initial_risk : 0.0);
+         double mae_r=(initial_risk>0 ? -MathAbs(g_position_states[idx].mae_price-entry_px)/initial_risk : 0.0);
+         string subtype=(sl_changed && tp_changed?"SL_TP_CHANGED":(sl_changed?"SL_CHANGED":"TP_CHANGED"));
          if(g_api.TradeEvent("UPDATE",(string)ticket,signal_id,PositionGetString(POSITION_SYMBOL),
                              PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"LONG":"SHORT",
-                             PositionGetDouble(POSITION_VOLUME),PositionGetDouble(POSITION_PRICE_OPEN),
-                             sl,tp,0.0,0.0,"",event_id,g_manual_destination))
+                             PositionGetDouble(POSITION_VOLUME),entry_px,
+                             sl,tp,0.0,0.0,"",event_id,g_manual_destination,0,0,0,0,0,0,"","","","MARKET",0,"",(long)TimeCurrent()*1000,
+                             0,0,subtype,PositionGetDouble(POSITION_VOLUME),g_position_states[idx].sl,sl,g_position_states[idx].tp,tp,
+                             MathMax(0.0,SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_ASK)-SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_BID)),
+                             0,g_position_states[idx].mfe_price,g_position_states[idx].mae_price,mfe_r,mae_r))
             Print("NEXUS trade update sent: ticket=",(string)ticket," SL/TP changed");
          else
             Print("NEXUS trade update failed: ",g_api.LastError());
