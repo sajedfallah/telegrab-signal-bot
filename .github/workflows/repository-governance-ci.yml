@@ -20,6 +20,9 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Release A test dependency
+        run: python -m pip install pytest
+
       - name: Run Signal Agent Release A tests
         run: python -m pytest -q tests/test_signal_agent_market_data_a.py
 
