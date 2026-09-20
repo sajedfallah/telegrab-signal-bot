@@ -86,6 +86,7 @@ def test_mt5_emits_execution_attempt_telemetry():
     api=(root/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
     assert "ExecutionAttempt(" in api
     assert "g_api.ExecutionAttempt(" in ea
+    assert "QueueExecutionAttempt(" in ea
 
 def test_mt5_populates_release_a_trade_metrics():
     root=Path(__file__).resolve().parents[1]
