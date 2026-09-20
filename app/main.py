@@ -4618,37 +4618,166 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
     if event == "UPDATE":
         sl = float(payload.get("stop_loss") or 0)
         tp = float(payload.get("take_profit") or 0)
+
         old_sl = float(row["stop_loss"] or 0)
-        old_tp = float((db.get_signal_targets(int(row["id"]))[0]["price"] if db.get_signal_targets(int(row["id"])) else 0) or 0)
+
+        targets = db.get_signal_targets(int(row["id"]))
+        old_tp = float((targets[0]["price"] if targets else 0) or 0)
+
+        entry_price = float(row["entry_price"] or 0)
+
         sl_changed = sl > 0 and abs(sl - old_sl) > 1e-12
         tp_changed = tp > 0 and abs(tp - old_tp) > 1e-12
+
+        be_tolerance = max(1e-8, abs(entry_price) * 1e-7)
+
+        is_risk_free = (
+            sl_changed
+            and entry_price > 0
+            and abs(sl - entry_price) <= be_tolerance
+        )
+
         if sl_changed:
-            try: db.update_signal_sl(int(row["id"]), sl)
-            except Exception: log.exception("[NEXUS][DB] MT5 SL sync failed for %s", row["code"])
+            try:
+                db.update_signal_sl(int(row["id"]), sl)
+            except Exception:
+                log.exception(
+                    "[NEXUS][DB] MT5 SL sync failed for %s",
+                    row["code"],
+                )
+
         if tp_changed:
-            try: db.update_signal_tp(int(row["id"]), 1, tp)
-            except Exception: log.exception("[NEXUS][DB] MT5 TP sync failed for %s", row["code"])
+            try:
+                db.update_signal_tp(int(row["id"]), 1, tp)
+            except Exception:
+                log.exception(
+                    "[NEXUS][DB] MT5 TP sync failed for %s",
+                    row["code"],
+                )
+
         if not sl_changed and not tp_changed:
-            db.update_trade_execution(uid, ticket, str(payload.get("event_id") or f"UPDATE:{ticket}"), signal_id=int(row["id"]), status="IGNORED")
+            db.update_trade_execution(
+                uid,
+                ticket,
+                str(payload.get("event_id") or f"UPDATE:{ticket}"),
+                signal_id=int(row["id"]),
+                status="IGNORED",
+            )
             return
-        parts_fa=[]; parts_en=[]
-        if sl_changed:
-            label = "🟡 <b>BE ACTIVATED:</b>" if abs(sl - float(row["entry_price"])) <= max(1e-8, abs(float(row["entry_price"]))*1e-7) else "🛑 <b>SL CHANGED:</b>"
-            parts_fa.append(f"{label}\nقدیم: {_copy_price(old_sl)}\nجدید: {_copy_price(sl)}")
-            parts_en.append(("🟡 <b>BE ACTIVATED:</b>" if abs(sl - float(row["entry_price"])) <= max(1e-8, abs(float(row["entry_price"]))*1e-7) else "🛑 <b>SL CHANGED:</b>") + f"\nOld: {_copy_price(old_sl)}\nNew: {_copy_price(sl)}")
-        if tp_changed:
-            parts_fa.append(f"🎯 <b>TP CHANGED:</b>\nقدیم: {_copy_price(old_tp)}\nجدید: {_copy_price(tp)}")
-            parts_en.append(f"🎯 <b>TP CHANGED:</b>\nOld: {_copy_price(old_tp)}\nNew: {_copy_price(tp)}")
-        if not parts_fa: return
-        text=tr(get_lang(uid),
-                f"<b>{escape(str(row['code']))}</b>\n" + "\n\n".join(parts_fa),
-                f"<b>{escape(str(row['code']))}</b>\n" + "\n\n".join(parts_en))
-        db.add_signal_event(int(row["id"]), "UPDATE", actor_type="MT5", actor_id=uid,
-                            account_number=str(payload.get("account_number") or ""), correlation_id=str(row["code"]),
-                            payload={"sl_changed": sl_changed, "tp_changed": tp_changed, "sl": sl, "tp": tp})
-        db.add_signal_update(int(row["id"]),"MT5_UPDATE",text,text,"",uid,None,None,"ACTIVE")
-        db.update_trade_execution(uid, ticket, str(payload.get("event_id") or f"UPDATE:{ticket}"), signal_id=int(row["id"]), status="UPDATED", destination=str(row["destination"]))
-        db.add_audit(uid,"mt5_trade_update",int(row["id"]),f"ticket={ticket} sl={sl:g} tp={tp:g}")
+
+        db.add_signal_event(
+            int(row["id"]),
+            "UPDATE",
+            actor_type="MT5",
+            actor_id=uid,
+            account_number=str(payload.get("account_number") or ""),
+            correlation_id=str(row["code"]),
+            payload={
+                "sl_changed": sl_changed,
+                "tp_changed": tp_changed,
+                "sl": sl,
+                "tp": tp,
+                "risk_free": is_risk_free,
+            },
+        )
+
+        db.update_trade_execution(
+            uid,
+            ticket,
+            str(payload.get("event_id") or f"UPDATE:{ticket}"),
+            signal_id=int(row["id"]),
+            status="UPDATED",
+            destination=str(row["destination"]),
+        )
+
+        db.add_audit(
+            uid,
+            "mt5_trade_update",
+            int(row["id"]),
+            f"ticket={ticket} sl={sl:g} tp={tp:g} risk_free={is_risk_free}",
+        )
+
+        # Normal trailing / SL / TP updates stay backend-only.
+        if not is_risk_free:
+            internal_text = (
+                f"MT5 UPDATE | {row['code']} | "
+                f"sl={sl:g} | tp={tp:g}"
+            )
+
+            db.add_signal_update(
+                int(row["id"]),
+                "MT5_UPDATE",
+                internal_text,
+                internal_text,
+                "",
+                uid,
+                None,
+                None,
+                "ACTIVE",
+            )
+            return
+
+        # Only mid-trade Telegram reply: Risk-Free / Break-Even.
+        risk_free_reply = (
+            "🛡 <b>Risk-Free</b>\n\n"
+            f"SL moved to Entry: <code>{entry_price:g}</code>"
+        )
+
+        free_mid = None
+        vip_mid = None
+        reply_errors = []
+
+        if (
+            row["destination"] in {"FREE", "BOTH"}
+            and row["free_message_id"]
+        ):
+            free_mid, err = await _publish_result_with_fallback(
+                bot,
+                settings.free_channel_target,
+                row,
+                row["free_last_message_id"],
+                row["free_message_id"],
+                risk_free_reply,
+                "FREE",
+            )
+            if err:
+                reply_errors.append(err)
+
+        if (
+            row["destination"] in {"VIP", "BOTH"}
+            and row["vip_message_id"]
+        ):
+            vip_mid, err = await _publish_result_with_fallback(
+                bot,
+                settings.vip_channel_id,
+                row,
+                row["vip_last_message_id"],
+                row["vip_message_id"],
+                risk_free_reply,
+                "VIP",
+            )
+            if err:
+                reply_errors.append(err)
+
+        db.add_signal_update(
+            int(row["id"]),
+            "RISK_FREE",
+            risk_free_reply,
+            risk_free_reply,
+            "",
+            uid,
+            free_mid,
+            vip_mid,
+            "ACTIVE",
+        )
+
+        if reply_errors:
+            log.warning(
+                "[NEXUS][RISK_FREE] Telegram partial delivery for %s: %s",
+                row["code"],
+                " | ".join(reply_errors),
+            )
+
         return
 
     if event == "CLOSE":

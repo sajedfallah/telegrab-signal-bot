@@ -139,16 +139,36 @@ class ChartCaptureFailureRequest(BaseModel):
     error_text: str = Field(min_length=1, max_length=1000)
 
 
+# NEXUS_CHART_RATE_BUCKETS_V1
 _chart_rate_windows: dict[str, list[float]] = {}
 
 
-def _chart_rate_limit(account: str, limit: int = 60) -> None:
+def _chart_rate_limit(
+    account: str,
+    bucket: str,
+    limit: int = 60,
+) -> None:
+    """Keep ChartAgent poll/upload/failure budgets independent."""
     now = time.monotonic()
-    recent = [stamp for stamp in _chart_rate_windows.get(account, []) if now - stamp < 60]
+
+    account_key = str(account or "").strip()
+    bucket_key = str(bucket or "default").strip().lower()
+    key = f"{account_key}:{bucket_key}"
+
+    recent = [
+        stamp
+        for stamp in _chart_rate_windows.get(key, [])
+        if now - stamp < 60
+    ]
+
     if len(recent) >= limit:
-        raise HTTPException(status_code=429, detail="chart capture rate limit exceeded")
+        raise HTTPException(
+            status_code=429,
+            detail=f"chart capture {bucket_key} rate limit exceeded",
+        )
+
     recent.append(now)
-    _chart_rate_windows[account] = recent
+    _chart_rate_windows[key] = recent
 
 
 class CommandReceiptRequest(BaseModel):
@@ -549,6 +569,158 @@ def command_receipt_mt5_get(
     return {"ok": True}
 
 
+# NEXUS_SIGNAL_PUBLIC_CODE_V1
+def _ensure_public_signal_code_schema() -> None:
+    with db.conn() as con:
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS signal_public_codes (
+                signal_id INTEGER PRIMARY KEY,
+                public_no INTEGER NOT NULL UNIQUE,
+                public_code TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
+            )
+            """
+        )
+
+
+def _public_signal_code(signal_id: int) -> str | None:
+    _ensure_public_signal_code_schema()
+    with db.conn() as con:
+        row = con.execute(
+            "SELECT public_code FROM signal_public_codes WHERE signal_id=?",
+            (int(signal_id),),
+        ).fetchone()
+    return str(row[0]) if row and row[0] else None
+
+
+def _assign_public_signal_code(signal_id: int) -> str:
+    """Assign one durable user-visible code without changing internal signal id/code."""
+    _ensure_public_signal_code_schema()
+    sid = int(signal_id)
+
+    with db.conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+
+        existing = con.execute(
+            "SELECT public_code FROM signal_public_codes WHERE signal_id=?",
+            (sid,),
+        ).fetchone()
+        if existing:
+            return str(existing[0])
+
+        mapped_max = con.execute(
+            "SELECT MAX(public_no) FROM signal_public_codes"
+        ).fetchone()[0]
+
+        if mapped_max is None:
+            # First migration seed: preserve the last number users actually saw
+            # before this signal. Rejected/DRAFT/FAILED records are excluded.
+            seed = con.execute(
+                """
+                SELECT MAX(CAST(REPLACE(UPPER(code),'NX-','') AS INTEGER))
+                FROM signals
+                WHERE id < ?
+                  AND (free_message_id IS NOT NULL OR vip_message_id IS NOT NULL)
+                  AND UPPER(code) LIKE 'NX-%'
+                """,
+                (sid,),
+            ).fetchone()[0]
+            next_no = int(seed or 0) + 1
+        else:
+            next_no = int(mapped_max) + 1
+
+        public_code = f"NX-{next_no:02d}"
+        con.execute(
+            "INSERT INTO signal_public_codes(signal_id,public_no,public_code,created_at) VALUES(?,?,?,?)",
+            (sid, next_no, public_code, db.now_iso()),
+        )
+        return public_code
+
+
+def _signal_row_value(row, key: str, default=None):
+    try:
+        if isinstance(row, dict):
+            value = row.get(key, default)
+        elif key in row.keys():
+            value = row[key]
+        else:
+            value = default
+    except Exception:
+        value = default
+    return default if value is None else value
+
+
+def _build_signal_caption(row, exec_status: str, public_code: str | None = None) -> str:
+    """Compact TEXT-ONLY Telegram signal card."""
+
+    symbol = str(_signal_row_value(row, "symbol", "--")).upper()
+    direction = str(_signal_row_value(row, "direction", "")).upper()
+    timeframe = str(_signal_row_value(row, "timeframe", "M5")).upper()
+
+    direction_text = "BUY 📈" if direction in {"LONG", "BUY"} else "SELL 📉"
+
+    try:
+        entry = f"{float(_signal_row_value(row, 'entry_price')):g}"
+    except (TypeError, ValueError):
+        entry = "--"
+
+    try:
+        stop_loss = f"{float(_signal_row_value(row, 'stop_loss')):g}"
+    except (TypeError, ValueError):
+        stop_loss = "--"
+
+    targets = db.get_signal_targets(int(row["id"]))
+    target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
+
+    tp1 = f"{target_map[1]:g}" if 1 in target_map else "--"
+    tp2 = f"{target_map[2]:g}" if 2 in target_map else "--"
+
+    display_code = str(public_code or _signal_row_value(row, "code", row["id"]))
+    if display_code.upper().startswith("NX-"):
+        display_code = display_code.split("-", 1)[1]
+        try:
+            display_code = str(int(display_code))
+        except ValueError:
+            pass
+
+    grade = _signal_row_value(row, "grade", None)
+    if grade is None:
+        grade = _signal_row_value(row, "signal_grade", None)
+    if grade is None:
+        grade = _signal_row_value(row, "setup_grade", None)
+
+    score = _signal_row_value(row, "score", None)
+    if score is None:
+        score = _signal_row_value(row, "signal_score", None)
+    if score is None:
+        score = _signal_row_value(row, "setup_score", None)
+
+    quality_line = ""
+
+    if score is not None and str(score).strip():
+        score_text = str(score).strip()
+        if not score_text.endswith("/100") and not score_text.endswith("%"):
+            score_text += "/100"
+
+        if grade is not None and str(grade).strip():
+            quality_line = "\n" + str(grade).strip() + " · " + score_text
+        else:
+            quality_line = "\n" + score_text
+
+    return (
+        f"🚨 <b>NEXUS Signal #{display_code}</b>\n\n"
+        f"{symbol} · {timeframe} · <b>{direction_text}</b>"
+        f"{quality_line}\n\n"
+        f"Entry  <code>{entry}</code>\n"
+        f"SL     <code>{stop_loss}</code>\n"
+        f"TP1    <code>{tp1}</code>\n"
+        f"TP2    <code>{tp2}</code>\n"
+        f"Runner 40%"
+    )
+
+
 async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
     """Publish an MT5-authority signal only after an accepted execution receipt.
 
@@ -593,10 +765,8 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     errors: list[str] = []
     try:
         from ..config import settings
-        from ..signals.card_generator import build_chart_frame, build_signal_card
         from aiogram import Bot
         from aiogram.enums import ParseMode
-        from aiogram.types import BufferedInputFile
     except Exception as exc:
         return {"free_message_id": None, "vip_message_id": None, "errors": [f"TELEGRAM_INIT: {exc}"], "published": False}
 
@@ -621,31 +791,9 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
                 "errors": ["CHART_GATE: uploaded chart asset is missing"],
                 "published": False, "complete": False}
 
-    try:
-        if raw:
-            chart_frame = await asyncio.to_thread(build_chart_frame, raw)
-        else:
-            # A broker/terminal may be unable to capture a screenshot (for
-            # example while the chart is still loading). Never send an empty
-            # dark frame: publish a useful signal card so the channel still
-            # receives a visible image and the result reply has an anchor.
-            card_signal = {
-                "code": row["code"], "market_type": row["market_type"],
-                "symbol": row["symbol"], "direction": row["direction"],
-                "order_type": row["order_type"], "entry": row["entry_price"],
-                "stop_loss": row["stop_loss"], "risk_percent": row["risk_percent"],
-                "trailing_code": row["trailing_code"] or "—",
-                "trailing_name": row["trailing_name"] or "—",
-                "rr": row["rr_ratio"] or "—",
-                "volume_mode": row["volume_mode"] or "RISK",
-                "lot_size": row["lot_size"], "leverage": row["leverage"],
-            }
-            for target in db.get_signal_targets(int(row["id"])):
-                card_signal[f"tp{int(target['target_no'])}"] = target["price"]
-            chart_frame = await asyncio.to_thread(build_signal_card, None, card_signal)
-    except Exception as exc:
-        errors.append(f"CHART_RENDER: {exc}")
-        chart_frame = b""
+    # NEXUS_TEXT_SIGNAL_V1_20260920
+    # Telegram publication is text-only. Chart rendering is intentionally
+    # excluded from the signal publication path.
 
     if issuer_type == "WEB_ADMIN":
         with db.conn() as con:
@@ -658,19 +806,9 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
     target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
     tp_lines = "\n".join(f"🎯 TP{n}: <code>{target_map[n]:g}</code>" for n in sorted(target_map)) or "🎯 TP: —"
     order_type = str(row["order_type"] or "MARKET").upper()
-    caption = (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{row['code']}</b>  🟦 {order_type}\n\n"
-        f"📌 Symbol: <b>{str(row['symbol']).upper()}</b>\n"
-        f"↕️ Direction: <b>{str(row['direction']).upper()}</b>\n"
-        f"⏱ Timeframe: <b>{str(row['timeframe'] or 'M5').upper()}</b>\n"
-        f"📍 Entry: <code>{float(row['entry_price']):g}</code>\n"
-        f"🛑 Stop Loss: <code>{float(row['stop_loss']):g}</code>\n"
-        f"{tp_lines}\n"
-        f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>\n"
-        f"📌 Status: <b>{'PENDING' if exec_status == 'PENDING' else 'ACTIVE'}</b>\n"
-        f"🔧 Trailing: <b>{row['trailing_code'] or '—'}</b>"
-    )
+    # NEXUS_SIGNAL_CAPTION_V3_20260911
+    public_code = _assign_public_signal_code(int(row["id"]))
+    caption = _build_signal_caption(row, exec_status, public_code)
 
     # Preserve already-published destinations so a retry sends only missing
     # channels and can still determine that the overall publication completed.
@@ -686,10 +824,11 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
             if not db.claim_signal_channel(int(row["id"]), channel):
                 continue
             try:
-                msg = await bot.send_photo(
+                msg = await bot.send_message(
                     target,
-                    BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-                    caption=caption, parse_mode=ParseMode.HTML,
+                    caption,
+                    parse_mode=ParseMode.HTML,
+                    disable_web_page_preview=True,
                 )
                 mid = int(msg.message_id)
                 if channel == "FREE":
@@ -740,7 +879,7 @@ def claim_chart_capture_job(
     account = str(x_mt5_account or "").strip()
     try:
         auth = authorize_admin_mt5(account, x_admin_token)
-        _chart_rate_limit(account)
+        _chart_rate_limit(account, "poll", 60)
         job = db.claim_next_chart_capture_job(account)
         if not job:
             return {"ok": True, "job": None, "poll_after_seconds": 2}
@@ -771,7 +910,7 @@ async def upload_chart_capture_result(
     account = str(req.account_number or x_mt5_account or "").strip()
     try:
         auth = authorize_admin_mt5(account, x_admin_token)
-        _chart_rate_limit(account, 30)
+        _chart_rate_limit(account, "upload", 30)
         if req.job_id is not None and int(req.job_id) != int(job_id):
             raise HTTPException(status_code=409, detail="chart job identity mismatch")
         if req.account_number and x_mt5_account and str(req.account_number) != str(x_mt5_account):
@@ -864,7 +1003,7 @@ def fail_chart_capture(
     account = str(req.account_number or x_mt5_account or "").strip()
     try:
         auth = authorize_admin_mt5(account, x_admin_token)
-        _chart_rate_limit(account, 30)
+        _chart_rate_limit(account, "fail", 30)
         if req.job_id is not None and int(req.job_id) != int(job_id):
             raise HTTPException(status_code=409, detail="chart job identity mismatch")
         if req.account_number and x_mt5_account and str(req.account_number) != str(x_mt5_account):
