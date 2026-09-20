@@ -994,15 +994,41 @@ bool IsPendingSignalType(const string order_type)
           order_type=="BUY_STOP_LIMIT" || order_type=="SELL_STOP_LIMIT";
   }
 
+string ObservationReasonCode(const string detail)
+  {
+   string x=detail; StringToUpper(x);
+   if(StringFind(x,"DEVIATION")>=0) return "ENTRY_DEVIATION";
+   if(StringFind(x,"MARGIN")>=0) return "INSUFFICIENT_MARGIN";
+   if(StringFind(x,"VOLUME")>=0 || StringFind(x,"LOT")>=0) return "INVALID_VOLUME";
+   if(StringFind(x,"SYMBOL")>=0) return "SYMBOL_UNAVAILABLE";
+   if(StringFind(x,"TRADE")>=0 && StringFind(x,"DISABLED")>=0) return "TRADING_DISABLED";
+   if(StringFind(x,"MARKET")>=0 && StringFind(x,"CLOSED")>=0) return "MARKET_CLOSED";
+   if(StringFind(x,"DUPLICATE")>=0) return "DUPLICATE";
+   if(StringFind(x,"TIMEOUT")>=0 || StringFind(x,"WEBREQUEST")>=0) return "CONNECTION_ERROR";
+   return "UNKNOWN";
+  }
+
+void ObserveSignal(const NexusSignal &s,const string status,const string detail="")
+  {
+   string snapshot=StringFormat("{\"risk_mode\":%d,\"fixed_lot\":%s,\"user_risk_percent\":%s,\"default_max_entry_deviation_pct\":%s,\"trailing_code\":\"%s\",\"order_type\":\"%s\"}",
+      (int)g_risk_mode,DoubleToString(g_fixed_lot,8),DoubleToString(g_user_risk_percent,4),
+      DoubleToString(InpDefaultMaxEntryDeviationPct,6),NexusJsonEscape(s.trailing_code),NexusJsonEscape(s.order_type));
+   string code=(status=="REJECTED" || status=="NOT_EXECUTED" ? ObservationReasonCode(detail) : "");
+   if(!g_api.Observation(s.db_id,status,code,detail,snapshot))
+      Print("NEXUS observation telemetry failed: ",g_api.LastError());
+  }
+
 bool ProcessIncomingSignal(const NexusSignal &s)
   {
    SetExecutionStatus("RECEIVED",s,s.symbol,"order_type="+s.order_type+" entry="+DoubleToString(s.entry,8));
+   ObserveSignal(s,"RECEIVED");
    if(s.order_type!="MARKET" && s.order_type!="LIMIT" &&
       s.order_type!="BUY_LIMIT" && s.order_type!="SELL_LIMIT" &&
       s.order_type!="BUY_STOP" && s.order_type!="SELL_STOP" &&
       s.order_type!="BUY_STOP_LIMIT" && s.order_type!="SELL_STOP_LIMIT")
      {
       string bad="unsupported order type: "+s.order_type;
+      ObserveSignal(s,"REJECTED",bad);
       SendSignalReceiptReliable(s.db_id,"rejected","",bad);
       SetExecutionStatus("REJECTED",s,s.symbol,bad); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1025,6 +1051,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(symbol=="")
      {
       string reason="symbol not available/tradable on broker";
+      ObserveSignal(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,s.symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1032,6 +1059,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    string reason="";
    if(!g_trade.ValidateEntry(s,symbol,InpDefaultMaxEntryDeviationPct,reason))
      {
+      ObserveSignal(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1039,6 +1067,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(!ClaimNexusSignal(s.signal_id))
      {
       string duplicate="duplicate signal execution blocked by NEXUS idempotency lock";
+      ObserveSignal(s,"REJECTED",duplicate);
       SendSignalReceiptReliable(s.db_id,"rejected","",duplicate);
       SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1047,6 +1076,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
      {
       ReleaseNexusSignalClaim(s.signal_id);
       string err=g_trade.LastError(); bool retryable=g_trade.LastFailureRetryable();
+      ObserveSignal(s,retryable?"EVALUATING":"REJECTED",err);
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
       if(retryable) return false;
@@ -1055,6 +1085,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
     CompleteNexusSignalClaim(s.signal_id);
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
+   ObserveSignal(s,"EXECUTED");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
    AdvanceSignalCursor(s.db_id);
    return true;
