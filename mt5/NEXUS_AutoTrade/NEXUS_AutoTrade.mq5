@@ -1965,11 +1965,15 @@ void DetectPositionModifications()
          double mfe_r=(initial_risk>0 ? MathAbs(g_position_states[idx].mfe_price-entry_px)/initial_risk : 0.0);
          double mae_r=(initial_risk>0 ? -MathAbs(g_position_states[idx].mae_price-entry_px)/initial_risk : 0.0);
          string subtype=(sl_changed && tp_changed?"SL_TP_CHANGED":(sl_changed?"SL_CHANGED":"TP_CHANGED"));
+         double sl_before=g_position_states[idx].sl;
+         double sl_after=sl;
+         double tp_before=g_position_states[idx].tp;
+         double tp_after=tp;
          if(g_api.TradeEvent("UPDATE",(string)ticket,signal_id,PositionGetString(POSITION_SYMBOL),
                              PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"LONG":"SHORT",
                              PositionGetDouble(POSITION_VOLUME),entry_px,
                              sl,tp,0.0,0.0,"",event_id,g_manual_destination,0,0,0,0,0,0,"","","","MARKET",0,"",(long)TimeCurrent()*1000,
-                             0,0,subtype,PositionGetDouble(POSITION_VOLUME),g_position_states[idx].sl,sl,g_position_states[idx].tp,tp,
+                             0,0,subtype,PositionGetDouble(POSITION_VOLUME),sl_before,sl_after,tp_before,tp_after,
                              MathMax(0.0,SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_ASK)-SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_BID)),
                              0,g_position_states[idx].mfe_price,g_position_states[idx].mae_price,mfe_r,mae_r))
             Print("NEXUS trade update sent: ticket=",(string)ticket," SL/TP changed");
