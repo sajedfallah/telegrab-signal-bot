@@ -30,7 +30,7 @@
   height:218px;
   z-index:-2;
   pointer-events:none;
-  background:url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat;
+  background:url("./assets/brand/home-header.jpg") center center / cover no-repeat;
 
   /* Real alpha fade on the lower part of the image itself. */
   -webkit-mask-image:linear-gradient(
