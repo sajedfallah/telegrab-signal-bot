@@ -4907,6 +4907,60 @@ async def clean_unhandled_message(message: Message, bot: Bot):
             pass
 
 
+LEGACY_TELEGRAM_SIGNAL_CALLBACKS = {
+    "signal_create",
+    "sigpublish",
+}
+LEGACY_TELEGRAM_SIGNAL_PREFIXES = (
+    "sigmarket:",
+    "sigsymbol:",
+    "sigdir:",
+    "sigtf:",
+    "sigorder:",
+    "sigvol:",
+    "sigtrail:",
+    "sigdest:",
+    "sigretry:",
+    "sigact:",
+)
+
+
+@router.callback_query(
+    lambda cb: bool(
+        cb.data
+        and (
+            cb.data in LEGACY_TELEGRAM_SIGNAL_CALLBACKS
+            or any(cb.data.startswith(prefix) for prefix in LEGACY_TELEGRAM_SIGNAL_PREFIXES)
+        )
+    )
+)
+async def legacy_telegram_signal_action_notice(cb: CallbackQuery, bot: Bot, state: FSMContext):
+    """Keep stale Telegram signal-control buttons from failing silently.
+
+    Signal mutation authority moved to MT5 in v0.6.0. Older Telegram messages can
+    still contain now-disabled CRUD buttons, so route those callbacks to a clear,
+    actionable read-only destination instead of leaving users with a dead button.
+    """
+    if not is_admin(cb.from_user.id):
+        await cb.answer(
+            tr(get_lang(cb.from_user.id), "دسترسی مجاز نیست.", "Access denied."),
+            show_alert=True,
+        )
+        return
+
+    await state.clear()
+    lang = get_lang(cb.from_user.id)
+    await cb.answer(
+        tr(
+            lang,
+            "این اکشن قدیمی است؛ مدیریت سیگنال اکنون فقط از MT5 انجام می‌شود.",
+            "This is a legacy action; signal management is now MT5-only.",
+        ),
+        show_alert=True,
+    )
+    await _render_admin_signal_center(bot, cb.from_user.id, cb.message.chat.id)
+
+
 def _disable_telegram_signal_authority() -> None:
     """v0.6 policy: Telegram is reporting/subscription only; no signal CRUD.
 
