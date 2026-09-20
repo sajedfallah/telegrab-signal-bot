@@ -27,7 +27,7 @@ from aiogram.types import CallbackQuery, ChatJoinRequest, InlineKeyboardButton, 
 
 from .config import settings
 from . import db
-from .signals.card_generator import build_chart_frame, build_report_card
+from .signals.card_generator import build_chart_frame, build_report_card, build_publication_signal_image, publication_card_payload
 from .signals.calculator import risk_reward, result_metric
 from .states import Flow
 from .storage.sqlite_storage import SQLiteStorage
@@ -2863,84 +2863,116 @@ def _copy_price(value) -> str:
     return f"<code>{escape(_format_price(value))}</code>"
 
 
-def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
-    """Canonical LTR English signal card used by every publication path.
+def _signal_caption(row, lang: str = "fa", *, status: str | None = None) -> str:
+    """Compact canonical text-only NEXUS signal card."""
 
-    Signal cards are deliberately language-neutral. Telegram channel posts must
-    remain stable across clients and must never contain Persian BiDi fragments or
-    literal ``\\n`` sequences.
-    """
-    order_type = str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper()
-    direction = str(row["direction"] or "").upper()
-    symbol = str(row["symbol"] or "").upper()
-    tf = str(row["timeframe"] if "timeframe" in row.keys() and row["timeframe"] else "M5").upper()
-    state = str(status or row["status"] or "SIGNAL").upper()
-    type_labels = {
-        "MARKET": "MARKET",
-        "BUY_LIMIT": "BUY LIMIT",
-        "SELL_LIMIT": "SELL LIMIT",
-        "BUY_STOP": "BUY STOP",
-        "SELL_STOP": "SELL STOP",
-        "BUY_STOP_LIMIT": "BUY STOP LIMIT",
-        "SELL_STOP_LIMIT": "SELL STOP LIMIT",
-        "LIMIT": "LIMIT",
-    }
-    state_labels = {
-        "ACTIVE": "ACTIVE", "PENDING": "PENDING", "CLOSED": "CLOSED",
-        "CANCELLED": "CANCELLED", "EXPIRED": "EXPIRED", "DRAFT": "DRAFT",
-    }
+    def value(key: str, default=None):
+        try:
+            if key in row.keys():
+                current = row[key]
+                return default if current is None else current
+        except Exception:
+            pass
+        return default
+
+    symbol = str(value("symbol", "--")).upper()
+    direction = str(value("direction", "")).upper()
+    tf = str(value("timeframe", "M5")).upper()
+
+    direction_text = "BUY 📈" if direction in {"BUY", "LONG"} else "SELL 📉"
+
     targets = db.get_signal_targets(int(row["id"]))
     if not targets:
-        legacy = [row["tp1"], row["tp2"], row["tp3"]]
-        targets = [{"target_no": i + 1, "price": value} for i, value in enumerate(legacy) if value is not None]
-    rr = ("1:" + format(float(row["rr_ratio"]), "g")) if row["rr_ratio"] else "—"
-    volume_mode = str(row["volume_mode"] or "RISK").upper()
-    if volume_mode == "FIXED" and row["lot_size"] is not None:
-        size_line = f"📦 Volume: <b>{float(row['lot_size']):g} lots</b>"
-    else:
-        size_line = f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>"
-    tp_lines = "\n".join(
-        f"🎯 TP{int(t['target_no'])}: {_copy_price(t['price'])}" for t in targets
-    ) or "🎯 TP: —"
-    stop_limit = ""
-    if order_type in {"BUY_STOP_LIMIT", "SELL_STOP_LIMIT"} and "stop_limit_price" in row.keys() and row["stop_limit_price"]:
-        stop_limit = f"\n🔹 Stop-Limit Price: {_copy_price(row['stop_limit_price'])}"
+        legacy = [value("tp1"), value("tp2"), value("tp3")]
+        targets = [
+            {"target_no": i + 1, "price": price}
+            for i, price in enumerate(legacy)
+            if price is not None
+        ]
+
+    target_map = {
+        int(t["target_no"]): t["price"]
+        for t in targets
+    }
+
+    tp1 = _copy_price(target_map[1]) if 1 in target_map else "--"
+    tp2 = _copy_price(target_map[2]) if 2 in target_map else "--"
+
+    entry = _copy_price(value("entry_price", "--"))
+    stop_loss = _copy_price(value("stop_loss", "--"))
+
+    code = str(value("code", row["id"]))
+    display_code = code
+
+    if display_code.upper().startswith("NX-"):
+        tail = display_code.split("-", 1)[1]
+        try:
+            display_code = str(int(tail))
+        except ValueError:
+            display_code = tail
+
+    grade = value("grade")
+    if grade is None:
+        grade = value("signal_grade")
+    if grade is None:
+        grade = value("setup_grade")
+
+    score = value("score")
+    if score is None:
+        score = value("signal_score")
+    if score is None:
+        score = value("setup_score")
+
+    quality_line = ""
+
+    if score not in (None, ""):
+        score_text = str(score).strip()
+
+        if not score_text.endswith("/100") and not score_text.endswith("%"):
+            score_text += "/100"
+
+        if grade not in (None, ""):
+            quality_line = "\n" + escape(str(grade).strip()) + " · " + escape(score_text)
+        else:
+            quality_line = "\n" + escape(score_text)
+
+    trailing_code = str(value("trailing_code", "") or "").upper()
+    runner_line = ""
+
+    if trailing_code in {"NEXUS_TRAIL_07", "TRAIL_07", "07"}:
+        runner_line = "\nRunner 40%"
+
     return (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{escape(str(row['code']))}</b>  🟦 {escape(type_labels.get(order_type, order_type))}\n\n"
-        f"📌 Symbol: <b>{escape(symbol)}</b>\n"
-        f"↕️ Direction: <b>{escape(direction)}</b>\n"
-        f"⏱ Timeframe: <b>{escape(tf)}</b>\n"
-        f"📍 Entry: {_copy_price(row['entry_price'])}{stop_limit}\n"
-        f"🛑 Stop Loss: {_copy_price(row['stop_loss'])}\n"
-        f"{tp_lines}\n"
-        f"{size_line}\n"
-        f"📐 R:R: <b>{escape(rr)}</b>\n"
-        f"📌 Status: <b>{escape(state_labels.get(state, state))}</b>\n"
-        f"🔧 Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>"
+        f"🚨 <b>NEXUS Signal #{escape(display_code)}</b>\n\n"
+        f"{escape(symbol)} · {escape(tf)} · <b>{direction_text}</b>"
+        f"{quality_line}\n\n"
+        f"Entry  {entry}\n"
+        f"SL     {stop_loss}\n"
+        f"TP1    {tp1}\n"
+        f"TP2    {tp2}"
+        f"{runner_line}"
     )
 
 
-
-async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes, caption: str) -> int:
-    """Publish exactly one signal post: framed chart + compact copyable caption."""
+async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes | None, caption: str) -> int:
+    """Publish exactly one text-only signal flash card."""
     try:
         await bot.get_chat(target)
     except Exception as exc:
         raise RuntimeError(f"Channel {target!s} is not accessible to the bot: {exc}") from exc
 
-    msg = await bot.send_photo(
+    msg = await bot.send_message(
         target,
-        BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-        caption=caption,
+        caption,
         parse_mode=ParseMode.HTML,
     )
     return msg.message_id
 
 
 async def _publish_signal(bot: Bot, row, *, only_missing: bool = False) -> tuple[int | None, int | None, list[str]]:
-    chart = await _download_bytes(bot, row["chart_file_id"])
-    chart_frame = await asyncio.to_thread(build_chart_frame, chart)
+    # V45: every Telegram signal root is a text-only flash card. Historical
+    # chart_file_id values are ignored and never downloaded or rendered.
+    chart_frame = None
     caption = _signal_caption(row, get_lang(int(row["created_by"])))
     # Publication is idempotent: an already delivered channel message is the
     # canonical signal post and must never be published again for the same Signal.
@@ -4573,41 +4605,258 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
     if event == "UPDATE":
         sl = float(payload.get("stop_loss") or 0)
         tp = float(payload.get("take_profit") or 0)
+
         old_sl = float(row["stop_loss"] or 0)
-        old_tp = float((db.get_signal_targets(int(row["id"]))[0]["price"] if db.get_signal_targets(int(row["id"])) else 0) or 0)
+
+        existing_targets = db.get_signal_targets(int(row["id"]))
+        old_tp = float(
+            (existing_targets[0]["price"] if existing_targets else 0) or 0
+        )
+
+        entry_price = float(row["entry_price"] or 0)
+        direction = str(row["direction"] or "").upper()
+
         sl_changed = sl > 0 and abs(sl - old_sl) > 1e-12
         tp_changed = tp > 0 and abs(tp - old_tp) > 1e-12
+
+        be_tolerance = max(1e-8, abs(entry_price) * 1e-7)
+
+        if direction in {"BUY", "LONG"}:
+            crossed_risk_free = (
+                sl_changed
+                and entry_price > 0
+                and old_sl < entry_price - be_tolerance
+                and sl >= entry_price - be_tolerance
+            )
+        else:
+            crossed_risk_free = (
+                sl_changed
+                and entry_price > 0
+                and old_sl > entry_price + be_tolerance
+                and sl > 0
+                and sl <= entry_price + be_tolerance
+            )
+
         if sl_changed:
-            try: db.update_signal_sl(int(row["id"]), sl)
-            except Exception: log.exception("[NEXUS][DB] MT5 SL sync failed for %s", row["code"])
+            try:
+                db.update_signal_sl(int(row["id"]), sl)
+            except Exception:
+                log.exception(
+                    "[NEXUS][DB] MT5 SL sync failed for %s",
+                    row["code"],
+                )
+
         if tp_changed:
-            try: db.update_signal_tp(int(row["id"]), 1, tp)
-            except Exception: log.exception("[NEXUS][DB] MT5 TP sync failed for %s", row["code"])
+            try:
+                db.update_signal_tp(int(row["id"]), 1, tp)
+            except Exception:
+                log.exception(
+                    "[NEXUS][DB] MT5 TP sync failed for %s",
+                    row["code"],
+                )
+
         if not sl_changed and not tp_changed:
-            db.update_trade_execution(uid, ticket, str(payload.get("event_id") or f"UPDATE:{ticket}"), signal_id=int(row["id"]), status="IGNORED")
+            db.update_trade_execution(
+                uid,
+                ticket,
+                str(payload.get("event_id") or f"UPDATE:{ticket}"),
+                signal_id=int(row["id"]),
+                status="IGNORED",
+            )
             return
-        parts_fa=[]; parts_en=[]
-        if sl_changed:
-            label = "🟡 <b>BE ACTIVATED:</b>" if abs(sl - float(row["entry_price"])) <= max(1e-8, abs(float(row["entry_price"]))*1e-7) else "🛑 <b>SL CHANGED:</b>"
-            parts_fa.append(f"{label}\nقدیم: {_copy_price(old_sl)}\nجدید: {_copy_price(sl)}")
-            parts_en.append(("🟡 <b>BE ACTIVATED:</b>" if abs(sl - float(row["entry_price"])) <= max(1e-8, abs(float(row["entry_price"]))*1e-7) else "🛑 <b>SL CHANGED:</b>") + f"\nOld: {_copy_price(old_sl)}\nNew: {_copy_price(sl)}")
-        if tp_changed:
-            parts_fa.append(f"🎯 <b>TP CHANGED:</b>\nقدیم: {_copy_price(old_tp)}\nجدید: {_copy_price(tp)}")
-            parts_en.append(f"🎯 <b>TP CHANGED:</b>\nOld: {_copy_price(old_tp)}\nNew: {_copy_price(tp)}")
-        if not parts_fa: return
-        text=tr(get_lang(uid),
-                f"<b>{escape(str(row['code']))}</b>\n" + "\n\n".join(parts_fa),
-                f"<b>{escape(str(row['code']))}</b>\n" + "\n\n".join(parts_en))
-        db.add_signal_event(int(row["id"]), "UPDATE", actor_type="MT5", actor_id=uid,
-                            account_number=str(payload.get("account_number") or ""), correlation_id=str(row["code"]),
-                            payload={"sl_changed": sl_changed, "tp_changed": tp_changed, "sl": sl, "tp": tp})
-        db.add_signal_update(int(row["id"]),"MT5_UPDATE",text,text,"",uid,None,None,"ACTIVE")
-        db.update_trade_execution(uid, ticket, str(payload.get("event_id") or f"UPDATE:{ticket}"), signal_id=int(row["id"]), status="UPDATED", destination=str(row["destination"]))
-        db.add_audit(uid,"mt5_trade_update",int(row["id"]),f"ticket={ticket} sl={sl:g} tp={tp:g}")
+
+        db.add_signal_event(
+            int(row["id"]),
+            "UPDATE",
+            actor_type="MT5",
+            actor_id=uid,
+            account_number=str(payload.get("account_number") or ""),
+            correlation_id=str(row["code"]),
+            payload={
+                "sl_changed": sl_changed,
+                "tp_changed": tp_changed,
+                "sl": sl,
+                "tp": tp,
+                "risk_free": crossed_risk_free,
+            },
+        )
+
+        db.update_trade_execution(
+            uid,
+            ticket,
+            str(payload.get("event_id") or f"UPDATE:{ticket}"),
+            signal_id=int(row["id"]),
+            status="UPDATED",
+            destination=str(row["destination"]),
+        )
+
+        db.add_audit(
+            uid,
+            "mt5_trade_update",
+            int(row["id"]),
+            f"ticket={ticket} sl={sl:g} tp={tp:g} risk_free={crossed_risk_free}",
+        )
+
+        # Normal SL / TP / trailing updates are backend-only.
+        if not crossed_risk_free:
+            internal_text = (
+                f"MT5 UPDATE | {row['code']} | "
+                f"sl={sl:g} | tp={tp:g}"
+            )
+
+            db.add_signal_update(
+                int(row["id"]),
+                "MT5_UPDATE",
+                internal_text,
+                internal_text,
+                "",
+                uid,
+                None,
+                None,
+                "ACTIVE",
+            )
+            return
+
+        risk_free_reply = (
+            "🛡 <b>Risk-Free</b>\n"
+            f"SL moved to Entry: {_copy_price(entry_price)}"
+        )
+
+        free_mid = None
+        vip_mid = None
+        reply_errors = []
+
+        if (
+            row["destination"] in {"FREE", "BOTH"}
+            and row["free_message_id"]
+        ):
+            free_mid, err = await _publish_result_with_fallback(
+                bot,
+                settings.free_channel_target,
+                row,
+                row["free_message_id"],
+                row["free_message_id"],
+                risk_free_reply,
+                "FREE",
+            )
+            if err:
+                reply_errors.append(err)
+
+        if (
+            row["destination"] in {"VIP", "BOTH"}
+            and row["vip_message_id"]
+        ):
+            vip_mid, err = await _publish_result_with_fallback(
+                bot,
+                settings.vip_channel_id,
+                row,
+                row["vip_message_id"],
+                row["vip_message_id"],
+                risk_free_reply,
+                "VIP",
+            )
+            if err:
+                reply_errors.append(err)
+
+        db.add_signal_update(
+            int(row["id"]),
+            "RISK_FREE",
+            risk_free_reply,
+            risk_free_reply,
+            "",
+            uid,
+            free_mid,
+            vip_mid,
+            "ACTIVE",
+        )
+
+        if reply_errors:
+            log.warning(
+                "[NEXUS][RISK_FREE] Telegram delivery issue for %s: %s",
+                row["code"],
+                " | ".join(reply_errors),
+            )
+
         return
 
     if event == "CLOSE":
         if str(row["status"]).upper() == "CLOSED":
+            return
+
+        event_subtype = str(
+            payload.get("event_subtype") or ""
+        ).strip().upper()
+
+        remaining_volume = float(
+            payload.get("remaining_volume") or 0
+        )
+
+        is_partial_close = (
+            event_subtype == "PARTIAL_CLOSE"
+            or remaining_volume > 1e-12
+        )
+
+        # Partial closes remain backend/analytics events only.
+        # They must NOT close the signal or publish a Telegram final reply.
+        if is_partial_close:
+            partial_profit = float(payload.get("profit") or 0)
+            exit_price = float(payload.get("exit_price") or 0)
+
+            db.add_signal_event(
+                int(row["id"]),
+                "PARTIAL_CLOSE",
+                actor_type="MT5",
+                actor_id=uid,
+                account_number=str(payload.get("account_number") or ""),
+                correlation_id=str(row["code"]),
+                payload={
+                    "ticket": ticket,
+                    "exit_price": exit_price,
+                    "profit": partial_profit,
+                    "remaining_volume": remaining_volume,
+                    "event_subtype": event_subtype,
+                },
+            )
+
+            internal_text = (
+                f"PARTIAL CLOSE | {row['code']} | "
+                f"ticket={ticket} | "
+                f"profit={partial_profit:+g} | "
+                f"remaining={remaining_volume:g}"
+            )
+
+            db.add_signal_update(
+                int(row["id"]),
+                "MT5_PARTIAL_CLOSE",
+                internal_text,
+                internal_text,
+                str(partial_profit),
+                uid,
+                None,
+                None,
+                "ACTIVE",
+            )
+
+            db.update_trade_execution(
+                uid,
+                ticket,
+                str(payload.get("event_id") or f"PARTIAL_CLOSE:{ticket}"),
+                signal_id=int(row["id"]),
+                status="PARTIAL_CLOSED",
+                destination=str(row["destination"]),
+            )
+
+            db.add_audit(
+                uid,
+                "mt5_trade_partial_close",
+                int(row["id"]),
+                (
+                    f"ticket={ticket} "
+                    f"profit={partial_profit:+g} "
+                    f"remaining={remaining_volume:g}"
+                ),
+            )
+
             return
         # Screenshot is optional for CLOSE. The final lifecycle result is
         # delivered as a reply even when MT5 chart capture is unavailable.

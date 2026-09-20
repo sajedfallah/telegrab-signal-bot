@@ -249,6 +249,8 @@ class TradeEventRequest(BaseModel):
     order_type: str = Field(default="MARKET", pattern="^(?:MARKET|BUY_LIMIT|SELL_LIMIT|BUY_STOP|SELL_STOP|BUY_STOP_LIMIT|SELL_STOP_LIMIT|LIMIT)$")
     stop_limit_price: float = Field(default=0.0, ge=0.0, le=1e12)
     close_reason: str = Field(default="", max_length=64)
+    event_subtype: str = Field(default="", max_length=64)
+    remaining_volume: float = Field(default=0.0, ge=0.0, le=1_000_000)
 
     @field_validator("event", "direction", "destination", "order_type", mode="before")
     @classmethod
@@ -550,146 +552,103 @@ def command_receipt_mt5_get(
 
 
 async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
-    """Publish an MT5-authority signal only after an accepted execution receipt.
+    """Publish MT5_ADMIN and WEB_ADMIN signals as Telegram text flash cards.
 
-    The publication asset is staged before MT5 execution and consumed only here.
-    Channel claims make publication idempotent across duplicate receipts/retries.
+    Signal publication is intentionally image-free. Execution truth, channel
+    idempotency, reply-chain anchors, and the canonical caption contract remain
+    unchanged. Legacy chart_base64/publication assets are ignored.
     """
     if isinstance(row, dict):
         issuer_type = str(row.get("issuer_type") or "MT5_ADMIN").strip().upper()
     else:
         issuer_type = str(row["issuer_type"] if "issuer_type" in row.keys() else "MT5_ADMIN").strip().upper()
-    receipt = db.mt5_signal_live_state(int(row["id"])) or {} if issuer_type == "MT5_ADMIN" else {}
-    exec_status = (str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
-                   if issuer_type == "MT5_ADMIN" else "NOT_APPLICABLE")
 
-    # This guard is intentionally inside the publisher itself so EVERY caller
-    # (accepted receipt, retry worker, CLOSE anchor recovery, future callers)
-    # inherits the same execution-truth invariant.
+    receipt = db.mt5_signal_live_state(int(row["id"])) or {} if issuer_type == "MT5_ADMIN" else {}
+    exec_status = (
+        str(receipt.get("receipt_status") or "NOT_RECEIVED").strip().upper()
+        if issuer_type == "MT5_ADMIN"
+        else "NOT_APPLICABLE"
+    )
+
     if issuer_type == "MT5_ADMIN" and exec_status not in PUBLISHABLE_RECEIPT_STATUSES:
         return {
             "free_message_id": None,
             "vip_message_id": None,
-            "errors": [
-                f"EXECUTION_GATE: receipt status {exec_status} is not publishable"
-            ],
+            "errors": [f"EXECUTION_GATE: receipt status {exec_status} is not publishable"],
             "published": False,
             "complete": False,
             "execution_status": exec_status,
+            "publication_mode": "TEXT_ONLY",
         }
 
-    # Resolve canonical data only after the fail-closed receipt gate. This
-    # keeps the gate independent from ambient/runtime database contents.
     row = db.get_signal(int(row["id"])) or row
-
-    chart_job = db.get_signal_chart_capture_job(int(row["id"])) if issuer_type == "WEB_ADMIN" else None
-    if issuer_type == "WEB_ADMIN" and not allow_without_chart and (
-        not chart_job or str(chart_job["status"]).upper() not in {"UPLOADED", "COMPLETED"}
-    ):
-        return {"free_message_id": None, "vip_message_id": None,
-                "errors": ["CHART_GATE: real MT5 chart has not been uploaded"],
-                "published": False, "complete": False, "execution_status": "NOT_APPLICABLE"}
-
     errors: list[str] = []
+
     try:
         from ..config import settings
-        from ..signals.card_generator import build_chart_frame, build_signal_card
+        from ..main import _signal_caption
         from aiogram import Bot
         from aiogram.enums import ParseMode
-        from aiogram.types import BufferedInputFile
     except Exception as exc:
-        return {"free_message_id": None, "vip_message_id": None, "errors": [f"TELEGRAM_INIT: {exc}"], "published": False}
-
-    raw = b""
-    asset_path = db.get_mt5_signal_publication_asset(int(row["id"]))
-    if asset_path:
-        try:
-            raw = Path(asset_path).read_bytes()
-        except OSError as exc:
-            errors.append(f"CHART_ASSET: {exc}")
-    if not raw and chart_base64:
-        try:
-            raw = base64.b64decode(chart_base64, validate=True)
-            if not raw or len(raw) > 5_000_000:
-                raise ValueError("chart image is empty or exceeds 5 MB")
-        except (ValueError, binascii.Error) as exc:
-            errors.append(f"CHART: {exc}")
-            raw = b""
-
-    if issuer_type == "WEB_ADMIN" and not raw and not allow_without_chart:
-        return {"free_message_id": None, "vip_message_id": None,
-                "errors": ["CHART_GATE: uploaded chart asset is missing"],
-                "published": False, "complete": False}
-
-    try:
-        if raw:
-            chart_frame = await asyncio.to_thread(build_chart_frame, raw)
-        else:
-            # A broker/terminal may be unable to capture a screenshot (for
-            # example while the chart is still loading). Never send an empty
-            # dark frame: publish a useful signal card so the channel still
-            # receives a visible image and the result reply has an anchor.
-            card_signal = {
-                "code": row["code"], "market_type": row["market_type"],
-                "symbol": row["symbol"], "direction": row["direction"],
-                "order_type": row["order_type"], "entry": row["entry_price"],
-                "stop_loss": row["stop_loss"], "risk_percent": row["risk_percent"],
-                "trailing_code": row["trailing_code"] or "—",
-                "trailing_name": row["trailing_name"] or "—",
-                "rr": row["rr_ratio"] or "—",
-                "volume_mode": row["volume_mode"] or "RISK",
-                "lot_size": row["lot_size"], "leverage": row["leverage"],
-            }
-            for target in db.get_signal_targets(int(row["id"])):
-                card_signal[f"tp{int(target['target_no'])}"] = target["price"]
-            chart_frame = await asyncio.to_thread(build_signal_card, None, card_signal)
-    except Exception as exc:
-        errors.append(f"CHART_RENDER: {exc}")
-        chart_frame = b""
+        return {
+            "free_message_id": None,
+            "vip_message_id": None,
+            "errors": [f"TELEGRAM_INIT: {exc}"],
+            "published": False,
+            "complete": False,
+            "publication_mode": "TEXT_ONLY",
+        }
 
     if issuer_type == "WEB_ADMIN":
         with db.conn() as con:
-            con.execute("UPDATE signals SET publication_stage='FLASHCARD_READY' WHERE id=?", (int(row["id"]),))
-        db.add_signal_event(int(row["id"]), "FLASHCARD_GENERATED", actor_type="BACKEND",
-                            actor_id=row["created_by"], correlation_id=str(row["code"]), payload={"chart": bool(raw)})
+            con.execute(
+                "UPDATE signals SET publication_stage='TEXT_READY' "
+                "WHERE id=? AND UPPER(COALESCE(publication_stage,''))!='PUBLISHED'",
+                (int(row["id"]),),
+            )
+        db.add_signal_event(
+            int(row["id"]),
+            "TEXT_FLASHCARD_READY",
+            actor_type="BACKEND",
+            actor_id=row["created_by"],
+            correlation_id=str(row["code"]),
+            payload={"publication_mode": "TEXT_ONLY", "chart": False},
+        )
 
     destination = str(row["destination"] or "BOTH").upper()
-    targets = db.get_signal_targets(int(row["id"]))
-    target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
-    tp_lines = "\n".join(f"🎯 TP{n}: <code>{target_map[n]:g}</code>" for n in sorted(target_map)) or "🎯 TP: —"
-    order_type = str(row["order_type"] or "MARKET").upper()
-    caption = (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{row['code']}</b>  🟦 {order_type}\n\n"
-        f"📌 Symbol: <b>{str(row['symbol']).upper()}</b>\n"
-        f"↕️ Direction: <b>{str(row['direction']).upper()}</b>\n"
-        f"⏱ Timeframe: <b>{str(row['timeframe'] or 'M5').upper()}</b>\n"
-        f"📍 Entry: <code>{float(row['entry_price']):g}</code>\n"
-        f"🛑 Stop Loss: <code>{float(row['stop_loss']):g}</code>\n"
-        f"{tp_lines}\n"
-        f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>\n"
-        f"📌 Status: <b>{'PENDING' if exec_status == 'PENDING' else 'ACTIVE'}</b>\n"
-        f"🔧 Trailing: <b>{row['trailing_code'] or '—'}</b>"
-    )
+    try:
+        caption = _signal_caption(
+            row,
+            status="PENDING" if exec_status == "PENDING" else "ACTIVE",
+        )
+    except Exception as exc:
+        return {
+            "free_message_id": None,
+            "vip_message_id": None,
+            "errors": [f"CAPTION_RENDER: {exc}"],
+            "published": False,
+            "complete": False,
+            "publication_mode": "TEXT_ONLY",
+        }
 
-    # Preserve already-published destinations so a retry sends only missing
-    # channels and can still determine that the overall publication completed.
     free_id = int(row["free_message_id"]) if row["free_message_id"] else None
     vip_id = int(row["vip_message_id"]) if row["vip_message_id"] else None
+
     async with Bot(settings.bot_token) as bot:
         targets_to_send = []
         if destination in {"FREE", "BOTH"}:
             targets_to_send.append(("FREE", settings.free_channel_target))
         if destination in {"VIP", "BOTH"}:
             targets_to_send.append(("VIP", settings.vip_channel_id))
+
         for channel, target in targets_to_send:
             if not db.claim_signal_channel(int(row["id"]), channel):
                 continue
             try:
-                msg = await bot.send_photo(
+                msg = await bot.send_message(
                     target,
-                    BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-                    caption=caption, parse_mode=ParseMode.HTML,
+                    caption,
+                    parse_mode=ParseMode.HTML,
                 )
                 mid = int(msg.message_id)
                 if channel == "FREE":
@@ -702,30 +661,78 @@ async def _publish_mt5_admin_signal_async(row, chart_base64: str | None = None, 
 
     if free_id is not None or vip_id is not None:
         db.set_signal_publish_messages(int(row["id"]), free_id, vip_id)
+
     db.add_signal_event(
-        int(row["id"]), "PUBLISH", actor_type="MT5_AUTHORITY", actor_id=int(row["created_by"]),
-        account_number=str(row["issuer_account"] or ""), correlation_id=str(row["code"]),
-        payload={"free_message_id": free_id, "vip_message_id": vip_id, "execution_status": exec_status, "errors": errors},
+        int(row["id"]),
+        "PUBLISH",
+        actor_type="MT5_AUTHORITY",
+        actor_id=int(row["created_by"]),
+        account_number=str(row["issuer_account"] or ""),
+        correlation_id=str(row["code"]),
+        payload={
+            "free_message_id": free_id,
+            "vip_message_id": vip_id,
+            "execution_status": exec_status,
+            "errors": errors,
+            "publication_mode": "TEXT_ONLY",
+        },
     )
-    # Do not delete the staged chart until every requested channel has a message.
-    complete = (destination == "FREE" and free_id is not None) or (destination == "VIP" and vip_id is not None) or (destination == "BOTH" and free_id is not None and vip_id is not None)
+
+    complete = (
+        (destination == "FREE" and free_id is not None)
+        or (destination == "VIP" and vip_id is not None)
+        or (destination == "BOTH" and free_id is not None and vip_id is not None)
+    )
+
     if complete:
+        # Any staged chart from an older runtime is obsolete in text-only mode.
         db.clear_mt5_signal_publication_asset(int(row["id"]))
         if issuer_type == "WEB_ADMIN":
             with db.conn() as con:
-                con.execute("UPDATE signals SET status='ACTIVE',publication_stage='PUBLISHED' WHERE id=?", (int(row["id"]),))
-            if chart_job:
+                con.execute(
+                    "UPDATE signals SET status='ACTIVE',publication_stage='PUBLISHED' WHERE id=?",
+                    (int(row["id"]),),
+                )
+            chart_job = db.get_signal_chart_capture_job(int(row["id"]))
+            if chart_job and str(chart_job["status"] or "").upper() not in {"COMPLETED", "FAILED", "EXPIRED"}:
                 db.mark_chart_capture_job_completed(int(chart_job["id"]))
-            db.add_signal_event(int(row["id"]), "TELEGRAM_PUBLISHED", actor_type="BACKEND",
-                                actor_id=row["created_by"], correlation_id=str(row["code"]),
-                                payload={"destination": destination, "free_message_id": free_id, "vip_message_id": vip_id})
+            db.add_signal_event(
+                int(row["id"]),
+                "TELEGRAM_PUBLISHED",
+                actor_type="BACKEND",
+                actor_id=row["created_by"],
+                correlation_id=str(row["code"]),
+                payload={
+                    "destination": destination,
+                    "free_message_id": free_id,
+                    "vip_message_id": vip_id,
+                    "publication_mode": "TEXT_ONLY",
+                },
+            )
     elif issuer_type == "WEB_ADMIN":
         with db.conn() as con:
-            con.execute("UPDATE signals SET publication_stage='PUBLISH_FAILED' WHERE id=?", (int(row["id"]),))
-        db.add_signal_event(int(row["id"]), "TELEGRAM_PUBLISH_FAILED", actor_type="BACKEND",
-                            actor_id=row["created_by"], result="FAILED", reason="; ".join(errors)[:1000])
-    return {"free_message_id": free_id, "vip_message_id": vip_id, "errors": errors,
-            "published": bool(free_id or vip_id), "complete": complete}
+            con.execute(
+                "UPDATE signals SET publication_stage='PUBLISH_FAILED' WHERE id=?",
+                (int(row["id"]),),
+            )
+        db.add_signal_event(
+            int(row["id"]),
+            "TELEGRAM_PUBLISH_FAILED",
+            actor_type="BACKEND",
+            actor_id=row["created_by"],
+            result="FAILED",
+            reason="; ".join(errors)[:1000],
+        )
+
+    return {
+        "free_message_id": free_id,
+        "vip_message_id": vip_id,
+        "errors": errors,
+        "published": bool(free_id or vip_id),
+        "complete": complete,
+        "publication_mode": "TEXT_ONLY",
+    }
+
 
 def _publish_mt5_admin_signal(row, chart_base64: str | None = None, *, allow_without_chart: bool = False) -> dict:
     return asyncio.run(_publish_mt5_admin_signal_async(row, chart_base64, allow_without_chart=allow_without_chart))
@@ -819,7 +826,11 @@ async def upload_chart_capture_result(
             published = str(signal["publication_stage"] or "").upper() == "PUBLISHED"
             if not published:
                 with db.conn() as con:
-                    con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+                    con.execute(
+                        "UPDATE signals SET publication_stage=? WHERE id=?",
+                        ("DIAGNOSTIC_CHART_RECEIVED" if str(signal["issuer_type"] or "").upper() == "WEB_ADMIN" else "CHART_RECEIVED",
+                         int(signal["id"])),
+                    )
                 background_tasks.add_task(_publish_mt5_admin_signal_async, signal, None)
             return {"ok": True, "idempotent": True, "status": current_status,
                     "publication": "ALREADY_PUBLISHED" if published else "RETRY_QUEUED"}
@@ -834,9 +845,17 @@ async def upload_chart_capture_result(
             job_id, account, broker_symbol=str(req.broker_symbol or signal["symbol"]), timeframe=timeframe,
             image_path=str(path), image_sha256=digest,
         )
-        db.save_mt5_signal_publication_asset(int(signal["id"]), str(path))
+        # V38: ChartAgent pixels are diagnostic evidence for WEB_ADMIN only.
+        # Do not stage them in the Telegram publication slot; canonical broker
+        # rendering is the sole publication authority for Mini App signals.
+        if str(signal["issuer_type"] or "").upper() != "WEB_ADMIN":
+            db.save_mt5_signal_publication_asset(int(signal["id"]), str(path))
         with db.conn() as con:
-            con.execute("UPDATE signals SET publication_stage='CHART_RECEIVED' WHERE id=?", (int(signal["id"]),))
+            con.execute(
+                "UPDATE signals SET publication_stage=? WHERE id=?",
+                ("DIAGNOSTIC_CHART_RECEIVED" if str(signal["issuer_type"] or "").upper() == "WEB_ADMIN" else "CHART_RECEIVED",
+                 int(signal["id"])),
+            )
         if changed:
             capture_timestamp = req.capture_timestamp or datetime.now(timezone.utc).isoformat()
             db.add_signal_event(int(signal["id"]), "CHART_CAPTURED", actor_type="MT5_ADMIN",
@@ -914,24 +933,9 @@ async def issue_mt5_admin_signal(
             timeframe=req.timeframe, stop_limit_price=req.stop_limit_price, destination=req.destination, admin_account=account,
             admin_id=int(auth["telegram_id"]), request_id=req.request_id, signal_code=req.signal_code,
         )
-        # Stage the original signal screenshot. Publication is deliberately NOT
-        # queued here: MT5 must first validate and execute/place the order and
-        # send an accepted signal receipt. This closes the v0.6.0 publication race.
-        if req.chart_base64:
-            try:
-                raw = base64.b64decode(req.chart_base64, validate=True)
-                if not raw or len(raw) > 5_000_000:
-                    raise ValueError("chart image is empty or exceeds 5 MB")
-                if not (raw.startswith(b"\x89PNG\r\n\x1a\n") or raw.startswith(b"\xff\xd8\xff")):
-                    raise ValueError("chart image must be PNG or JPEG")
-                folder = Path(__file__).resolve().parent.parent / "assets" / "autotrade" / "pending_signal_charts"
-                folder.mkdir(parents=True, exist_ok=True)
-                ext = "png" if raw.startswith(b"\x89PNG\r\n\x1a\n") else "jpg"
-                path = folder / f"{int(row['id'])}.{ext}"
-                path.write_bytes(raw)
-                db.save_mt5_signal_publication_asset(int(row["id"]), str(path))
-            except (ValueError, binascii.Error) as exc:
-                raise HTTPException(status_code=422, detail=f"invalid chart image: {exc}") from exc
+        # V45 text-only signal publication: legacy chart_base64 is accepted in
+        # the request schema for older EA compatibility but is deliberately
+        # ignored and never staged for Telegram publication.
         from .service import signal_to_payload
         payload = signal_to_payload(row)
         return {"ok": True, "signal_id": str(row["code"]), "signal": payload,
@@ -1219,6 +1223,8 @@ def trade_event(
         "position_id": str(req.position_id or ""),
         "deal_id": str(req.deal_id or req.ticket),
         "cycle_id": str(req.cycle_id or ""),
+        "event_subtype": str(req.event_subtype or "").strip().upper(),
+        "remaining_volume": float(req.remaining_volume or 0.0),
         "chart_path": chart_path,
         "event_id": str(req.event_id or "").strip(),
         "event_time_ms": int(req.event_time_ms or 0),
