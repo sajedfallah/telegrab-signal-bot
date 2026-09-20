@@ -5,7 +5,7 @@
 > **Repository:** `sajedfallah/telegrab-signal-bot`  
 > **Canonical branch:** `main`  
 > **GitHub is the source of truth for tracked project state.**  
-> **Last context sync:** 2026-09-19
+> **Last context sync:** 2026-09-20
 
 ---
 
@@ -260,13 +260,13 @@ Any newer branch/version must be verified against Git history, docs, PRs, and te
 
 For each work session, replace/update the task block below during `PROJECT-SYNC`:
 
-- **Active task:** [update during sync]
-- **Relevant subsystem:** [update during sync]
-- **Working branch/PR:** [verify from Git]
-- **Last completed step:** [update during sync]
-- **Validation evidence:** [update during sync]
-- **Blocker:** [none / describe]
-- **Next action:** [update during sync]
+- **Active task:** Reconcile the live Telegram AutoTrade signal-publication format with GitHub.
+- **Relevant subsystem:** Telegram Bot / AutoTrade / MT5 signal publication.
+- **Working branch/PR:** `hotfix/autotrade-persian-text-signal-20260920` / PR to `main`.
+- **Last completed step:** Replaced image/card publication with text-only Telegram posts and standardized the root signal caption as the approved Persian format.
+- **Validation evidence:** Live VPS formatter produced the expected Persian HTML output; `app/main.py` passed `python -m py_compile`; both `NEXUS-AutoTrade-API` and `NEXUS-Telegram-Bot` were restarted and verified Running.
+- **Blocker:** Final confirmation requires observing the next naturally generated AutoTrade signal in Telegram.
+- **Next action:** Verify the next real AutoTrade signal uses the new Persian text-only format, then continue lifecycle formatting for Partial Close / Final Result if requested.
 
 Do not invent these fields when evidence is unavailable. Mark them `UNKNOWN — VERIFY`.
 
@@ -441,6 +441,7 @@ Default priority when entering a new chat:
 Keep this short. Detailed history belongs in Git.
 
 - **2026-09-19:** Created `PROJECT_CONTEXT.md` as the persistent AI bootstrap/status/sync contract for NEXUS. Added source-of-truth hierarchy, repository/deployment map, branch policy, safety rules, validation/DoD, cleanup policy, ICT forward-test context, and the three standard commands.
+- **2026-09-20:** Synced Telegram AutoTrade signal publication with the live VPS behavior: Persian text-only signal cards, no chart/image publication, and current runtime validation/restart evidence recorded.
 
 ---
 

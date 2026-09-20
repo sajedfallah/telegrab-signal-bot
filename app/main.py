@@ -2863,84 +2863,104 @@ def _copy_price(value) -> str:
     return f"<code>{escape(_format_price(value))}</code>"
 
 
-def _signal_caption(row, lang: str = "en", *, status: str | None = None) -> str:
-    """Canonical LTR English signal card used by every publication path.
+def _signal_caption(row, lang: str = "fa", *, status: str | None = None) -> str:
+    """Canonical Persian text-only NEXUS signal card."""
 
-    Signal cards are deliberately language-neutral. Telegram channel posts must
-    remain stable across clients and must never contain Persian BiDi fragments or
-    literal ``\\n`` sequences.
-    """
-    order_type = str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper()
-    direction = str(row["direction"] or "").upper()
-    symbol = str(row["symbol"] or "").upper()
-    tf = str(row["timeframe"] if "timeframe" in row.keys() and row["timeframe"] else "M5").upper()
-    state = str(status or row["status"] or "SIGNAL").upper()
-    type_labels = {
-        "MARKET": "MARKET",
-        "BUY_LIMIT": "BUY LIMIT",
-        "SELL_LIMIT": "SELL LIMIT",
-        "BUY_STOP": "BUY STOP",
-        "SELL_STOP": "SELL STOP",
-        "BUY_STOP_LIMIT": "BUY STOP LIMIT",
-        "SELL_STOP_LIMIT": "SELL STOP LIMIT",
-        "LIMIT": "LIMIT",
-    }
-    state_labels = {
-        "ACTIVE": "ACTIVE", "PENDING": "PENDING", "CLOSED": "CLOSED",
-        "CANCELLED": "CANCELLED", "EXPIRED": "EXPIRED", "DRAFT": "DRAFT",
-    }
-    targets = db.get_signal_targets(int(row["id"]))
-    if not targets:
-        legacy = [row["tp1"], row["tp2"], row["tp3"]]
-        targets = [{"target_no": i + 1, "price": value} for i, value in enumerate(legacy) if value is not None]
-    rr = ("1:" + format(float(row["rr_ratio"]), "g")) if row["rr_ratio"] else "—"
-    volume_mode = str(row["volume_mode"] or "RISK").upper()
-    if volume_mode == "FIXED" and row["lot_size"] is not None:
-        size_line = f"📦 Volume: <b>{float(row['lot_size']):g} lots</b>"
+    def value(key: str, default=None):
+        try:
+            if key in row.keys():
+                current = row[key]
+                return default if current is None else current
+        except Exception:
+            pass
+        return default
+
+    symbol = str(value("symbol", "--")).upper()
+    direction = str(value("direction", "")).upper()
+    tf = str(value("timeframe", "M5")).upper()
+
+    if direction in {"BUY", "LONG"}:
+        direction_fa = "\u062e\u0631\u06cc\u062f \U0001F4C8"
     else:
-        size_line = f"📊 Risk: <b>{float(row['risk_percent']):g}%</b>"
+        direction_fa = "\u0641\u0631\u0648\u0634 \U0001F4C9"
+
+    targets = db.get_signal_targets(int(row["id"]))
+
+    if not targets:
+        legacy = [
+            value("tp1"),
+            value("tp2"),
+            value("tp3"),
+        ]
+        targets = [
+            {"target_no": i + 1, "price": price}
+            for i, price in enumerate(legacy)
+            if price is not None
+        ]
+
     tp_lines = "\n".join(
-        f"🎯 TP{int(t['target_no'])}: {_copy_price(t['price'])}" for t in targets
-    ) or "🎯 TP: —"
-    stop_limit = ""
-    if order_type in {"BUY_STOP_LIMIT", "SELL_STOP_LIMIT"} and "stop_limit_price" in row.keys() and row["stop_limit_price"]:
-        stop_limit = f"\n🔹 Stop-Limit Price: {_copy_price(row['stop_limit_price'])}"
+        f"TP{int(t['target_no'])}: {_copy_price(t['price'])}"
+        for t in targets
+    ) or "TP: --"
+
+    entry = _copy_price(value("entry_price", "--"))
+    stop_loss = _copy_price(value("stop_loss", "--"))
+
+    rr_raw = value("rr_ratio")
+    if rr_raw not in (None, "", "--"):
+        try:
+            rr = f"1:{float(rr_raw):g}"
+        except (TypeError, ValueError):
+            rr = str(rr_raw)
+    else:
+        rr = "--"
+
+    score = value("score")
+    if score is None:
+        score = value("signal_score")
+    if score is None:
+        score = value("setup_score")
+
+    if score in (None, ""):
+        score_text = "--"
+    else:
+        score_text = str(score)
+        if not score_text.endswith("/100") and not score_text.endswith("%"):
+            score_text = f"{score_text}/100"
+
     return (
-        "<b>━━━━━━━━ NEXUS SIGNAL ━━━━━━━━</b>\n"
-        f"<b>{escape(str(row['code']))}</b>  🟦 {escape(type_labels.get(order_type, order_type))}\n\n"
-        f"📌 Symbol: <b>{escape(symbol)}</b>\n"
-        f"↕️ Direction: <b>{escape(direction)}</b>\n"
-        f"⏱ Timeframe: <b>{escape(tf)}</b>\n"
-        f"📍 Entry: {_copy_price(row['entry_price'])}{stop_limit}\n"
-        f"🛑 Stop Loss: {_copy_price(row['stop_loss'])}\n"
-        f"{tp_lines}\n"
-        f"{size_line}\n"
-        f"📐 R:R: <b>{escape(rr)}</b>\n"
-        f"📌 Status: <b>{escape(state_labels.get(state, state))}</b>\n"
-        f"🔧 Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>"
+        "\U0001F6A8 <b>\u0633\u06cc\u06af\u0646\u0627\u0644 \u062c\u062f\u06cc\u062f NEXUS</b>\n\n"
+        f"\U0001F4CA \u0646\u0645\u0627\u062f: <b>{escape(symbol)}</b>\n"
+        f"\U0001F4CC \u062c\u0647\u062a: <b>{direction_fa}</b>\n"
+        f"\u23F1 \u062a\u0627\u06cc\u0645\u200c\u0641\u0631\u06cc\u0645: <b>{escape(tf)}</b>\n\n"
+        f"\U0001F4B0 \u0648\u0631\u0648\u062f: {entry}\n"
+        f"\U0001F6D1 \u062d\u062f \u0636\u0631\u0631: {stop_loss}\n\n"
+        "\U0001F3AF <b>\u0627\u0647\u062f\u0627\u0641:</b>\n"
+        f"{tp_lines}\n\n"
+        f"\U0001F4C8 \u0631\u06cc\u0633\u06a9 \u0628\u0647 \u0631\u06cc\u0648\u0627\u0631\u062f: <b>{escape(rr)}</b>\n"
+        f"\u2B50 \u0627\u0645\u062a\u06cc\u0627\u0632 \u0633\u06cc\u06af\u0646\u0627\u0644: <b>{escape(score_text)}</b>"
     )
 
 
-
-async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes, caption: str) -> int:
-    """Publish exactly one signal post: framed chart + compact copyable caption."""
+async def _publish_one_channel(bot: Bot, target, row, chart_frame: bytes | None, caption: str) -> int:
+    """Publish exactly one text-only signal flash card."""
     try:
         await bot.get_chat(target)
     except Exception as exc:
         raise RuntimeError(f"Channel {target!s} is not accessible to the bot: {exc}") from exc
 
-    msg = await bot.send_photo(
+    msg = await bot.send_message(
         target,
-        BufferedInputFile(chart_frame, filename=f"{row['code']}_chart.png"),
-        caption=caption,
+        caption,
         parse_mode=ParseMode.HTML,
     )
     return msg.message_id
 
 
 async def _publish_signal(bot: Bot, row, *, only_missing: bool = False) -> tuple[int | None, int | None, list[str]]:
-    chart = await _download_bytes(bot, row["chart_file_id"])
-    chart_frame = await asyncio.to_thread(build_chart_frame, chart)
+    # Every Telegram signal root is a text-only flash card. Historical
+    # chart_file_id values are ignored and never downloaded or rendered.
+    chart_frame = None
     caption = _signal_caption(row, get_lang(int(row["created_by"])))
     # Publication is idempotent: an already delivered channel message is the
     # canonical signal post and must never be published again for the same Signal.
