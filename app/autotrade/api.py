@@ -77,7 +77,7 @@ class ObservationRequest(BaseModel):
 class ExecutionAttemptRequest(BaseModel):
     license_key: str = ""
     account_number: str = ""
-    observation_id: int
+    observation_id: int = Field(default=0, ge=0)
     attempt_no: int = Field(default=1, ge=1, le=100)
     requested_at: str | None = Field(default=None, max_length=64)
     broker_response_at: str | None = Field(default=None, max_length=64)
@@ -1106,12 +1106,19 @@ def autotrade_execution_attempt(
         auth = _resolve_ea_auth(key, account, admin=admin)
     except AutoTradeError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    observation_id = int(req.observation_id)
     with db.conn() as con:
-        obs = con.execute("SELECT telegram_id,account_number FROM autotrade_signal_observations WHERE id=?", (req.observation_id,)).fetchone()
+        obs = con.execute("SELECT telegram_id,account_number FROM autotrade_signal_observations WHERE id=?", (observation_id,)).fetchone() if observation_id > 0 else None
+        if obs is None and observation_id == 0:
+            obs = con.execute("""SELECT id,telegram_id,account_number FROM autotrade_signal_observations
+                                 WHERE telegram_id=? AND account_number=? ORDER BY id DESC LIMIT 1""",
+                              (int(auth["telegram_id"]), str(account))).fetchone()
+            if obs is not None:
+                observation_id = int(obs["id"])
     if not obs or int(obs["telegram_id"]) != int(auth["telegram_id"]) or str(obs["account_number"]) != str(account):
         raise HTTPException(status_code=404, detail="observation not found")
     row = db.add_autotrade_execution_attempt(
-        req.observation_id, attempt_no=req.attempt_no, requested_at=req.requested_at,
+        observation_id, attempt_no=req.attempt_no, requested_at=req.requested_at,
         broker_response_at=req.broker_response_at, requested_price=req.requested_price,
         market_bid=req.market_bid, market_ask=req.market_ask, spread=req.spread,
         requested_volume=req.requested_volume, executed_volume=req.executed_volume,
