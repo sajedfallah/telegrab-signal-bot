@@ -1,0 +1,126 @@
+/* NEXUS Home Header — swappable single-file hero
+   To change the Home header image, replace only:
+   miniapp/assets/brand/home-header.jpg
+   Keep the filename unchanged. No CSS/JS edits are required. */
+
+.app-shell .home-v2 > .home-v2-spotlight{
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  min-height:270px;
+  padding:146px 20px 18px!important;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  border:1px solid rgba(92,174,255,.24)!important;
+  background:
+    url("./assets/brand/home-header.jpg") top center / 100% auto no-repeat,
+    #07111d!important;
+  box-shadow:
+    0 16px 30px -12px rgba(0,0,0,.72),
+    0 4px 12px rgba(0,0,0,.32),
+    inset 0 1px 0 rgba(255,255,255,.05)!important;
+}
+
+.app-shell .home-v2 > .home-v2-spotlight::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 50% 55%,rgba(65,157,230,.10),transparent 42%),
+    linear-gradient(180deg,
+      rgba(7,17,29,0) 0%,
+      rgba(7,17,29,.04) 34%,
+      rgba(7,17,29,.18) 48%,
+      rgba(7,17,29,.55) 62%,
+      rgba(7,17,29,.88) 76%,
+      #07111d 94%,
+      #07111d 100%);
+}
+
+.app-shell .home-v2 > .home-v2-spotlight::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  bottom:0;
+  height:96px;
+  z-index:-1;
+  pointer-events:none;
+  background:
+    radial-gradient(ellipse at 50% 35%,rgba(58,151,224,.10),transparent 68%),
+    linear-gradient(180deg,transparent 0%,rgba(7,17,29,.58) 58%,#07111d 100%);
+}
+
+.app-shell .home-v2-spotlight .nexus-motion-orb,
+.app-shell .home-v2-spotlight .home-brand-lockup{
+  display:none!important;
+}
+
+.app-shell .home-v2-spotlight>.eyebrow,
+.app-shell .home-v2-spotlight h1,
+.app-shell .home-v2-spotlight p,
+.app-shell .home-v2-spotlight .home-v2-actions{
+  position:relative;
+  z-index:1;
+}
+
+.app-shell .home-v2-spotlight>.eyebrow{
+  width:max-content;
+  max-width:100%;
+  margin-bottom:7px;
+  padding:5px 8px;
+  border:1px solid rgba(255,255,255,.14);
+  border-radius:999px;
+  background:rgba(3,10,18,.46);
+  backdrop-filter:blur(8px);
+  color:#b9d8ef;
+  text-shadow:0 1px 8px rgba(0,0,0,.55);
+}
+
+.app-shell .home-v2-spotlight h1{
+  max-width:18ch!important;
+  margin:0!important;
+  color:#f7fbff!important;
+  text-shadow:0 2px 16px rgba(0,0,0,.72);
+}
+
+.app-shell .home-v2-spotlight p{
+  max-width:50ch!important;
+  margin:8px 0 0!important;
+  color:#c4d3df!important;
+  text-shadow:0 1px 10px rgba(0,0,0,.72);
+}
+
+.app-shell .home-v2-spotlight .home-v2-actions{margin-top:15px!important}
+.app-shell .home-v2-spotlight .btn{min-height:46px;backdrop-filter:blur(10px)}
+.app-shell .home-v2-spotlight .btn.ghost{
+  border-color:rgba(255,255,255,.18)!important;
+  background:rgba(7,17,28,.54)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+@media(max-width:679px){
+  .app-shell .home-v2 > .home-v2-spotlight{
+    min-height:252px;
+    padding:126px 16px 15px!important;
+    background-size:100% auto!important;
+    background-position:top center!important;
+  }
+  .app-shell .home-v2-spotlight h1{max-width:16ch!important}
+  .app-shell .home-v2-spotlight p{
+    max-width:34ch!important;
+    font-size:11.5px!important;
+    line-height:1.75!important;
+  }
+}
+
+@media(max-width:390px){
+  .app-shell .home-v2 > .home-v2-spotlight{
+    min-height:244px;
+    padding:116px 14px 14px!important;
+  }
+  .app-shell .home-v2-spotlight>.eyebrow{font-size:8.5px!important}
+}
