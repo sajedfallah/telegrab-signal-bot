@@ -994,15 +994,123 @@ bool IsPendingSignalType(const string order_type)
           order_type=="BUY_STOP_LIMIT" || order_type=="SELL_STOP_LIMIT";
   }
 
+string ObservationReasonCode(const string detail)
+  {
+   string x=detail; StringToUpper(x);
+   if(StringFind(x,"DEVIATION")>=0) return "ENTRY_DEVIATION";
+   if(StringFind(x,"MARGIN")>=0) return "INSUFFICIENT_MARGIN";
+   if(StringFind(x,"VOLUME")>=0 || StringFind(x,"LOT")>=0) return "INVALID_VOLUME";
+   if(StringFind(x,"SYMBOL")>=0) return "SYMBOL_UNAVAILABLE";
+   if(StringFind(x,"TRADE")>=0 && StringFind(x,"DISABLED")>=0) return "TRADING_DISABLED";
+   if(StringFind(x,"MARKET")>=0 && StringFind(x,"CLOSED")>=0) return "MARKET_CLOSED";
+   if(StringFind(x,"DUPLICATE")>=0) return "DUPLICATE";
+   if(StringFind(x,"TIMEOUT")>=0) return "TIMEOUT";
+   if(StringFind(x,"WEBREQUEST")>=0 || StringFind(x,"CONNECTION")>=0) return "CONNECTION_ERROR";
+   return "UNKNOWN";
+  }
+
+struct NEXUSPendingAttempt
+  {
+   long signal_db_id;
+   double requested_price,bid,ask,spread,requested_volume,executed_volume,executed_price,slippage;
+   long latency_ms;
+   string status,reason_code,broker_retcode,error_text;
+   int attempts;
+   datetime next_try;
+  };
+NEXUSPendingAttempt g_pending_attempts[];
+
+void QueueExecutionAttempt(const long signal_db_id,const double requested_price,const double bid,const double ask,
+                           const double requested_volume,const double executed_volume,const double executed_price,
+                           const double slippage,const long latency_ms,const string status,const string reason_code,
+                           const string broker_retcode,const string error_text)
+  {
+   int idx=ArraySize(g_pending_attempts); ArrayResize(g_pending_attempts,idx+1);
+   g_pending_attempts[idx].signal_db_id=signal_db_id; g_pending_attempts[idx].requested_price=requested_price;
+   g_pending_attempts[idx].bid=bid; g_pending_attempts[idx].ask=ask; g_pending_attempts[idx].spread=MathMax(0.0,ask-bid);
+   g_pending_attempts[idx].requested_volume=requested_volume; g_pending_attempts[idx].executed_volume=executed_volume;
+   g_pending_attempts[idx].executed_price=executed_price; g_pending_attempts[idx].slippage=slippage;
+   g_pending_attempts[idx].latency_ms=latency_ms; g_pending_attempts[idx].status=status;
+   g_pending_attempts[idx].reason_code=reason_code; g_pending_attempts[idx].broker_retcode=broker_retcode;
+   g_pending_attempts[idx].error_text=error_text; g_pending_attempts[idx].attempts=0; g_pending_attempts[idx].next_try=TimeCurrent();
+  }
+
+void ProcessPendingAttempts()
+  {
+   datetime now=TimeCurrent();
+   for(int i=ArraySize(g_pending_attempts)-1;i>=0;i--)
+     {
+      if(now<g_pending_attempts[i].next_try) continue;
+      // The matching observation is sent first in this timer cycle; backend resolves id=0
+      // to the newest observation for this authenticated account.
+      if(g_api.ExecutionAttempt(0,g_pending_attempts[i].signal_db_id,1,g_pending_attempts[i].requested_price,g_pending_attempts[i].bid,g_pending_attempts[i].ask,
+                                g_pending_attempts[i].spread,g_pending_attempts[i].requested_volume,g_pending_attempts[i].executed_volume,
+                                g_pending_attempts[i].executed_price,g_pending_attempts[i].slippage,g_pending_attempts[i].latency_ms,
+                                g_pending_attempts[i].status,g_pending_attempts[i].reason_code,g_pending_attempts[i].broker_retcode,
+                                g_pending_attempts[i].error_text))
+        { ArrayRemove(g_pending_attempts,i,1); continue; }
+      g_pending_attempts[i].attempts++;
+      g_pending_attempts[i].next_try=now+(int)MathMin(60.0,MathPow(2.0,MathMin(g_pending_attempts[i].attempts,5)));
+      if(g_pending_attempts[i].attempts>20) ArrayRemove(g_pending_attempts,i,1);
+     }
+  }
+
+struct NEXUSPendingObservation
+  {
+   long signal_db_id;
+   string status;
+   string reason_code;
+   string detail;
+   string snapshot;
+   int attempts;
+   datetime next_try;
+  };
+NEXUSPendingObservation g_pending_observations[];
+
+void QueueObservation(const NexusSignal &s,const string status,const string detail="")
+  {
+   string snapshot=StringFormat("{\"risk_mode\":%d,\"fixed_lot\":%s,\"user_risk_percent\":%s,\"default_max_entry_deviation_pct\":%s,\"trailing_code\":\"%s\",\"order_type\":\"%s\"}",
+      (int)g_risk_mode,DoubleToString(g_fixed_lot,8),DoubleToString(g_user_risk_percent,4),
+      DoubleToString(InpDefaultMaxEntryDeviationPct,6),NexusJsonEscape(s.trailing_code),NexusJsonEscape(s.order_type));
+   string code=(status=="REJECTED" || status=="NOT_EXECUTED" ? ObservationReasonCode(detail) : "");
+   int idx=ArraySize(g_pending_observations); ArrayResize(g_pending_observations,idx+1);
+   g_pending_observations[idx].signal_db_id=s.db_id; g_pending_observations[idx].status=status;
+   g_pending_observations[idx].reason_code=code; g_pending_observations[idx].detail=detail;
+   g_pending_observations[idx].snapshot=snapshot; g_pending_observations[idx].attempts=0;
+   g_pending_observations[idx].next_try=TimeCurrent();
+  }
+
+void ProcessPendingObservations()
+  {
+   datetime now=TimeCurrent();
+   // FIFO is intentional: RECEIVED must reach the backend before terminal
+   // EXECUTED/REJECTED state for the same signal.
+   int i=0;
+   while(i<ArraySize(g_pending_observations))
+     {
+      if(now<g_pending_observations[i].next_try) { i++; continue; }
+      if(g_api.Observation(g_pending_observations[i].signal_db_id,g_pending_observations[i].status,
+                           g_pending_observations[i].reason_code,g_pending_observations[i].detail,
+                           g_pending_observations[i].snapshot))
+        { ArrayRemove(g_pending_observations,i,1); continue; }
+      g_pending_observations[i].attempts++;
+      g_pending_observations[i].next_try=now+(int)MathMin(60.0,MathPow(2.0,MathMin(g_pending_observations[i].attempts,5)));
+      if(g_pending_observations[i].attempts>20) { ArrayRemove(g_pending_observations,i,1); continue; }
+      i++;
+     }
+  }
+
 bool ProcessIncomingSignal(const NexusSignal &s)
   {
    SetExecutionStatus("RECEIVED",s,s.symbol,"order_type="+s.order_type+" entry="+DoubleToString(s.entry,8));
+   QueueObservation(s,"RECEIVED");
    if(s.order_type!="MARKET" && s.order_type!="LIMIT" &&
       s.order_type!="BUY_LIMIT" && s.order_type!="SELL_LIMIT" &&
       s.order_type!="BUY_STOP" && s.order_type!="SELL_STOP" &&
       s.order_type!="BUY_STOP_LIMIT" && s.order_type!="SELL_STOP_LIMIT")
      {
       string bad="unsupported order type: "+s.order_type;
+      QueueObservation(s,"REJECTED",bad);
       SendSignalReceiptReliable(s.db_id,"rejected","",bad);
       SetExecutionStatus("REJECTED",s,s.symbol,bad); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1025,6 +1133,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(symbol=="")
      {
       string reason="symbol not available/tradable on broker";
+      QueueObservation(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,s.symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1032,6 +1141,7 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    string reason="";
    if(!g_trade.ValidateEntry(s,symbol,InpDefaultMaxEntryDeviationPct,reason))
      {
+      QueueObservation(s,"REJECTED",reason);
       SendSignalReceiptReliable(s.db_id,"rejected","",reason);
       SetExecutionStatus("REJECTED",s,symbol,reason); AdvanceSignalCursor(s.db_id); return true;
      }
@@ -1039,22 +1149,40 @@ bool ProcessIncomingSignal(const NexusSignal &s)
    if(!ClaimNexusSignal(s.signal_id))
      {
       string duplicate="duplicate signal execution blocked by NEXUS idempotency lock";
+      QueueObservation(s,"REJECTED",duplicate);
       SendSignalReceiptReliable(s.db_id,"rejected","",duplicate);
       SetExecutionStatus("DUPLICATE BLOCKED",s,symbol,duplicate); AdvanceSignalCursor(s.db_id); return true;
      }
    ulong ticket=0;
+   double obs_bid=SymbolInfoDouble(symbol,SYMBOL_BID), obs_ask=SymbolInfoDouble(symbol,SYMBOL_ASK);
+   double obs_requested=(s.order_type=="MARKET" ? (s.direction=="BUY"||s.direction=="LONG"?obs_ask:obs_bid) : s.entry);
+   ulong obs_started=GetTickCount64();
     if(!g_trade.OpenSignal(s,symbol,g_risk_mode,g_fixed_lot,g_user_risk_percent,ticket))
      {
       ReleaseNexusSignalClaim(s.signal_id);
       string err=g_trade.LastError(); bool retryable=g_trade.LastFailureRetryable();
+      long obs_latency=(long)(GetTickCount64()-obs_started);
+      // observation_id=0 means backend resolves/ignores until the queued observation is persisted;
+      // execution-attempt transport is timer-safe follow-up and must never gate order execution.
+      QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,g_trade.LastRequestedVolume(),0,0,0,obs_latency,
+                            retryable?"RETRYABLE":"REJECTED",ObservationReasonCode(err),(string)g_trade.LastRetcode(),err);
+      QueueObservation(s,retryable?"EVALUATING":"REJECTED",err);
       SendSignalReceiptReliable(s.db_id,retryable?"failed_retryable":"rejected","",err);
       SetExecutionStatus(retryable?"OPEN FAILED - RETRYING":"REJECTED",s,symbol,err);
       if(retryable) return false;
        AdvanceSignalCursor(s.db_id); return true;
       }
+    long obs_latency=(long)(GetTickCount64()-obs_started);
+    double obs_executed=0.0;
+    if(ticket>0 && PositionSelectByTicket(ticket)) obs_executed=PositionGetDouble(POSITION_PRICE_OPEN);
+    double obs_slippage=(obs_executed>0.0 ? MathAbs(obs_executed-obs_requested) : 0.0);
+    QueueExecutionAttempt(s.db_id,obs_requested,obs_bid,obs_ask,g_trade.LastRequestedVolume(),
+                          (ticket>0 && PositionSelectByTicket(ticket)?PositionGetDouble(POSITION_VOLUME):g_trade.LastRequestedVolume()),
+                          obs_executed,obs_slippage,obs_latency,"EXECUTED","",(string)g_trade.LastRetcode(),"");
     CompleteNexusSignalClaim(s.signal_id);
     string receipt_status=IsPendingSignalType(s.order_type)?"pending":"executed";
    SendSignalReceiptReliable(s.db_id,receipt_status,(string)ticket,"");
+   QueueObservation(s,"EXECUTED");
    SetExecutionStatus(IsPendingSignalType(s.order_type)?"PENDING PLACED":"EXECUTED",s,symbol,"ticket "+(string)ticket,g_last_exec_volume);
    AdvanceSignalCursor(s.db_id);
    return true;
@@ -1484,6 +1612,8 @@ struct NEXUSPositionState
    ulong ticket;
    double sl;
    double tp;
+   double mfe_price;
+   double mae_price;
   };
 NEXUSPositionState g_position_states[];
 
@@ -1788,6 +1918,16 @@ void SyncPositionState(const long identifier,const ulong ticket,const double sl,
    g_position_states[idx].ticket=ticket;
    g_position_states[idx].sl=sl;
    g_position_states[idx].tp=tp;
+   if(g_position_states[idx].mfe_price<0) g_position_states[idx].mfe_price=0;
+   if(g_position_states[idx].mae_price<0) g_position_states[idx].mae_price=0;
+   if(PositionSelectByTicket(ticket))
+     {
+      double p=PositionGetDouble(POSITION_PRICE_CURRENT);
+      long pt=PositionGetInteger(POSITION_TYPE);
+      if(g_position_states[idx].mfe_price<=0) { g_position_states[idx].mfe_price=p; g_position_states[idx].mae_price=p; }
+      if(pt==POSITION_TYPE_BUY) { g_position_states[idx].mfe_price=MathMax(g_position_states[idx].mfe_price,p); g_position_states[idx].mae_price=MathMin(g_position_states[idx].mae_price,p); }
+      else { g_position_states[idx].mfe_price=MathMin(g_position_states[idx].mfe_price,p); g_position_states[idx].mae_price=MathMax(g_position_states[idx].mae_price,p); }
+     }
   }
 
 void RemovePositionState(const long identifier)
@@ -1820,10 +1960,22 @@ void DetectPositionModifications()
          string signal_id=PositionSignalId(identifier);
          if(signal_id=="") signal_id="MT5MANUAL-POS-"+(string)identifier;
          string event_id="UPDATE-"+(string)identifier+"-"+(string)GetTickCount64();
+         double entry_px=PositionGetDouble(POSITION_PRICE_OPEN);
+         double initial_risk=MathAbs(entry_px-GlobalVariableGet("NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"."+signal_id+".initial_sl"));
+         double mfe_r=(initial_risk>0 ? MathAbs(g_position_states[idx].mfe_price-entry_px)/initial_risk : 0.0);
+         double mae_r=(initial_risk>0 ? -MathAbs(g_position_states[idx].mae_price-entry_px)/initial_risk : 0.0);
+         string subtype=(sl_changed && tp_changed?"SL_TP_CHANGED":(sl_changed?"SL_CHANGED":"TP_CHANGED"));
+         double sl_before=g_position_states[idx].sl;
+         double sl_after=sl;
+         double tp_before=g_position_states[idx].tp;
+         double tp_after=tp;
          if(g_api.TradeEvent("UPDATE",(string)ticket,signal_id,PositionGetString(POSITION_SYMBOL),
                              PositionGetInteger(POSITION_TYPE)==POSITION_TYPE_BUY?"LONG":"SHORT",
-                             PositionGetDouble(POSITION_VOLUME),PositionGetDouble(POSITION_PRICE_OPEN),
-                             sl,tp,0.0,0.0,"",event_id,g_manual_destination))
+                             PositionGetDouble(POSITION_VOLUME),entry_px,
+                             sl,tp,0.0,0.0,"",event_id,g_manual_destination,0,0,0,0,0,0,"","","","MARKET",0,"",(long)TimeCurrent()*1000,
+                             0,0,subtype,PositionGetDouble(POSITION_VOLUME),sl_before,sl_after,tp_before,tp_after,
+                             MathMax(0.0,SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_ASK)-SymbolInfoDouble(PositionGetString(POSITION_SYMBOL),SYMBOL_BID)),
+                             0,g_position_states[idx].mfe_price,g_position_states[idx].mae_price,mfe_r,mae_r))
             Print("NEXUS trade update sent: ticket=",(string)ticket," SL/TP changed");
          else
             Print("NEXUS trade update failed: ",g_api.LastError());
@@ -1951,10 +2103,26 @@ bool SendManualOrClosedTradeEvent(const string event_name,const long position_id
         }
      }
    double realized_r=(risk_cash>0.0 ? profit/risk_cash : 0.0);
+   // remaining_volume is the broker-truth volume still open after this lifecycle event.
+   // A final CLOSE is zero; a partial exit reports the live residual position volume.
+   double remaining_volume=0.0;
+   ulong live_ticket=PositionTicketByIdentifier(position_id);
+   if(live_ticket>0 && PositionSelectByTicket(live_ticket))
+      remaining_volume=PositionGetDouble(POSITION_VOLUME);
+   string event_subtype="";
+   if(event_name=="CLOSE")
+      event_subtype=(remaining_volume>0.0 ? "PARTIAL_CLOSE" : "FINAL_CLOSE");
+   int state_idx=FindPositionState(position_id);
+   double mfe_price=(state_idx>=0 ? g_position_states[state_idx].mfe_price : 0.0);
+   double mae_price=(state_idx>=0 ? g_position_states[state_idx].mae_price : 0.0);
+   double initial_risk_price=MathAbs(entry_price-GlobalVariableGet("NXS."+(string)AccountInfoInteger(ACCOUNT_LOGIN)+"."+signal_id+".initial_sl"));
+   double mfe_r=(initial_risk_price>0.0 && mfe_price>0.0 ? MathAbs(mfe_price-entry_price)/initial_risk_price : 0.0);
+   double mae_r=(initial_risk_price>0.0 && mae_price>0.0 ? -MathAbs(mae_price-entry_price)/initial_risk_price : 0.0);
    if(!g_api.TradeEvent(event_name,(string)deal_ticket,signal_id,symbol,direction,volume,
                         entry_price,sl,tp,exit_price,profit,shot,event_id,destination,
                         gross_profit,commission,swap,0.0,risk_cash,realized_r,(string)position_id,(string)deal_ticket,"",
-                        "MARKET",0,close_reason,(long)HistoryDealGetInteger(deal_ticket,DEAL_TIME)*1000))
+                        "MARKET",0,close_reason,(long)HistoryDealGetInteger(deal_ticket,DEAL_TIME)*1000,
+                        0,0,event_subtype,remaining_volume,sl,sl,tp,tp,0.0,0,mfe_price,mae_price,mfe_r,mae_r))
      {
       Print("NEXUS trade event failed: ",g_api.LastError());
       return false;
@@ -2321,6 +2489,8 @@ void OnTimer()
    if(g_setup_required) return;
    DoHeartbeat();
    ProcessPendingReceipts();
+   ProcessPendingObservations();
+   ProcessPendingAttempts();
    DoLiveSync();
    ReconcileMT5History();
    ProcessPendingOrders();

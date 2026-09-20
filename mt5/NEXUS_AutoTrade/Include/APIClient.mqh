@@ -215,10 +215,14 @@ public:
                    const double gross_profit=0,const double commission=0,const double swap=0,
                    const double slippage=0,const double risk_cash=0,const double realized_r=0,
                    const string position_id="",const string deal_id="",const string cycle_id="",const string order_type="MARKET",
-                   const double stop_limit_price=0,const string close_reason="",const long event_time_ms=0)
+                   const double stop_limit_price=0,const string close_reason="",const long event_time_ms=0,
+                   const long observation_id=0,const long attempt_id=0,const string event_subtype="",const double remaining_volume=0,
+                   const double sl_before=0,const double sl_after=0,const double tp_before=0,const double tp_after=0,
+                   const double spread=0,const long latency_ms=0,const double mfe_price=0,const double mae_price=0,
+                   const double mfe_r=0,const double mae_r=0,const string config_snapshot_json="{}")
      {
       string body=StringFormat(
-         "{\"license_key\":\"%s\",\"account_number\":\"%s\",\"event\":\"%s\",\"ticket\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"slippage\":%s,\"risk_cash\":%s,\"realized_r\":%s,\"position_id\":\"%s\",\"deal_id\":\"%s\",\"cycle_id\":\"%s\",\"chart_base64\":\"%s\",\"event_id\":\"%s\",\"destination\":\"%s\",\"order_type\":\"%s\",\"stop_limit_price\":%s,\"close_reason\":\"%s\",\"event_time_ms\":%I64d}",
+         "{\"license_key\":\"%s\",\"account_number\":\"%s\",\"event\":\"%s\",\"ticket\":\"%s\",\"signal_id\":\"%s\",\"symbol\":\"%s\",\"direction\":\"%s\",\"volume\":%s,\"entry_price\":%s,\"stop_loss\":%s,\"take_profit\":%s,\"exit_price\":%s,\"profit\":%s,\"gross_profit\":%s,\"commission\":%s,\"swap\":%s,\"slippage\":%s,\"risk_cash\":%s,\"realized_r\":%s,\"position_id\":\"%s\",\"deal_id\":\"%s\",\"cycle_id\":\"%s\",\"chart_base64\":\"%s\",\"event_id\":\"%s\",\"destination\":\"%s\",\"order_type\":\"%s\",\"stop_limit_price\":%s,\"close_reason\":\"%s\",\"event_time_ms\":%I64d,\"observation_id\":%s,\"attempt_id\":%s,\"event_subtype\":\"%s\",\"remaining_volume\":%s,\"sl_before\":%s,\"sl_after\":%s,\"tp_before\":%s,\"tp_after\":%s,\"spread\":%s,\"latency_ms\":%I64d,\"mfe_price\":%s,\"mae_price\":%s,\"mfe_r\":%s,\"mae_r\":%s,\"config_snapshot\":%s}",
          NexusJsonEscape(m_license),NexusJsonEscape(m_account),NexusJsonEscape(event_name),
          NexusJsonEscape(ticket),NexusJsonEscape(signal_id),NexusJsonEscape(symbol),NexusJsonEscape(direction),
          DoubleToString(volume,8),DoubleToString(entry_price,8),DoubleToString(stop_loss,8),
@@ -227,7 +231,12 @@ public:
          DoubleToString(slippage,8),DoubleToString(risk_cash,8),DoubleToString(realized_r,8),
          NexusJsonEscape(position_id),NexusJsonEscape(deal_id),NexusJsonEscape(cycle_id),
          NexusJsonEscape(chart_base64),NexusJsonEscape(event_id),NexusJsonEscape(destination),
-         NexusJsonEscape(order_type),DoubleToString(stop_limit_price,8),NexusJsonEscape(close_reason),event_time_ms);
+         NexusJsonEscape(order_type),DoubleToString(stop_limit_price,8),NexusJsonEscape(close_reason),event_time_ms,
+         observation_id>0?(string)observation_id:"null",attempt_id>0?(string)attempt_id:"null",NexusJsonEscape(event_subtype),
+         DoubleToString(remaining_volume,8),DoubleToString(sl_before,8),DoubleToString(sl_after,8),
+         DoubleToString(tp_before,8),DoubleToString(tp_after,8),DoubleToString(spread,8),latency_ms,
+         DoubleToString(mfe_price,8),DoubleToString(mae_price,8),DoubleToString(mfe_r,8),DoubleToString(mae_r,8),
+         config_snapshot_json==""?"{}":config_snapshot_json);
       string response;
       return Request("POST","/api/v1/autotrade/trade-event",body,true,response);
      }
@@ -239,6 +248,35 @@ public:
                               NexusJsonEscape(m_license),NexusJsonEscape(m_account),json_items);
       string response;
       return Request("POST","/api/v1/autotrade/history-reconcile",body,true,response,true);
+     }
+
+   bool ExecutionAttempt(const long observation_id,const long signal_db_id,const int attempt_no,const double requested_price,const double market_bid,
+                         const double market_ask,const double spread,const double requested_volume,const double executed_volume,
+                         const double executed_price,const double slippage,const long latency_ms,const string status,
+                         const string reason_code,const string broker_retcode,const string error_text)
+     {
+      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"observation_id\":%I64d,\"signal_db_id\":%I64d,\"attempt_no\":%d,\"requested_price\":%s,\"market_bid\":%s,\"market_ask\":%s,\"spread\":%s,\"requested_volume\":%s,\"executed_volume\":%s,\"executed_price\":%s,\"slippage\":%s,\"latency_ms\":%I64d,\"status\":\"%s\",\"reason_code\":%s,\"broker_retcode\":%s,\"error_text\":%s}",
+         NexusJsonEscape(m_license),NexusJsonEscape(m_account),observation_id,signal_db_id,attempt_no,
+         DoubleToString(requested_price,8),DoubleToString(market_bid,8),DoubleToString(market_ask,8),DoubleToString(spread,8),
+         DoubleToString(requested_volume,8),DoubleToString(executed_volume,8),DoubleToString(executed_price,8),
+         DoubleToString(slippage,8),latency_ms,NexusJsonEscape(status),
+         reason_code==""?"null":"\""+NexusJsonEscape(reason_code)+"\"",
+         broker_retcode==""?"null":"\""+NexusJsonEscape(broker_retcode)+"\"",
+         error_text==""?"null":"\""+NexusJsonEscape(error_text)+"\"");
+      string response;
+      return Request("POST","/api/v1/autotrade/execution-attempt",body,true,response);
+     }
+
+   bool Observation(const long signal_db_id,const string decision_status,const string reason_code,const string reason_detail,
+                    const string config_snapshot_json="{}")
+     {
+      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"signal_db_id\":%I64d,\"decision_status\":\"%s\",\"reason_code\":%s,\"reason_detail\":%s,\"ea_version\":\"%s\",\"config_snapshot\":%s}",
+         NexusJsonEscape(m_license),NexusJsonEscape(m_account),signal_db_id,NexusJsonEscape(decision_status),
+         reason_code==""?"null":"\""+NexusJsonEscape(reason_code)+"\"",
+         reason_detail==""?"null":"\""+NexusJsonEscape(reason_detail)+"\"",
+         NexusJsonEscape(m_version),config_snapshot_json==""?"{}":config_snapshot_json);
+      string response;
+      return Request("POST","/api/v1/autotrade/observation",body,true,response);
      }
 
    bool CommandReceipt(const long command_id,const string status,const string error_text)
