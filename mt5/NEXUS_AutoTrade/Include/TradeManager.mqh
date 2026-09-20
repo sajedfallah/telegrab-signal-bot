@@ -22,6 +22,8 @@ private:
    long m_magic;
    string m_last_error;
    bool   m_last_retryable;
+   double m_last_requested_volume;
+   uint   m_last_retcode;
    int    m_limit_expiration_hours;
    bool   m_strict_limit_checks;
 
@@ -115,7 +117,7 @@ private:
      }
 
 public:
-   CNexusTradeManager():m_magic(258025),m_last_error(""),m_last_retryable(false),m_limit_expiration_hours(0),m_strict_limit_checks(true) {}
+   CNexusTradeManager():m_magic(258025),m_last_error(""),m_last_retryable(false),m_last_requested_volume(0.0),m_last_retcode(0),m_limit_expiration_hours(0),m_strict_limit_checks(true) {}
 
    void Configure(const long magic,const int limit_expiration_hours=0,const bool strict_limit_checks=true)
      {
@@ -129,6 +131,8 @@ public:
 
    string LastError() const { return m_last_error; }
    bool LastFailureRetryable() const { return m_last_retryable; }
+   double LastRequestedVolume() const { return m_last_requested_volume; }
+   uint LastRetcode() const { return m_last_retcode; }
 
    bool HasSignalPosition(const string signal_id)
      {
@@ -245,7 +249,7 @@ public:
 
    bool OpenSignal(const NexusSignal &s,const string symbol,const ENUM_NEXUS_RISK_MODE risk_mode,const double fixed_lot,const double user_risk_pct,ulong &ticket)
      {
-      ticket=0; m_last_error=""; m_last_retryable=false;
+      ticket=0; m_last_error=""; m_last_retryable=false; m_last_requested_volume=0.0; m_last_retcode=0;
       if(s.order_type!="MARKET" && s.order_type!="BUY_LIMIT" && s.order_type!="SELL_LIMIT" &&
          s.order_type!="BUY_STOP" && s.order_type!="SELL_STOP" &&
          s.order_type!="BUY_STOP_LIMIT" && s.order_type!="SELL_STOP_LIMIT" && s.order_type!="LIMIT")
@@ -286,6 +290,7 @@ public:
          double sizing_price=(normalized_type=="MARKET"?price:s.entry);
          volume=m_risk.RiskLot(symbol,order_type,sizing_price,s.sl,s.risk_percent);
         }
+      m_last_requested_volume=volume;
       if(volume<=0)
         {
          string sizing_reason=m_risk.LastError();
@@ -384,7 +389,7 @@ public:
          ok=OrderSend(req,res);
           if(!ok || (res.retcode!=TRADE_RETCODE_DONE && res.retcode!=TRADE_RETCODE_PLACED))
            {
-            uint rc=res.retcode;
+            uint rc=res.retcode; m_last_retcode=rc;
             m_last_error="pending order failed: "+IntegerToString((int)rc);
             if(res.comment!="") m_last_error+=" "+res.comment;
             m_last_retryable=(rc==TRADE_RETCODE_REQUOTE ||
@@ -439,7 +444,7 @@ public:
            }
           ResetLastError();
           ok=buy?m_trade.Buy(volume,symbol,0,sl_price,tp_price,s.signal_id):m_trade.Sell(volume,symbol,0,sl_price,tp_price,s.signal_id);
-          uint market_rc=m_trade.ResultRetcode();
+          uint market_rc=m_trade.ResultRetcode(); m_last_retcode=market_rc;
           if(ok && market_rc!=TRADE_RETCODE_DONE && market_rc!=TRADE_RETCODE_DONE_PARTIAL)
             {
              ok=false;
