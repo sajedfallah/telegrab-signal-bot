@@ -3677,8 +3677,22 @@ async def _render_admin_signal_center(bot: Bot, user_id: int, chat_id: int) -> N
         if row: sid=int(row["id"])
         if sid: buttons.append([(label,f"sigmanage:{sid}")])
         else: lines.append(escape(label))
-    if not positions and not orders:
-        lines.append(tr(lang,"هیچ معامله یا سفارش فعالی در MT5 وجود ندارد.","No active MT5 position or pending order."))
+
+    live_signal_ids={int(r["id"]) for r in (db.get_signal_by_code(str(x.get("signal_code") or "")) for x in positions+orders) if r}
+    telegram_active=[]
+    for row in db.list_active_signals(50):
+        issuer=str(row["issuer_type"] or "LEGACY_TELEGRAM").upper() if "issuer_type" in row.keys() else "LEGACY_TELEGRAM"
+        if issuer=="MT5_ADMIN" or int(row["id"]) in live_signal_ids:
+            continue
+        telegram_active.append(row)
+    if telegram_active:
+        lines.append("")
+        lines.append(tr(lang,"<b>📨 سیگنال‌های فعال صادرشده از Telegram Admin</b>","<b>📨 Active Telegram Admin Signals</b>"))
+        for row in telegram_active:
+            label=f"{row['code']} | {row['symbol']} {row['direction']} | {row['status']}"
+            buttons.append([(label,f"sigmanage:{int(row['id'])}")])
+    if not positions and not orders and not telegram_active:
+        lines.append(tr(lang,"هیچ سیگنال، معامله یا سفارش فعالی وجود ندارد.","No active signal, MT5 position or pending order."))
     lines.append("")
     lines.append(tr(lang,"🔒 منبع: MT5 Live Snapshot؛ تاریخچه سیگنال نمایش داده نمی‌شود.","🔒 Source: MT5 Live Snapshot; signal history is not shown."))
     buttons.append([(tr(lang,"🔄 همگام‌سازی زنده","🔄 Live Sync"),"signal_refresh")])
@@ -3717,37 +3731,43 @@ async def signal_active(cb: CallbackQuery, bot: Bot):
 
 @router.callback_query(F.data.startswith("sigmanage:"))
 async def signal_manage(cb: CallbackQuery, bot: Bot):
-    """Read-only MT5 signal detail view; Telegram cannot mutate signals."""
+    """Admin signal detail view for both MT5 and Telegram-issued signals."""
     if not is_admin(cb.from_user.id): return
     sid=int(cb.data.split(":",1)[1]); row=db.get_signal(sid); lang=get_lang(cb.from_user.id); await cb.answer()
-    if not row or str(row["issuer_type"] or "").upper() != "MT5_ADMIN":
-        await screen(bot, cb.from_user.id, cb.message.chat.id, tr(lang,"سیگنال MT5 پیدا نشد.","MT5 signal not found."), kb(nav(lang,"signal_active")))
+    if not row:
+        await screen(bot, cb.from_user.id, cb.message.chat.id, tr(lang,"سیگنال پیدا نشد.","Signal not found."), kb(nav(lang,"signal_active")))
         return
     targets=db.get_signal_targets(sid)
     tp_text=" / ".join(_format_price(t["price"]) for t in targets) if targets else "—"
-    status_map={"ACTIVE":"فعال","CLOSED":"بسته","BREAK_EVEN":"سر به سر","PARTIAL":"بخشی بسته شده","TRAILING":"تریلینگ","REJECTED":"رد شده","CANCELLED":"لغو شده","EXPIRED":"منقضی شده"}
+    status_map={"ACTIVE":"فعال","DRAFT":"پیش‌نویس","CLOSED":"بسته","BREAK_EVEN":"سر به سر","PARTIAL":"بخشی بسته شده","TRAILING":"تریلینگ","REJECTED":"رد شده","CANCELLED":"لغو شده","EXPIRED":"منقضی شده"}
     status=str(row["status"] or "—")
-    live = db.mt5_signal_live_state(sid)
-    live_rows = db.mt5_live_for_signal(str(row["code"]), str(row["issuer_account"] or ""))
-    receipt_status = str(live.get("receipt_status") or "NOT_RECEIVED")
-    trade_status = str(live.get("trade_status") or "NO_TRADE")
-    ticket = str(live.get("ticket") or "")
-    live_error = str(live.get("receipt_error") or "")
-    if live_rows:
-        lr=live_rows[0]
-        trade_status=str(lr.get("status") or trade_status).upper()
-        ticket=str(lr.get("ticket") or ticket)
-        live_fa=(f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>\n"
-                  f"Ticket: <code>{escape(ticket)}</code>\nحجم واقعی: <b>{float(lr.get('volume') or 0):g}</b>\n"
-                  f"قیمت ورود واقعی: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
-                  f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
-        live_en=(f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>\n"
-                  f"Ticket: <code>{escape(ticket)}</code>\nExecuted Volume: <b>{float(lr.get('volume') or 0):g}</b>\n"
-                  f"Executed Entry: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
-                  f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+    issuer_type=str(row["issuer_type"] or "LEGACY_TELEGRAM").upper() if "issuer_type" in row.keys() else "LEGACY_TELEGRAM"
+    issuer_label="MT5 ADMIN" if issuer_type=="MT5_ADMIN" else "TELEGRAM ADMIN"
+    if issuer_type=="MT5_ADMIN":
+        live = db.mt5_signal_live_state(sid)
+        live_rows = db.mt5_live_for_signal(str(row["code"]), str(row["issuer_account"] or ""))
+        receipt_status = str(live.get("receipt_status") or "NOT_RECEIVED")
+        trade_status = str(live.get("trade_status") or "NO_TRADE")
+        ticket = str(live.get("ticket") or "")
+        live_error = str(live.get("receipt_error") or "")
+        if live_rows:
+            lr=live_rows[0]
+            trade_status=str(lr.get("status") or trade_status).upper()
+            ticket=str(lr.get("ticket") or ticket)
+            live_fa=(f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>\n"
+                     f"Ticket: <code>{escape(ticket)}</code>\nحجم واقعی: <b>{float(lr.get('volume') or 0):g}</b>\n"
+                     f"قیمت ورود واقعی: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
+                     f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+            live_en=(f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>\n"
+                     f"Ticket: <code>{escape(ticket)}</code>\nExecuted Volume: <b>{float(lr.get('volume') or 0):g}</b>\n"
+                     f"Executed Entry: <code>{float(lr.get('entry_price') or 0):g}</code>\n"
+                     f"P/L: <b>{float(lr.get('profit') or 0):g}</b>")
+        else:
+            live_fa = f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>" + (f"\nخطا: <code>{escape(live_error[:500])}</code>" if live_error else "")
+            live_en = f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>" + (f"\nError: <code>{escape(live_error[:500])}</code>" if live_error else "")
     else:
-        live_fa = f"رسید MT5: <b>{escape(receipt_status)}</b>\nوضعیت زنده: <b>{escape(trade_status)}</b>" + (f"\nخطا: <code>{escape(live_error[:500])}</code>" if live_error else "")
-        live_en = f"MT5 Receipt: <b>{escape(receipt_status)}</b>\nLive State: <b>{escape(trade_status)}</b>" + (f"\nError: <code>{escape(live_error[:500])}</code>" if live_error else "")
+        live_fa="منبع صدور: <b>Telegram Admin</b>"
+        live_en="Issuer: <b>Telegram Admin</b>"
     if lang == "fa":
         text=(f"<b>📈 {escape(row['code'])}</b>\n\n"
               f"نماد: <b>{escape(row['symbol'])}</b>\nجهت: <b>{escape(row['direction'])}</b>\n"
@@ -3755,15 +3775,16 @@ async def signal_manage(cb: CallbackQuery, bot: Bot):
               f"نوع سفارش: <b>{escape(str(row['order_type'] or 'MARKET'))}</b>\n"
               f"Entry: <code>{_format_price(row['entry_price'])}</code>\nSL: <code>{_format_price(row['stop_loss'])}</code>\n"
               f"TPها: <code>{escape(tp_text)}</code>\nمقصد: <b>{escape(row['destination'])}</b>\n"
-              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>MT5 ADMIN</b>\n\n{live_fa}")
+              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>{escape(issuer_label)}</b>\n\n{live_fa}")
     else:
         text=(f"<b>📈 {escape(row['code'])}</b>\n\n"
               f"Symbol: <b>{escape(row['symbol'])}</b>\nDirection: <b>{escape(row['direction'])}</b>\n"
               f"Status: <b>{escape(status)}</b>\nOrder Type: <b>{escape(str(row['order_type'] or 'MARKET'))}</b>\n"
               f"Entry: <code>{_format_price(row['entry_price'])}</code>\nSL: <code>{_format_price(row['stop_loss'])}</code>\n"
               f"TPs: <code>{escape(tp_text)}</code>\nDestination: <b>{escape(row['destination'])}</b>\n"
-              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>MT5 ADMIN</b>\n\n{live_en}")
-    await screen(bot,cb.from_user.id,cb.message.chat.id,text,signal_readonly_menu(lang))
+              f"Trailing: <b>{escape(str(row['trailing_code'] or '—'))}</b>\nIssuer: <b>{escape(issuer_label)}</b>\n\n{live_en}")
+    markup=signal_manage_menu(sid,lang) if status.upper()!="CLOSED" else signal_readonly_menu(lang)
+    await screen(bot,cb.from_user.id,cb.message.chat.id,text,markup)
 
 
 @router.callback_query(F.data.startswith("sigact:"))
