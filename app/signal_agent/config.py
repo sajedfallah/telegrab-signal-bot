@@ -10,5 +10,6 @@ class SignalAgentSettings:
     symbols: tuple[str,...] = tuple(x.strip().upper() for x in os.getenv("SIGNAL_AGENT_SYMBOLS","XAUUSD").split(",") if x.strip())
     stale_after_seconds: int = int(os.getenv("SIGNAL_AGENT_STALE_AFTER_SECONDS","30"))
     provider: str = os.getenv("SIGNAL_AGENT_MARKET_DATA_PROVIDER","MT5").strip().upper()
+    poll_interval_seconds: float = float(os.getenv("SIGNAL_AGENT_POLL_INTERVAL_SECONDS","5"))
 
 settings = SignalAgentSettings()
