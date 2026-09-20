@@ -248,7 +248,7 @@ public:
          NexusJsonEscape(m_license),NexusJsonEscape(m_account),signal_db_id,NexusJsonEscape(decision_status),
          reason_code==""?"null":"\""+NexusJsonEscape(reason_code)+"\"",
          reason_detail==""?"null":"\""+NexusJsonEscape(reason_detail)+"\"",
-         NexusJsonEscape(m_ea_version),config_snapshot_json==""?"{}":config_snapshot_json);
+         NexusJsonEscape(m_version),config_snapshot_json==""?"{}":config_snapshot_json);
       string response;
       return Request("POST","/api/v1/autotrade/observation",body,true,response);
      }
