@@ -66,3 +66,30 @@ def test_release_a_api_contract_is_present():
     assert '/api/v1/autotrade/observation' in api
     assert '/api/v1/autotrade/execution-attempt' in api
     assert "ObservationRequest" in api and "ExecutionAttemptRequest" in api
+
+
+def test_mt5_observation_is_non_blocking_to_execution_path():
+    root=Path(__file__).resolve().parents[1]
+    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    # Release A telemetry must not introduce a synchronous HTTP request before
+    # ValidateEntry/OpenSignal, otherwise an observability outage can delay trading.
+    start=ea.index("bool ProcessIncomingSignal")
+    end=ea.index("void PollSignals", start)
+    flow=ea[start:end]
+    first_observe=flow.find("ObserveSignal(")
+    open_call=flow.find("g_trade.OpenSignal(")
+    assert first_observe == -1 or first_observe > open_call
+
+def test_mt5_emits_execution_attempt_telemetry():
+    root=Path(__file__).resolve().parents[1]
+    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    api=(root/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
+    assert "ExecutionAttempt(" in api
+    assert "g_api.ExecutionAttempt(" in ea
+
+def test_mt5_populates_release_a_trade_metrics():
+    root=Path(__file__).resolve().parents[1]
+    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    required=("latency_ms","mfe_r","mae_r","remaining_volume","sl_before","sl_after","tp_before","tp_after")
+    for token in required:
+        assert token in ea, f"MT5 does not emit {token}"
