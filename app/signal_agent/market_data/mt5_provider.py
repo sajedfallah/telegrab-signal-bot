@@ -19,5 +19,5 @@ class MT5MarketDataProvider(MarketDataProvider):
         key=timeframe.upper()
         if key not in self.TF: raise ValueError(f"unsupported timeframe: {timeframe}")
         rows=self.mt5.copy_rates_from_pos(symbol,getattr(self.mt5,self.TF[key]),0,limit)
-        if rows is None: raise RuntimeError(f"missing MT5 candles: {symbol} {key}")
+        if rows is None or len(rows)==0: raise RuntimeError(f"missing MT5 candles: {symbol} {key}")
         return [Candle(symbol.upper(),key,datetime.fromtimestamp(int(r["time"]),timezone.utc),float(r["open"]),float(r["high"]),float(r["low"]),float(r["close"]),float(r["tick_volume"])) for r in rows]
