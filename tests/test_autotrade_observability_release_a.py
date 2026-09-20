@@ -76,9 +76,14 @@ def test_mt5_observation_is_non_blocking_to_execution_path():
     start=ea.index("bool ProcessIncomingSignal")
     end=ea.index("void PollSignals", start)
     flow=ea[start:end]
-    first_observe=flow.find("ObserveSignal(")
     open_call=flow.find("g_trade.OpenSignal(")
-    assert first_observe == -1 or first_observe > open_call
+    assert open_call >= 0
+    # Queueing is local/in-memory. Direct network telemetry is forbidden in the
+    # execution path; it is flushed later from OnTimer.
+    assert "g_api.Observation(" not in flow
+    assert "g_api.ExecutionAttempt(" not in flow
+    assert "QueueObservation(" in flow
+    assert "QueueExecutionAttempt(" in flow
 
 def test_mt5_emits_execution_attempt_telemetry():
     root=Path(__file__).resolve().parents[1]
