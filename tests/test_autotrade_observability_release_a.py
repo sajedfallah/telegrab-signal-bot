@@ -94,3 +94,19 @@ def test_mt5_populates_release_a_trade_metrics():
     required=("latency_ms","mfe_r","mae_r","remaining_volume","sl_before","sl_after","tp_before","tp_after")
     for token in required:
         assert token in ea, f"MT5 does not emit {token}"
+
+
+def test_execution_attempt_contract_supports_exact_signal_linkage():
+    root=Path(__file__).resolve().parents[1]
+    api=(root/"app/autotrade/api.py").read_text(encoding="utf-8")
+    client=(root/"mt5/NEXUS_AutoTrade/Include/APIClient.mqh").read_text(encoding="utf-8")
+    assert "signal_db_id: int | None" in api
+    assert "WHERE telegram_id=? AND signal_id=? AND account_number=?" in api
+    assert '\"signal_db_id\":%I64d' in client
+
+def test_observation_queue_is_fifo_and_position_state_tracks_excursions():
+    root=Path(__file__).resolve().parents[1]
+    ea=(root/"mt5/NEXUS_AutoTrade/NEXUS_AutoTrade.mq5").read_text(encoding="utf-8")
+    assert "while(i<ArraySize(g_pending_observations))" in ea
+    assert "double mfe_price;" in ea
+    assert "double mae_price;" in ea
