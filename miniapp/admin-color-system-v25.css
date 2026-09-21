@@ -672,3 +672,94 @@ html body .bottom{
       inset 0 1px 0 rgba(255,255,255,.025)!important;
   }
 }
+
+
+/* =========================================================
+   V26.1 — Stronger borders + readable live data tiles
+   ========================================================= */
+:root{
+  --nx-border:#365a79;
+  --nx-border-soft:#2b4863;
+  --nx-border-strong:#4d7396;
+}
+
+/* Stronger separation for all primary boxes */
+html body .app :is(
+  .panel,
+  .card,
+  .setup-fields,
+  .metrics article,
+  .auto-setup-panel,
+  .admin-live,
+  .sheet
+){
+  border:1px solid var(--nx-border-strong)!important;
+  box-shadow:
+    0 16px 38px rgba(0,0,0,.24),
+    0 0 0 1px rgba(126,190,235,.035),
+    inset 0 1px 0 rgba(255,255,255,.035)!important;
+}
+
+/* Live MT5 panel: override legacy light theme completely */
+html body .app .admin-live{
+  background:linear-gradient(180deg,#10243a 0%,#0b1a2b 100%)!important;
+  border:1px solid #41698b!important;
+}
+html body .app .admin-live-grid{
+  gap:8px!important;
+}
+html body .app .admin-live-grid span{
+  background:linear-gradient(180deg,#132b44 0%,#0f2237 100%)!important;
+  color:#9fb3c9!important;
+  border:1px solid #3c6283!important;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+html body .app .admin-live-grid b{
+  color:#f4f8ff!important;
+  opacity:1!important;
+  text-shadow:none!important;
+}
+html body .app .admin-live-grid b.in_profit{
+  color:#72e0b4!important;
+}
+html body .app .admin-live-grid b.in_loss{
+  color:#ff98a6!important;
+}
+html body .app .admin-live-grid b.be{
+  color:#b9c7d6!important;
+}
+
+/* Keep nested operational tiles dark/readable */
+html body .app :is(
+  .levels span,
+  .preview-grid>div,
+  .targets article,
+  .auto-setup-grid>div,
+  .risk,
+  .empty,
+  .admin-position-sync
+){
+  background:linear-gradient(180deg,#12273e 0%,#0e2033 100%)!important;
+  border:1px solid #355b7b!important;
+  color:var(--nx-text-2)!important;
+}
+
+/* Position cards get a slightly firmer outline */
+html body #positions .card,
+html body #positions .admin-position-card-v7{
+  border:1px solid #456f92!important;
+  box-shadow:
+    0 16px 36px rgba(0,0,0,.24),
+    0 0 0 1px rgba(95,208,255,.035)!important;
+}
+
+@media(max-width:480px){
+  html body .app :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live,.sheet){
+    border-width:1px!important;
+    box-shadow:
+      0 12px 26px rgba(0,0,0,.22),
+      0 0 0 1px rgba(126,190,235,.03)!important;
+  }
+}
