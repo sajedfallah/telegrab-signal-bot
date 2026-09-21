@@ -31,13 +31,23 @@
 
   <section id="dashboard" class="view active">
     <button id="newSignal" class="primary large">＋ صدور سیگنال جدید</button>
-    <div class="metrics metrics-clean">
-      <article><b id="publishedCount">۰</b><span>سیگنال فعال</span></article>
-      <article><b id="positionCount">۰</b><span>پوزیشن زنده</span></article>
+
+    <div class="admin-overview-head">
+      <div><small>OPERATION OVERVIEW</small><h2>نمای کلی عملیات</h2></div>
+      <span>خلاصه وضعیت سیگنال‌ها و موارد نیازمند توجه</span>
     </div>
-    <div class="section-head"><h2>گزارش‌های عملیاتی</h2><button id="reloadSignals">بروزرسانی</button></div>
+
+    <div class="metrics metrics-clean admin-dashboard-metrics">
+      <article class="metric-active"><b id="publishedCount">۰</b><span>سیگنال فعال</span><small>منتشرشده و عملیاتی</small></article>
+      <article class="metric-waiting"><b id="waitingCount">۰</b><span>در انتظار</span><small>MT5 یا انتشار</small></article>
+      <article class="metric-attention"><b id="rejectedCount">۰</b><span>نیازمند بررسی</span><small>ردشده یا ناموفق</small></article>
+    </div>
+
+    <button id="openLogs" class="outline admin-attention-link">مشاهده موارد نیازمند بررسی</button>
+
+    <div class="section-head"><h2>سیگنال‌های فعال اخیر</h2><button id="reloadSignals">بروزرسانی</button></div>
     <div id="signalList" class="stack"><div class="empty">سیگنال عملیاتی ثبت نشده است.</div></div>
-    <p class="operational-note">درخواست‌های در انتظار، ناموفق و منقضی از این نما حذف می‌شوند تا فقط داده‌های عملیاتی نمایش داده شوند.</p>
+    <p class="operational-note">مدیریت و جزئیات پوزیشن‌ها فقط در تب «پوزیشن‌ها» انجام می‌شود؛ صفحه خانه برای خلاصه عملیات و وضعیت سیگنال‌هاست.</p>
   </section>
 
   <section id="create" class="view">
@@ -101,7 +111,7 @@
 <div id="modal" class="modal" hidden><div class="sheet"><button id="closeModal" class="close">×</button><small>تأیید نهایی</small><h2>بررسی سیگنال</h2><div id="preview"></div><div class="safety">DRAFT → VALIDATE → APPROVE → EXECUTE → PUBLISH</div><button id="publish" class="primary">تأیید و ارسال</button><button id="recalculatePreview" class="outline">محاسبه مجدد</button><button id="cancelPreview" class="ghost">بازگشت و ویرایش</button></div></div>
 <div id="toast" class="toast"></div>
 <script src="symbol-visuals.js?v=20260914-v14-final"></script>
-<script src="admin-signal-v13.js?v=20260922-v25-preview1"></script>
+<script src="admin-signal-v13.js?v=20260922-v25-dashboard2"></script>
 <script src="admin-position-compact-v7.js?v=20260912-1135"></script>
 </body>
 </html>
