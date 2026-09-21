@@ -1,0 +1,460 @@
+/* NEXUS Admin Color System V25
+   Presentation-only theme layer for admin.html.
+   Centralizes color tokens and overrides legacy V5/V14/V15/V24 palette drift. */
+
+:root{
+  color-scheme:dark;
+
+  /* Core hierarchy */
+  --nx-page:#07111f;
+  --nx-page-deep:#050b14;
+  --nx-surface:#0d1a2b;
+  --nx-surface-2:#122238;
+  --nx-surface-3:#172b44;
+  --nx-surface-soft:#0a1626;
+  --nx-overlay:rgba(3,9,18,.76);
+
+  /* Borders / separators */
+  --nx-border:#263a52;
+  --nx-border-soft:#1c2d43;
+  --nx-border-strong:#3a5877;
+  --nx-divider:#22364d;
+
+  /* Typography */
+  --nx-text:#f4f8ff;
+  --nx-text-2:#d6e0ed;
+  --nx-muted:#9fb0c4;
+  --nx-muted-2:#7f91a7;
+  --nx-disabled:#68798d;
+
+  /* Brand / interaction */
+  --nx-accent:#64d8ff;
+  --nx-accent-strong:#4f8cff;
+  --nx-accent-soft:#112f48;
+  --nx-focus:#8be3ff;
+
+  /* Semantic */
+  --nx-success:#63d6a5;
+  --nx-success-bg:#0e3029;
+  --nx-warning:#f2c66d;
+  --nx-warning-bg:#342812;
+  --nx-error:#ff8a9a;
+  --nx-error-bg:#3b1720;
+  --nx-info:#84b9ff;
+  --nx-info-bg:#132a49;
+
+  /* Financial */
+  --nx-profit:#67d7aa;
+  --nx-loss:#ff8b9b;
+  --nx-flat:#a9b8c9;
+
+  /* Elevation */
+  --nx-shadow-sm:0 6px 18px rgba(0,0,0,.20);
+  --nx-shadow-md:0 14px 34px rgba(0,0,0,.28);
+  --nx-shadow-lg:0 24px 68px rgba(0,0,0,.42);
+  --nx-ring:0 0 0 3px rgba(100,216,255,.18);
+
+  /* Compatibility aliases used by older admin CSS */
+  --bg:var(--nx-page);
+  --panel:var(--nx-surface);
+  --panel2:var(--nx-surface-2);
+  --surface-soft:var(--nx-surface-soft);
+  --surface-blue:var(--nx-info-bg);
+  --line:var(--nx-border);
+  --line-accent:var(--nx-border-strong);
+  --line-strong:var(--nx-focus);
+  --text:var(--nx-text);
+  --muted:var(--nx-muted);
+  --muted-2:var(--nx-muted-2);
+  --accent:var(--nx-accent);
+  --accent2:var(--nx-accent-strong);
+  --accent-strong:var(--nx-accent-strong);
+  --green:var(--nx-success);
+  --red:var(--nx-error);
+  --orange:var(--nx-warning);
+  --gold:var(--nx-warning);
+  --admin-border:var(--nx-border);
+  --admin-border-strong:var(--nx-border-strong);
+  --card-shadow:var(--nx-shadow-md);
+  --soft-shadow:var(--nx-shadow-sm);
+  --primary-gradient:linear-gradient(135deg,#4f8cff 0%,#42b7f5 55%,#64d8ff 100%);
+}
+
+/* Page / shell */
+html,body{
+  background:
+    radial-gradient(circle at 88% -8%,rgba(79,140,255,.15),transparent 31%),
+    radial-gradient(circle at 5% 102%,rgba(100,216,255,.07),transparent 36%),
+    linear-gradient(180deg,var(--nx-page-deep) 0%,var(--nx-page) 48%,#081522 100%)!important;
+  color:var(--nx-text)!important;
+}
+body::before{opacity:.06!important}
+.app{background:transparent!important;color:var(--nx-text)!important}
+.top,.bottom{
+  background:rgba(7,17,31,.94)!important;
+  border-color:var(--nx-border-soft)!important;
+  box-shadow:var(--nx-shadow-sm)!important;
+  backdrop-filter:blur(18px) saturate(135%)!important;
+  -webkit-backdrop-filter:blur(18px) saturate(135%)!important;
+}
+
+/* Text hierarchy */
+.brand,.hero h1,.section-head h2,.panel h2,.sheet h2,
+.card-head strong,#positions #positionList>h3{color:var(--nx-text)!important}
+.brand-copy small,.hero small,.mini-title,.sheet>small{color:var(--nx-accent)!important}
+label,.entry-source small,.operational-note,.empty,.card small,
+.levels span,.preview-grid span,.targets small,.admin-live-grid span,
+.auto-setup-grid span,.admin-position-sync{color:var(--nx-muted)!important}
+.metrics b,.levels b,.preview-grid b,.targets b,.admin-live-grid b,
+.auto-setup-grid b,.risk b{opacity:1!important}
+
+/* Surfaces */
+html body .app :is(
+  .panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live,
+  .preview-grid>div,.risk,.targets article,.levels span,.auto-setup-grid>div,
+  .empty,.operational-note,.admin-action-sheet,.sheet,.safety,.entry-source,
+  table,.table,[role="table"]
+){
+  color:var(--nx-text)!important;
+  background:linear-gradient(180deg,var(--nx-surface-2),var(--nx-surface))!important;
+  border:1px solid var(--nx-border)!important;
+  box-shadow:var(--nx-shadow-sm)!important;
+}
+.panel,.card,.setup-fields,.metrics article,.auto-setup-panel{
+  box-shadow:var(--nx-shadow-md)!important;
+}
+#signalForm.panel,#manualSetupFields.setup-fields,#autoSetupFields.setup-fields,
+#signalList .card,#positionList .card,#logList .card{
+  background:linear-gradient(180deg,var(--nx-surface-2),var(--nx-surface))!important;
+  border-color:var(--nx-border)!important;
+}
+#signalList .card:hover,#positionList .card:hover,#logList .card:hover{
+  border-color:var(--nx-border-strong)!important;
+  box-shadow:0 16px 38px rgba(0,0,0,.32)!important;
+}
+
+/* Metrics and financial data */
+.metrics article{background:linear-gradient(180deg,#12253a,#0d1b2c)!important}
+.metrics article b{color:var(--nx-accent)!important;text-shadow:none!important}
+.metrics article span{color:var(--nx-muted)!important}
+.levels b,.admin-live-grid b,.preview-grid b,.auto-setup-grid b{
+  color:var(--nx-text)!important;
+  font-variant-numeric:tabular-nums;
+}
+.targets article b,.risk b{color:var(--nx-info)!important;font-variant-numeric:tabular-nums}
+b.profit,.in_profit,.admin-position-levels b.profit{color:var(--nx-profit)!important}
+b.loss,.in_loss,.admin-position-levels b.loss{color:var(--nx-loss)!important}
+b.flat,.be,.admin-position-levels b.flat{color:var(--nx-flat)!important}
+
+/* Forms */
+.form,.form label,.auto-grid label{color:var(--nx-text-2)!important}
+html body .app :is(input,select,textarea){
+  background:var(--nx-surface-soft)!important;
+  color:var(--nx-text)!important;
+  border:1px solid var(--nx-border-strong)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+  caret-color:var(--nx-accent)!important;
+}
+html body .app :is(input,select,textarea)::placeholder{color:var(--nx-muted-2)!important;opacity:1}
+html body .app :is(input,select,textarea):focus{
+  outline:none!important;
+  border-color:var(--nx-focus)!important;
+  box-shadow:var(--nx-ring)!important;
+  background:#0c1b2e!important;
+}
+html body .app :is(input,select,textarea):disabled{
+  color:var(--nx-disabled)!important;
+  background:#0a1422!important;
+  border-color:var(--nx-border-soft)!important;
+  opacity:1!important;
+}
+
+/* Segmented and direction controls */
+.segments,.direction{
+  background:#091523!important;
+  border:1px solid var(--nx-border)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+.segments button,.direction button{
+  background:transparent!important;
+  color:var(--nx-muted)!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+.segments button:hover,.direction button:hover{
+  color:var(--nx-text-2)!important;
+  background:rgba(100,216,255,.07)!important;
+}
+.segments button.selected,
+.setup-mode button.selected,.volume-mode button.selected,.auto-volume-mode button.selected,
+.destination button.selected,.auto-destination button.selected{
+  color:#04111d!important;
+  background:linear-gradient(135deg,#8be3ff 0%,#64d8ff 35%,#4f8cff 100%)!important;
+  box-shadow:0 8px 22px rgba(79,140,255,.24)!important;
+}
+.direction .buy.selected,
+.direction button[data-side="BUY"].selected,
+.direction button[data-auto-side="BUY"].selected{
+  color:#b9f5dc!important;
+  background:var(--nx-success-bg)!important;
+  box-shadow:inset 0 0 0 1px rgba(99,214,165,.48)!important;
+}
+.direction button[data-side="SELL"].selected,
+.direction button[data-auto-side="SELL"].selected{
+  color:#ffd1d7!important;
+  background:var(--nx-error-bg)!important;
+  box-shadow:inset 0 0 0 1px rgba(255,138,154,.45)!important;
+}
+
+/* Buttons */
+.primary,.submit-preview,#newSignal,#publish{
+  color:#04111d!important;
+  background:linear-gradient(135deg,#8be3ff 0%,#64d8ff 36%,#4f8cff 100%)!important;
+  border:1px solid rgba(255,255,255,.18)!important;
+  box-shadow:0 10px 26px rgba(40,116,210,.28)!important;
+}
+:is(.primary,.submit-preview,#newSignal,#publish):hover{
+  filter:brightness(1.04)!important;
+  box-shadow:0 14px 32px rgba(40,116,210,.34)!important;
+}
+:is(.outline,.ghost,.section-head button,.icon,.entry-source button,#recalculatePreview,#cancelPreview){
+  color:var(--nx-text-2)!important;
+  background:var(--nx-surface-2)!important;
+  border:1px solid var(--nx-border-strong)!important;
+  box-shadow:var(--nx-shadow-sm)!important;
+}
+:is(.outline,.ghost,.section-head button,.icon,.entry-source button,#recalculatePreview,#cancelPreview):hover{
+  color:var(--nx-text)!important;
+  background:var(--nx-surface-3)!important;
+  border-color:#4f6f91!important;
+}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,summary:focus-visible{
+  outline:3px solid rgba(100,216,255,.30)!important;
+  outline-offset:2px!important;
+}
+button:disabled,[aria-disabled="true"]{
+  color:var(--nx-disabled)!important;
+  background:#0b1624!important;
+  border-color:var(--nx-border-soft)!important;
+  box-shadow:none!important;
+  opacity:.66!important;
+  cursor:not-allowed!important;
+  filter:none!important;
+}
+
+/* Status / badges */
+.status,.chip,.auto-setup-state{
+  color:var(--nx-info)!important;
+  background:var(--nx-info-bg)!important;
+  border-color:rgba(132,185,255,.38)!important;
+}
+.status.PUBLISHED,.status.SCREENSHOT_READY,.status.LIVE,
+.chip.online{
+  color:#b9f5dc!important;
+  background:var(--nx-success-bg)!important;
+  border-color:rgba(99,214,165,.42)!important;
+}
+.status.FAILED,.status.PUBLISH_FAILED,.status.EXPIRED{
+  color:#ffd1d7!important;
+  background:var(--nx-error-bg)!important;
+  border-color:rgba(255,138,154,.42)!important;
+}
+.status.WAITING_FOR_MT5,.status.PENDING,.status.STALE,.chip.offline{
+  color:#ffe3a6!important;
+  background:var(--nx-warning-bg)!important;
+  border-color:rgba(242,198,109,.42)!important;
+}
+.admin-signal-error{color:#ffb3bd!important}
+#clearRejectedLogs,.trade-actions button.danger{
+  color:#ffd1d7!important;
+  background:var(--nx-error-bg)!important;
+  border-color:rgba(255,138,154,.42)!important;
+}
+.trade-actions button.safe{
+  color:#b9f5dc!important;
+  background:var(--nx-success-bg)!important;
+  border-color:rgba(99,214,165,.42)!important;
+}
+
+/* Live / information blocks */
+.admin-live{background:linear-gradient(180deg,#0e2032,#0a1827)!important}
+.admin-live.live{border-color:rgba(99,214,165,.36)!important}
+.admin-live.stale{background:var(--nx-warning-bg)!important;border-color:rgba(242,198,109,.38)!important}
+.admin-live.unavailable{background:#0b1624!important;border-color:var(--nx-border)!important}
+.auto-structure-note,.safety{
+  color:#ffe3a6!important;
+  background:var(--nx-warning-bg)!important;
+  border-color:rgba(242,198,109,.36)!important;
+}
+.risk{
+  color:var(--nx-text-2)!important;
+  background:linear-gradient(135deg,#0e2639,#10253a)!important;
+  border-color:#2f536e!important;
+}
+
+/* Position page: remove legacy white-card island */
+html body #positions{color:var(--nx-text)!important}
+html body #positions>.section-head h2,
+html body #positions #positionList>h3{color:var(--nx-text)!important;text-shadow:none!important}
+html body #positions>.section-head button{
+  color:var(--nx-text-2)!important;
+  background:var(--nx-surface-2)!important;
+  border-color:var(--nx-border-strong)!important;
+  box-shadow:var(--nx-shadow-sm)!important;
+}
+html body #positions .card.admin-position-card-v7,
+html body #positions .card.admin-position-card-v7.expanded{
+  color:var(--nx-text)!important;
+  background:linear-gradient(180deg,var(--nx-surface-2),var(--nx-surface))!important;
+  border-color:var(--nx-border)!important;
+  box-shadow:var(--nx-shadow-md)!important;
+}
+html body #positions .card.admin-position-card-v7::before{
+  background:linear-gradient(90deg,var(--nx-accent),var(--nx-accent-strong))!important;
+}
+html body #positions .admin-position-card-v7 .card-head strong{color:var(--nx-text)!important}
+html body #positions .admin-position-card-v7 .card-head .status{
+  color:#b9f5dc!important;
+  background:var(--nx-success-bg)!important;
+  border-color:rgba(99,214,165,.42)!important;
+}
+html body #positions .admin-position-card-v7 .admin-position-levels>span{
+  color:var(--nx-muted)!important;
+  background:#0a1727!important;
+  border-color:var(--nx-border)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+html body #positions .admin-position-card-v7 .admin-position-levels span{color:var(--nx-muted)!important}
+html body #positions .admin-position-card-v7 .admin-position-levels b{color:var(--nx-text)!important}
+html body #positions .admin-position-sync{
+  color:var(--nx-muted)!important;
+  background:#0a1727!important;
+  border-color:var(--nx-border)!important;
+}
+html body #positions .admin-position-more{
+  color:var(--nx-accent)!important;
+  background:var(--nx-accent-soft)!important;
+  border-color:#2d5873!important;
+  box-shadow:none!important;
+}
+html body #positions .admin-action-sheet{
+  background:var(--nx-surface-soft)!important;
+  border-color:var(--nx-border)!important;
+}
+html body #positions .admin-action-sheet>summary{
+  color:var(--nx-text)!important;
+  background:linear-gradient(135deg,#173553,#204d72)!important;
+}
+html body #positions .trade-actions{background:var(--nx-surface-soft)!important}
+html body #positions .trade-actions button{
+  color:var(--nx-text-2)!important;
+  background:var(--nx-surface-2)!important;
+  border-color:var(--nx-border-strong)!important;
+  box-shadow:none!important;
+}
+html body #positions .empty{
+  color:var(--nx-muted)!important;
+  background:#0a1727!important;
+  border-color:var(--nx-border)!important;
+}
+
+/* Tables */
+html body .app table{
+  background:var(--nx-surface)!important;
+  border-color:var(--nx-border)!important;
+}
+html body .app th{
+  color:var(--nx-text)!important;
+  background:var(--nx-surface-2)!important;
+}
+html body .app td{
+  color:var(--nx-text-2)!important;
+  background:transparent!important;
+}
+html body .app :is(th,td){border-bottom:1px solid var(--nx-divider)!important}
+html body .app tbody tr:hover{background:rgba(100,216,255,.045)!important}
+
+/* Modal / toast */
+.modal{background:var(--nx-overlay)!important}
+.sheet{
+  color:var(--nx-text)!important;
+  background:linear-gradient(180deg,#13243a,#0d1929)!important;
+  border-color:var(--nx-border-strong)!important;
+  box-shadow:var(--nx-shadow-lg)!important;
+}
+.close{color:var(--nx-muted)!important}
+.toast{
+  color:var(--nx-text)!important;
+  background:#102238!important;
+  border:1px solid #315c7b!important;
+  box-shadow:var(--nx-shadow-md)!important;
+}
+
+/* Navigation / selected context */
+.bottom button{color:var(--nx-muted-2)!important;background:transparent!important}
+.bottom button:hover{color:var(--nx-text-2)!important}
+.bottom button.selected,.bottom button.selected b{
+  color:var(--nx-accent)!important;
+  text-shadow:0 0 16px rgba(100,216,255,.20)!important;
+}
+.bottom button.selected{
+  background:linear-gradient(180deg,rgba(100,216,255,.06),transparent 72%)!important;
+}
+
+/* Steps */
+.steps span{
+  color:var(--nx-muted)!important;
+  background:var(--nx-surface)!important;
+  border-color:var(--nx-border-strong)!important;
+  box-shadow:none!important;
+}
+.steps span.on{
+  color:#04111d!important;
+  background:linear-gradient(135deg,#8be3ff,#64d8ff 42%,#4f8cff)!important;
+  border-color:var(--nx-focus)!important;
+  box-shadow:0 0 0 4px rgba(100,216,255,.09)!important;
+}
+.steps i{background:var(--nx-divider)!important}
+.steps span small{color:inherit!important}
+
+/* Loading */
+[aria-busy="true"]{position:relative;overflow:hidden}
+[aria-busy="true"]::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(100deg,transparent 25%,rgba(139,227,255,.08) 45%,rgba(255,255,255,.08) 50%,transparent 70%);
+  background-size:220% 100%;
+  animation:nx-v25-loading 1.6s linear infinite;
+}
+@keyframes nx-v25-loading{to{background-position:-220% 0}}
+
+/* Mobile / Telegram WebView */
+@media(max-width:480px){
+  .app{padding-inline:12px!important}
+  .top{min-height:60px!important}
+  .panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live,.sheet{
+    box-shadow:0 9px 25px rgba(0,0,0,.25)!important;
+  }
+  .segments button,.direction button{min-height:44px!important}
+  .form input,.form select{min-height:48px!important}
+}
+@media(max-width:360px){
+  .grid,.preview-grid,.admin-live-grid{grid-template-columns:1fr!important}
+  .destination{grid-template-columns:1fr!important}
+}
+@media(hover:none){
+  html body .app :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live):hover{
+    transform:none!important;
+    filter:none!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+}
