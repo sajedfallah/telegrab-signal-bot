@@ -10,7 +10,7 @@
   const previewNow = () => new Date().toISOString();
   function previewApi(path, options = {}) {
     if (path === '/bootstrap') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'}});
-    if (path === '/signals') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'},items:[]});
+    if (path === '/signals') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'},items:[{request_id:'preview-waiting-1',status:'WAITING_FOR_MT5',payload_json:JSON.stringify({symbol:'BTCUSD',direction:'BUY',entry:112400,stop_loss:111900,destination:'BOTH'})}]});
     if (path === '/active-signals') return Promise.resolve({items:[
       {request_id:'preview-live-1',status:'PUBLISHED',payload_json:JSON.stringify({symbol:'XAUUSD',direction:'BUY',entry:4360.20,stop_loss:4352.00,destination:'VIP'}),signal:{code:'NX-PREVIEW-01',symbol:'XAUUSD',direction:'BUY',entry_price:4360.20,stop_loss:4352.00,destination:'VIP',publication_stage:'PUBLISHED'},live:{status:'LIVE',age_seconds:4,current_price:4365.10,floating_pnl:48.60,current_r:0.60,volume:0.10,stop_loss:4358.00,take_profit:4376.60,pnl_state:'in_profit'}}
     ]});
@@ -283,10 +283,15 @@
       const [data, canonical, rejected] = await Promise.all([api('/signals'), api('/active-signals'), api('/rejected-logs')]);
       setMt5(data.mt5_admin);
       const operational = canonical.items || [];
+      const requestItems = Array.isArray(data.items) ? data.items : [];
+      const waitingStatuses = new Set(['WAITING_FOR_MT5', 'PENDING', 'QUEUED']);
+      const waitingCount = requestItems.filter((item) => waitingStatuses.has(String(item.status || '').toUpperCase())).length;
       $('signalList').innerHTML = operational.length ? operational.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">سیگنال عملیاتی منتشرشده‌ای وجود ندارد.</div>';
       const rejectedItems = rejected.items || [];
       $('logList').innerHTML = rejectedItems.length ? rejectedItems.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">درخواست ردشده‌ای وجود ندارد.</div>';
-      $('publishedCount').textContent = fa(operational.length);
+      $('publishedCount')?.textContent = fa(operational.length);
+      $('waitingCount')?.textContent = fa(waitingCount);
+      $('rejectedCount')?.textContent = fa(rejectedItems.length);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -313,7 +318,7 @@
       setMt5(data.mt5_admin);
       const open = data.positions || [], pending = data.orders || [];
       $('positionList').innerHTML = `<h3>Open Positions</h3>${open.map((item) => positionCard(item)).join('') || '<div class="empty">پوزیشن بازی وجود ندارد.</div>'}<h3>Pending Orders</h3>${pending.map((item) => positionCard(item, true)).join('') || '<div class="empty">سفارش Pending وجود ندارد.</div>'}`;
-      $('positionCount').textContent = fa(state.mt5?.online ? open.filter(item => item.last_seen_at && Date.now() - new Date(item.last_seen_at).getTime() <= 120000).length : 0);
+      $('positionCount')?.textContent = fa(state.mt5?.online ? open.filter(item => item.last_seen_at && Date.now() - new Date(item.last_seen_at).getTime() <= 120000).length : 0);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -376,6 +381,7 @@
   $('publish').addEventListener('click', publish);
   $('recalculatePreview').addEventListener('click', () => { $('modal').hidden = true; scheduleRecalculate(); });
   $('newSignal').addEventListener('click', () => show('create'));
+  $('openLogs')?.addEventListener('click', () => show('logs'));
   $('refresh').addEventListener('click', bootstrap);
   $('reloadSignals').addEventListener('click', loadSignals);
   $('reloadPositions').addEventListener('click', loadPositions);
