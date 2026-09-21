@@ -6,6 +6,32 @@
   tg?.expand();
 
   const API = '/miniapp/api/admin';
+  const PREVIEW_MODE = !tg?.initData && (location.hostname.endsWith('.vercel.app') || new URLSearchParams(location.search).get('preview') === '1');
+  const previewNow = () => new Date().toISOString();
+  function previewApi(path, options = {}) {
+    if (path === '/bootstrap') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'}});
+    if (path === '/signals') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'},items:[{request_id:'preview-waiting-1',status:'WAITING_FOR_MT5',payload_json:JSON.stringify({symbol:'BTCUSD',direction:'BUY',entry:112400,stop_loss:111900,destination:'BOTH'})}]});
+    if (path === '/active-signals') return Promise.resolve({items:[
+      {request_id:'preview-live-1',status:'PUBLISHED',payload_json:JSON.stringify({symbol:'XAUUSD',direction:'BUY',entry:4360.20,stop_loss:4352.00,destination:'VIP'}),signal:{code:'NX-PREVIEW-01',symbol:'XAUUSD',direction:'BUY',entry_price:4360.20,stop_loss:4352.00,destination:'VIP',publication_stage:'PUBLISHED'},live:{status:'LIVE',age_seconds:4,current_price:4365.10,floating_pnl:48.60,current_r:0.60,volume:0.10,stop_loss:4358.00,take_profit:4376.60,pnl_state:'in_profit'}}
+    ]});
+    if (path === '/rejected-logs') return Promise.resolve({items:[
+      {request_id:'preview-fail-1',status:'PUBLISH_FAILED',payload_json:JSON.stringify({symbol:'EURUSD',direction:'SELL',entry:1.17842,stop_loss:1.18010,destination:'FREE'}),error_message:'Preview fixture: publication failed'}
+    ]});
+    if (path === '/positions') return Promise.resolve({mt5_admin:{online:true,account_number:'PREVIEW-001'},positions:[
+      {signal_id:101,signal_code:'NX-PREVIEW-01',symbol:'XAUUSD',direction:'BUY',ticket:'901001',entry_price:4360.20,current_price:4365.10,volume:0.10,floating_pnl:48.60,stop_loss:4358.00,take_profit:4376.60,last_seen_at:previewNow()},
+      {signal_id:102,signal_code:'NX-PREVIEW-02',symbol:'GBPUSD',direction:'SELL',ticket:'901002',entry_price:1.35210,current_price:1.35305,volume:0.05,floating_pnl:-9.50,stop_loss:1.35600,take_profit:1.34430,last_seen_at:previewNow()}
+    ],orders:[
+      {signal_id:103,signal_code:'NX-PREVIEW-03',symbol:'EURUSD',type:'BUY LIMIT',ticket:'901003',price_open:1.17400,current_price:1.17520,volume:0.10,stop_loss:1.17050,take_profit:1.18100,last_seen_at:previewNow()}
+    ]});
+    if (path === '/signals/calculate' && options.method === 'POST') {
+      const p=JSON.parse(options.body || '{}'), entry=Number(p.entry), stop=Number(p.stop_loss), risk=Math.abs(entry-stop), sign=String(p.direction).toUpperCase()==='SELL'?-1:1;
+      return Promise.resolve({symbol:p.symbol,direction:p.direction,entry,stop_loss:stop,risk,digits:2,target_multipliers:[1,2,3],targets:[entry+sign*risk,entry+sign*risk*2,entry+sign*risk*3]});
+    }
+    if (path.startsWith('/market-quote')) return Promise.resolve({fresh:true,age_seconds:2,bid:4364.90,ask:4365.10});
+    if (options.method === 'DELETE') return Promise.resolve({deleted:1});
+    if (options.method === 'POST') return Promise.resolve({status:'WAITING_FOR_MT5',publication:'RETRY_QUEUED'});
+    return Promise.resolve({});
+  }
   const $ = (id) => document.getElementById(id);
   const state = {
     setupMode: 'MANUAL',
@@ -29,6 +55,7 @@
   });
 
   async function api(path, options = {}) {
+    if (PREVIEW_MODE) return previewApi(path, options);
     const response = await fetch(API + path, {
       ...options,
       headers: {...headers(), ...(options.headers || {})},
@@ -256,10 +283,15 @@
       const [data, canonical, rejected] = await Promise.all([api('/signals'), api('/active-signals'), api('/rejected-logs')]);
       setMt5(data.mt5_admin);
       const operational = canonical.items || [];
+      const requestItems = Array.isArray(data.items) ? data.items : [];
+      const waitingStatuses = new Set(['WAITING_FOR_MT5', 'PENDING', 'QUEUED']);
+      const waitingCount = requestItems.filter((item) => waitingStatuses.has(String(item.status || '').toUpperCase())).length;
       $('signalList').innerHTML = operational.length ? operational.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">سیگنال عملیاتی منتشرشده‌ای وجود ندارد.</div>';
       const rejectedItems = rejected.items || [];
       $('logList').innerHTML = rejectedItems.length ? rejectedItems.map((item) => signalCard(item, {allowRetry: false})).join('') : '<div class="empty">درخواست ردشده‌ای وجود ندارد.</div>';
-      $('publishedCount').textContent = fa(operational.length);
+      $('publishedCount')?.textContent = fa(operational.length);
+      $('waitingCount')?.textContent = fa(waitingCount);
+      $('rejectedCount')?.textContent = fa(rejectedItems.length);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -286,7 +318,7 @@
       setMt5(data.mt5_admin);
       const open = data.positions || [], pending = data.orders || [];
       $('positionList').innerHTML = `<h3>Open Positions</h3>${open.map((item) => positionCard(item)).join('') || '<div class="empty">پوزیشن بازی وجود ندارد.</div>'}<h3>Pending Orders</h3>${pending.map((item) => positionCard(item, true)).join('') || '<div class="empty">سفارش Pending وجود ندارد.</div>'}`;
-      $('positionCount').textContent = fa(state.mt5?.online ? open.filter(item => item.last_seen_at && Date.now() - new Date(item.last_seen_at).getTime() <= 120000).length : 0);
+      $('positionCount')?.textContent = fa(state.mt5?.online ? open.filter(item => item.last_seen_at && Date.now() - new Date(item.last_seen_at).getTime() <= 120000).length : 0);
     } catch (error) {
       toast(error.message);
     } finally {
@@ -349,6 +381,7 @@
   $('publish').addEventListener('click', publish);
   $('recalculatePreview').addEventListener('click', () => { $('modal').hidden = true; scheduleRecalculate(); });
   $('newSignal').addEventListener('click', () => show('create'));
+  $('openLogs')?.addEventListener('click', () => show('logs'));
   $('refresh').addEventListener('click', bootstrap);
   $('reloadSignals').addEventListener('click', loadSignals);
   $('reloadPositions').addEventListener('click', loadPositions);
