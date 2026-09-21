@@ -6,6 +6,11 @@
     if (!card || card.dataset.compactV7 === '1') return;
     card.dataset.compactV7 = '1';
     card.classList.add('admin-position-card-v7');
+
+    const state = String(card.querySelector('.card-head .status')?.textContent || '').trim().toLowerCase();
+    if (state) card.dataset.positionState = state;
+    card.classList.toggle('is-live', state === 'live');
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'admin-position-more';
