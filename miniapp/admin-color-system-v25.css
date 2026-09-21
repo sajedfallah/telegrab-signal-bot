@@ -458,3 +458,96 @@ html body .app tbody tr:hover{background:rgba(100,216,255,.045)!important}
     scroll-behavior:auto!important;
   }
 }
+
+/* Dashboard operational overview */
+.admin-overview-head{
+  display:flex!important;
+  align-items:flex-end!important;
+  justify-content:space-between!important;
+  gap:14px!important;
+  margin:22px 0 12px!important;
+}
+.admin-overview-head>div{display:grid!important;gap:3px!important}
+.admin-overview-head small{
+  color:var(--nx-accent)!important;
+  font-size:10px!important;
+  font-weight:800!important;
+  letter-spacing:.12em!important;
+}
+.admin-overview-head h2{
+  margin:0!important;
+  color:var(--nx-text)!important;
+  font-size:18px!important;
+}
+.admin-overview-head>span{
+  color:var(--nx-muted)!important;
+  font-size:12px!important;
+  line-height:1.7!important;
+  text-align:left!important;
+}
+.admin-dashboard-metrics{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  gap:10px!important;
+}
+.admin-dashboard-metrics article{
+  position:relative!important;
+  min-width:0!important;
+  padding:14px 12px!important;
+  overflow:hidden!important;
+}
+.admin-dashboard-metrics article::before{
+  content:""!important;
+  position:absolute!important;
+  top:0!important;
+  right:0!important;
+  width:42%!important;
+  height:2px!important;
+  background:var(--nx-border-strong)!important;
+}
+.admin-dashboard-metrics article b{
+  display:block!important;
+  margin-bottom:4px!important;
+  font-size:24px!important;
+  line-height:1.1!important;
+  font-variant-numeric:tabular-nums!important;
+}
+.admin-dashboard-metrics article span{
+  display:block!important;
+  color:var(--nx-text-2)!important;
+  font-weight:800!important;
+  font-size:12px!important;
+}
+.admin-dashboard-metrics article small{
+  display:block!important;
+  margin-top:4px!important;
+  color:var(--nx-muted)!important;
+  font-size:10px!important;
+  line-height:1.5!important;
+}
+.admin-dashboard-metrics .metric-active b{color:var(--nx-success)!important}
+.admin-dashboard-metrics .metric-active::before{background:var(--nx-success)!important}
+.admin-dashboard-metrics .metric-waiting b{color:var(--nx-warning)!important}
+.admin-dashboard-metrics .metric-waiting::before{background:var(--nx-warning)!important}
+.admin-dashboard-metrics .metric-attention b{color:var(--nx-error)!important}
+.admin-dashboard-metrics .metric-attention::before{background:var(--nx-error)!important}
+.admin-attention-link{
+  width:100%!important;
+  margin:10px 0 20px!important;
+  min-height:44px!important;
+}
+@media(max-width:480px){
+  .admin-overview-head{
+    align-items:flex-start!important;
+    flex-direction:column!important;
+    gap:4px!important;
+  }
+  .admin-overview-head>span{text-align:right!important}
+  .admin-dashboard-metrics{gap:7px!important}
+  .admin-dashboard-metrics article{padding:12px 8px!important}
+  .admin-dashboard-metrics article b{font-size:21px!important}
+  .admin-dashboard-metrics article span{font-size:11px!important}
+  .admin-dashboard-metrics article small{font-size:9px!important}
+}
+@media(max-width:360px){
+  .admin-dashboard-metrics{grid-template-columns:1fr!important}
+}
