@@ -551,3 +551,124 @@ html body .app tbody tr:hover{background:rgba(100,216,255,.045)!important}
 @media(max-width:360px){
   .admin-dashboard-metrics{grid-template-columns:1fr!important}
 }
+
+
+/* =========================================================
+   V26 — Surface depth / soft separation
+   ========================================================= */
+:root{
+  --nx-page:#07111d;
+  --nx-page-deep:#050b14;
+  --nx-surface:#102033;
+  --nx-surface-2:#13263c;
+  --nx-surface-3:#172d47;
+  --nx-surface-soft:#0c1a2b;
+  --nx-border:#29435d;
+  --nx-border-soft:#22384e;
+  --nx-border-strong:#355776;
+  --nx-divider:#22384e;
+  --nx-text:#f4f8ff;
+  --nx-text-2:#c9d6e5;
+  --nx-muted:#91a3b7;
+  --nx-accent:#5fd0ff;
+  --nx-shadow-soft:0 10px 28px rgba(0,0,0,.18);
+  --nx-shadow-card:0 14px 34px rgba(0,0,0,.22);
+  --nx-shadow-elevated:0 18px 42px rgba(0,0,0,.26);
+}
+
+html,body{
+  background:
+    radial-gradient(circle at 50% -10%,rgba(30,75,115,.20),transparent 36%),
+    linear-gradient(180deg,#081321 0%,var(--nx-page) 46%,#050b14 100%)!important;
+}
+
+.app{
+  background:transparent!important;
+}
+
+/* Primary elevated surfaces */
+html body .app :is(
+  .panel,
+  .card,
+  .setup-fields,
+  .metrics article,
+  .auto-setup-panel,
+  .admin-live,
+  .sheet
+){
+  background:linear-gradient(180deg,#13263c 0%,#102033 100%)!important;
+  border:1px solid var(--nx-border)!important;
+  box-shadow:
+    0 14px 34px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.025)!important;
+}
+
+/* Dashboard tiles need slightly stronger separation */
+html body .admin-dashboard-metrics article{
+  background:linear-gradient(180deg,#152a42 0%,#112236 100%)!important;
+  border:1px solid #31506f!important;
+  box-shadow:
+    0 12px 28px rgba(0,0,0,.20),
+    inset 0 1px 0 rgba(255,255,255,.03)!important;
+}
+
+/* Forms stay recessed inside cards */
+html body .app :is(input,select,textarea){
+  background:#0c1a2b!important;
+  border:1px solid #35506a!important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.025),
+    inset 0 0 0 1px rgba(0,0,0,.08)!important;
+}
+html body .app :is(input,select,textarea):focus{
+  border-color:#5fd0ff!important;
+  box-shadow:
+    0 0 0 3px rgba(95,208,255,.10),
+    inset 0 1px 0 rgba(255,255,255,.03)!important;
+}
+
+/* Secondary / nested surfaces */
+html body .app :is(
+  .empty,
+  .risk,
+  .targets article,
+  .preview-grid>div,
+  .levels>span,
+  .admin-position-sync,
+  .auto-setup-grid>div
+){
+  background:#0d1c2d!important;
+  border:1px solid var(--nx-border-soft)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02)!important;
+}
+
+/* Header / bottom nav should feel lifted but quieter than cards */
+html body .top{
+  background:linear-gradient(180deg,rgba(13,28,45,.94),rgba(9,20,34,.94))!important;
+  border-bottom:1px solid var(--nx-border-soft)!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.14)!important;
+}
+html body .bottom{
+  background:linear-gradient(180deg,rgba(12,27,44,.96),rgba(7,17,29,.98))!important;
+  border-top:1px solid var(--nx-border)!important;
+  box-shadow:0 -10px 28px rgba(0,0,0,.18)!important;
+}
+
+/* Interactive cards */
+@media(hover:hover){
+  html body .app :is(.panel,.card,.metrics article,.auto-setup-panel):hover{
+    border-color:#365b7a!important;
+    box-shadow:
+      0 16px 38px rgba(0,0,0,.24),
+      inset 0 1px 0 rgba(255,255,255,.03)!important;
+  }
+}
+
+/* Keep mobile depth restrained */
+@media(max-width:480px){
+  html body .app :is(.panel,.card,.setup-fields,.metrics article,.auto-setup-panel,.admin-live,.sheet){
+    box-shadow:
+      0 10px 24px rgba(0,0,0,.20),
+      inset 0 1px 0 rgba(255,255,255,.025)!important;
+  }
+}
