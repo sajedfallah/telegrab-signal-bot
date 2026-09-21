@@ -25,3 +25,26 @@
   #positions .admin-position-card-v7.expanded .admin-position-levels{grid-template-columns:1fr 1fr!important}
 }
 @media(prefers-reduced-motion:reduce){#positions .card.admin-position-card-v7{transition:none!important}}
+
+
+/* Live position state — theme-aligned emphasis without changing layout */
+#positions .card.admin-position-card-v7.is-live{
+  background:linear-gradient(155deg,var(--panel2),var(--panel))!important;
+  border-color:var(--accent)!important;
+  box-shadow:0 14px 34px rgba(0,0,0,.26),inset 0 2px 0 var(--accent)!important;
+}
+#positions .admin-position-card-v7.is-live .card-head .status{
+  background:var(--green)!important;
+  border-color:var(--green)!important;
+  color:var(--bg)!important;
+  font-weight:900!important;
+  letter-spacing:.08em;
+}
+#positions .admin-position-card-v7.is-live .admin-position-levels>span{
+  background:var(--panel)!important;
+  border-color:var(--line)!important;
+}
+#positions .admin-position-card-v7.is-live.expanded{
+  background:linear-gradient(155deg,var(--panel2),var(--panel))!important;
+  border-color:var(--accent)!important;
+}
