@@ -38,6 +38,7 @@ def _ensure_execution_claim_schema() -> None:
 
 
 def _release_execution_claim(signal_id: int) -> None:
+    _ensure_execution_claim_schema()
     with db.conn() as con:
         con.execute(
             "DELETE FROM miniapp_admin_execution_claims WHERE signal_id=?",
@@ -52,6 +53,7 @@ def _claim_web_admin_signal(signal_id: int, account: str, request_id: str) -> bo
     duplicate pollers; an expired lease allows recovery if a poller died before
     producing either a receipt or live-state confirmation.
     """
+    _ensure_execution_claim_schema()
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
     lease_until = (now_dt + timedelta(seconds=_EXECUTION_CLAIM_LEASE_SECONDS)).isoformat()
