@@ -1,6 +1,9 @@
 (() => {
   'use strict';
 
+  if (window.__nexusAdminSignalV13Loaded) return;
+  window.__nexusAdminSignalV13Loaded = true;
+
   const tg = window.Telegram?.WebApp;
   tg?.ready();
   tg?.expand();
@@ -21,6 +24,7 @@
     loadingSignals: false,
     loadingPositions: false,
     entrySource: 'MANUAL',
+    publishInFlight: false,
   };
 
   const headers = () => ({
@@ -187,20 +191,31 @@
   }
 
   async function publish() {
-    if (!state.preview) return;
+    if (!state.preview || state.publishInFlight) return;
     const button = $('publish');
+    const traceId = state.preview.request_id;
+    state.publishInFlight = true;
     button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
     button.textContent = 'در حال ثبت امن…';
     try {
-      const result = await api('/signals', {method: 'POST', body: JSON.stringify(state.preview)});
+      const result = await api('/signals', {
+        method: 'POST',
+        headers: {'X-Idempotency-Key': traceId},
+        body: JSON.stringify(state.preview),
+      });
       $('modal').hidden = true;
-      toast(result.status === 'WAITING_FOR_MT5' ? 'ثبت شد؛ منتظر اتصال MT5 است.' : 'درخواست برای MT5 ارسال شد.');
+      toast(result.status === 'WAITING_FOR_MT5'
+        ? `ثبت شد؛ منتظر اتصال MT5 است. ID: ${traceId}`
+        : `درخواست برای MT5 ارسال شد. ID: ${traceId}`);
       show('logs');
       await loadSignals();
     } catch (error) {
-      toast(error.message);
+      toast(`${error.message} · ID: ${traceId}`);
     } finally {
+      state.publishInFlight = false;
       button.disabled = false;
+      button.removeAttribute('aria-busy');
       button.textContent = 'تأیید و ارسال';
     }
   }
