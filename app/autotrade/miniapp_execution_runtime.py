@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from fastapi import HTTPException
@@ -14,6 +15,83 @@ from ..autotrade.trailing_profiles import profile_snapshot
 
 _ACCEPTED_EXECUTION_STATUSES = {"EXECUTED", "PENDING", "ACTIVATED"}
 _TERMINAL_FAILURE_STATUSES = {"REJECTED", "FAILED", "FAILED_RETRYABLE"}
+_EXECUTION_CLAIM_LEASE_SECONDS = 300
+
+
+def _ensure_execution_claim_schema() -> None:
+    with db.conn() as con:
+        con.execute(
+            """CREATE TABLE IF NOT EXISTS miniapp_admin_execution_claims (
+                   signal_id INTEGER PRIMARY KEY,
+                   request_id TEXT NOT NULL,
+                   account_number TEXT NOT NULL,
+                   claimed_at TEXT NOT NULL,
+                   lease_until TEXT NOT NULL,
+                   claim_count INTEGER NOT NULL DEFAULT 1,
+                   FOREIGN KEY(signal_id) REFERENCES signals(id) ON DELETE CASCADE
+               )"""
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_miniapp_execution_claim_account "
+            "ON miniapp_admin_execution_claims(account_number, lease_until)"
+        )
+
+
+def _release_execution_claim(signal_id: int) -> None:
+    with db.conn() as con:
+        con.execute(
+            "DELETE FROM miniapp_admin_execution_claims WHERE signal_id=?",
+            (int(signal_id),),
+        )
+
+
+def _claim_web_admin_signal(signal_id: int, account: str, request_id: str) -> bool:
+    """Atomically lease one WEB_ADMIN execution to one poller.
+
+    SQLite BEGIN IMMEDIATE serializes competing API workers. A live lease blocks
+    duplicate pollers; an expired lease allows recovery if a poller died before
+    producing either a receipt or live-state confirmation.
+    """
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    lease_until = (now_dt + timedelta(seconds=_EXECUTION_CLAIM_LEASE_SECONDS)).isoformat()
+    with db.conn() as con:
+        con.execute("BEGIN IMMEDIATE")
+        receipt = con.execute(
+            """SELECT 1 FROM autotrade_signal_receipts
+               WHERE signal_id=? AND platform='MT5'
+                 AND UPPER(COALESCE(status,'')) IN
+                     ('EXECUTED','PENDING','ACTIVATED','REJECTED','FAILED','FAILED_RETRYABLE')
+               LIMIT 1""",
+            (int(signal_id),),
+        ).fetchone()
+        if receipt:
+            return False
+
+        claim = con.execute(
+            "SELECT lease_until FROM miniapp_admin_execution_claims WHERE signal_id=?",
+            (int(signal_id),),
+        ).fetchone()
+        if claim and str(claim["lease_until"] or "") > now:
+            return False
+
+        if claim:
+            con.execute(
+                """UPDATE miniapp_admin_execution_claims
+                   SET request_id=?,account_number=?,claimed_at=?,lease_until=?,
+                       claim_count=claim_count+1
+                   WHERE signal_id=?""",
+                (str(request_id), str(account), now, lease_until, int(signal_id)),
+            )
+        else:
+            con.execute(
+                """INSERT INTO miniapp_admin_execution_claims
+                   (signal_id,request_id,account_number,claimed_at,lease_until,claim_count)
+                   VALUES(?,?,?,?,?,1)""",
+                (int(signal_id), str(request_id), str(account), now, lease_until),
+            )
+    return True
+
 
 
 def _route(app, path: str, method: str) -> APIRoute:
@@ -103,6 +181,8 @@ def _record_web_admin_receipt(
             (uid, event_key, "SIGNAL_RECEIPT", signal_id, payload, now),
         )
 
+    _release_execution_claim(signal_id)
+
     db.add_signal_event(
         signal_id,
         "EXECUTION_RECEIPT",
@@ -174,6 +254,8 @@ def install_miniapp_execution_gate(app) -> None:
 
     if getattr(app.state, "nexus_miniapp_execution_gate_v1", False):
         return
+
+    _ensure_execution_claim_schema()
 
     original_sync_request = mini_mod._sync_request
 
@@ -362,25 +444,62 @@ def install_miniapp_execution_gate(app) -> None:
         limit = max(1, min(int(kwargs.get("limit") or 50), 100))
         with db.conn() as con:
             rows = con.execute(
-                """SELECT s.* FROM signals s
+                """SELECT s.*,
+                          COALESCE(rq.request_id, 'signal:' || s.id) AS miniapp_request_id
+                   FROM signals s
+                   LEFT JOIN miniapp_admin_signal_requests rq ON rq.signal_id=s.id
                    WHERE s.id>? AND (
-                     (s.status='ACTIVE' AND s.issuer_type IN ('MT5_ADMIN','WEB_ADMIN'))
+                     (s.status='ACTIVE' AND s.issuer_type='MT5_ADMIN')
                      OR (
                        s.issuer_type='WEB_ADMIN'
                        AND s.issuer_account=?
-                       AND s.status='DRAFT'
-                       AND UPPER(COALESCE(s.publication_stage,'')) IN ('WAITING_EXECUTION','WAITING_FOR_CHART')
+                       AND s.status IN ('DRAFT','ACTIVE')
+                       AND UPPER(COALESCE(s.publication_stage,'')) IN
+                           ('WAITING_EXECUTION','WAITING_FOR_CHART','PUBLISHED')
                        AND NOT EXISTS (
                          SELECT 1 FROM autotrade_signal_receipts r
                          WHERE r.signal_id=s.id AND r.platform='MT5'
-                           AND UPPER(COALESCE(r.status,'')) IN ('EXECUTED','PENDING','ACTIVATED','REJECTED','FAILED','FAILED_RETRYABLE')
+                           AND UPPER(COALESCE(r.status,'')) IN
+                               ('EXECUTED','PENDING','ACTIVATED','REJECTED','FAILED','FAILED_RETRYABLE')
                        )
                      )
                    )
                    ORDER BY s.id ASC LIMIT ?""",
-                (after_id, str(account), limit),
+                (after_id, str(account), limit * 4),
             ).fetchall()
-        return {"license_status": "ADMIN", "signals": [signal_to_payload(row) for row in rows]}
+
+        selected = []
+        for row in rows:
+            if len(selected) >= limit:
+                break
+            if str(row["issuer_type"] or "").upper() != "WEB_ADMIN":
+                selected.append(row)
+                continue
+            request_id = str(row["miniapp_request_id"] or f"signal:{int(row['id'])}")
+            if not _claim_web_admin_signal(int(row["id"]), str(account), request_id):
+                continue
+            db.add_signal_event(
+                int(row["id"]),
+                "EXECUTION_CLAIMED",
+                actor_type="BACKEND",
+                actor_id=int(admin["telegram_id"]),
+                account_number=str(account),
+                request_id=request_id,
+                correlation_id=str(row["code"]),
+                payload={
+                    "lease_seconds": _EXECUTION_CLAIM_LEASE_SECONDS,
+                    "after_id": after_id,
+                },
+            )
+            selected.append(row)
+
+        payloads = []
+        for row in selected:
+            payload = signal_to_payload(row)
+            if str(row["issuer_type"] or "").upper() == "WEB_ADMIN":
+                payload["request_id"] = str(row["miniapp_request_id"] or "")
+            payloads.append(payload)
+        return {"license_status": "ADMIN", "signals": payloads}
 
     _replace_route(app, "/api/v1/autotrade/signals", "GET", get_signals)
 
