@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from .autotrade.api import app
 from .miniapp_api import router as miniapp_router
 from .ai_setup_review.api import router as ai_setup_review_router
+from .market_candles import router as market_candles_router
 from .miniapp_experience import router as miniapp_experience_router
 from .miniapp_home import router as miniapp_home_router
 from .miniapp_signals import router as miniapp_signals_router
@@ -24,6 +25,7 @@ from .miniapp_purchase_flow import router as miniapp_purchase_flow_router
 # SQLite database, subscription engine, pricing service and bot configuration.
 app.include_router(miniapp_router)
 app.include_router(ai_setup_review_router)
+app.include_router(market_candles_router)
 app.include_router(miniapp_experience_router)
 app.include_router(miniapp_home_router)
 app.include_router(miniapp_signals_router)
