@@ -162,8 +162,16 @@ def authorize_mt5(license_key: str, account_number: str, *, bind: bool = False,
 
 
 def signal_to_payload(row) -> dict[str, Any]:
+    """Serialize persisted signal truth to the established Expert wire format.
+
+    Canonical semantics live in app.signals.contract. The MT5 adapter preserves
+    the existing entry/sl/tpN key names so execution behavior does not change.
+    """
+    from ..signals.contract import canonical_signal, to_mt5_payload
+
     targets = db.get_signal_targets(int(row["id"]))
-    target_map = {int(t["target_no"]): float(t["price"]) for t in targets}
+    contract = canonical_signal(row, targets)
+
     cfg = None
     raw_cfg = row["trailing_config_json"] if "trailing_config_json" in row.keys() else None
     if raw_cfg:
@@ -176,48 +184,8 @@ def signal_to_payload(row) -> dict[str, Any]:
             cfg = profile_snapshot(str(row["trailing_code"]))
         except Exception:
             cfg = None
-    return {
-        "id": int(row["id"]),
-        "signal_id": str(row["code"]),
-        "market": str(row["market_type"]),
-        "symbol": str(row["symbol"]),
-        "timeframe": str(row["timeframe"] if "timeframe" in row.keys() and row["timeframe"] else "M5"),
-        "direction": str(row["direction"]),
-        "entry": float(row["entry_price"]),
-        "sl": float(row["stop_loss"]),
-        "tp1": target_map.get(1),
-        "tp2": target_map.get(2),
-        "tp3": target_map.get(3),
-        "tp4": target_map.get(4),
-        "tp5": target_map.get(5),
-        "tp6": target_map.get(6),
-        "tp7": target_map.get(7),
-        "tp8": target_map.get(8),
-        "tp9": target_map.get(9),
-        "tp10": target_map.get(10),
-        "targets": [target_map[k] for k in sorted(target_map)],
-        "risk_percent": float(row["risk_percent"]),
-        "volume_mode": str(row["volume_mode"] if "volume_mode" in row.keys() and row["volume_mode"] else "RISK").upper(),
-        "lot_size": float(row["lot_size"]) if row["lot_size"] is not None else None,
-        "leverage": float(row["leverage"]) if row["leverage"] is not None else None,
-        "trailing_code": str(row["trailing_code"] or ""),
-        "trailing_name": str(row["trailing_name"] or ""),
-        "trailing_config": cfg,
-        "max_entry_deviation_pct": float(row["max_entry_deviation_pct"]) if "max_entry_deviation_pct" in row.keys() and row["max_entry_deviation_pct"] is not None else None,
-        "max_entry_deviation_abs": float(row["max_entry_deviation_abs"]) if "max_entry_deviation_abs" in row.keys() and row["max_entry_deviation_abs"] is not None else None,
-        "order_type": str(row["order_type"] if "order_type" in row.keys() and row["order_type"] else "MARKET").upper(),
-        "stop_limit_price": float(row["stop_limit_price"]) if "stop_limit_price" in row.keys() and row["stop_limit_price"] is not None else None,
-        "limit_activated_at": str(row["limit_activated_at"]) if "limit_activated_at" in row.keys() and row["limit_activated_at"] else None,
-        "status": str(row["status"]),
-        "created_at": str(row["created_at"]),
-        "destination": str(row["destination"] or "BOTH").upper(),
-        "signal_uuid": str(row["signal_uuid"] or "") if "signal_uuid" in row.keys() else "",
-        "revision": int(row["revision"] or 1) if "revision" in row.keys() else 1,
-        "issuer_type": str(row["issuer_type"] or "") if "issuer_type" in row.keys() else "",
-        "issuer_account": str(row["issuer_account"] or "") if "issuer_account" in row.keys() else "",
-        "issued_at": str(row["issued_at"] or "") if "issued_at" in row.keys() else "",
-    }
 
+    return to_mt5_payload(contract, trailing_config=cfg)
 
 def _resolve_service_ea_auth(license_key: str, account_number: str) -> dict[str, Any]:
     """Resolve a licensed customer session; never silently fall back on bad credentials."""
