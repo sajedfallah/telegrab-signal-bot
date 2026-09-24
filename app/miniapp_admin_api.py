@@ -318,10 +318,53 @@ def _admin_live_signal(signal: Any) -> dict[str, Any] | None:
     return {"status": "UNAVAILABLE", "pnl_state": None, "last_sync": last_sync, "age_seconds": age}
 
 
+def _get_signal_chart_capture_job(signal_id: int):
+    """Read the latest chart-capture job without depending on a removed db helper."""
+    with db.conn() as con:
+        return con.execute(
+            """
+            SELECT *
+            FROM signal_chart_capture_jobs
+            WHERE signal_id=?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (int(signal_id),),
+        ).fetchone()
+
+
+def _enrich_mt5_live_signals(rows, account_number: str | None = None) -> list[dict[str, Any]]:
+    """Attach managed NEXUS signal identity to authoritative MT5 live-state rows."""
+    result: list[dict[str, Any]] = []
+    account = str(account_number or "").strip()
+
+    for raw in rows or []:
+        item = dict(raw)
+        code = str(item.get("signal_code") or "").strip()
+        signal = db.get_signal_by_code(code) if code else None
+
+        if signal:
+            issuer_account = str(signal["issuer_account"] or "").strip()
+            if not account or not issuer_account or issuer_account == account:
+                item["signal_id"] = int(signal["id"])
+                item["signal_code"] = str(signal["code"] or code)
+            else:
+                item["signal_id"] = None
+        else:
+            item["signal_id"] = None
+
+        if "floating_pnl" not in item:
+            item["floating_pnl"] = float(item.get("profit") or 0.0)
+
+        result.append(item)
+
+    return result
+
+
 def _sync_request(row) -> dict[str, Any]:
     item = dict(row)
     signal = db.get_signal(int(item["signal_id"])) if item.get("signal_id") else None
-    job = db.get_signal_chart_capture_job(int(item["signal_id"])) if item.get("signal_id") else None
+    job = _get_signal_chart_capture_job(int(item["signal_id"])) if item.get("signal_id") else None
     status, error = str(item["status"]), item.get("error_message")
     if signal:
         if signal["free_message_id"] or signal["vip_message_id"]:
@@ -464,7 +507,7 @@ def retry(request_id: str, background_tasks: BackgroundTasks,
         raise HTTPException(404, "signal request not found")
     try:
         signal = db.get_signal(int(row["signal_id"]))
-        existing_job = db.get_signal_chart_capture_job(int(row["signal_id"]))
+        existing_job = _get_signal_chart_capture_job(int(row["signal_id"]))
         already_published = bool(signal and str(signal["publication_stage"] or "").upper() == "PUBLISHED")
         if (signal and existing_job and not already_published
                 and str(existing_job["status"] or "").upper() in {"UPLOADED", "COMPLETED"}):
@@ -495,8 +538,8 @@ def positions(x_telegram_init_data: str | None = Header(default=None, alias="X-T
     live_positions = db.mt5_live_positions(account, nexus_only=True) if account else []
     live_orders = db.mt5_live_orders(account, nexus_only=True) if account else []
     return {"mt5_admin": mt5,
-            "positions": db.enrich_mt5_live_signals(live_positions, account) if account else [],
-            "orders": db.enrich_mt5_live_signals(live_orders, account) if account else []}
+            "positions": _enrich_mt5_live_signals(live_positions, account) if account else [],
+            "orders": _enrich_mt5_live_signals(live_orders, account) if account else []}
 
 
 @router.post("/signals/{signal_id}/command")
