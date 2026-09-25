@@ -1,6 +1,42 @@
 ﻿// UI65 build shim: compile NEXUS_AutoTrade_UI65.mq5 from this directory.
 // The execution core remains the production source under ../NEXUS_AutoTrade.
+//
+// v0.6.6.1 wraps only the timer/trade-transaction entry points so exact MT5
+// partial-deal truth can be queued/retried without modifying the hardened core.
+// All other core event mappings supplied by the UI65 shell remain unchanged.
+#undef OnTimer
+#undef OnTradeTransaction
+#define OnTimer            NEXUSCoreBase_OnTimer
+#define OnTradeTransaction NEXUSCoreBase_OnTradeTransaction
 #include "Core/NEXUS_AutoTrade_Core.mq5"
+#undef OnTimer
+#undef OnTradeTransaction
+
+#include "Core/Include/PartialLifecycleTruth.mqh"
+
+void NEXUSCore_OnTimer()
+  {
+   // Deliver pending partial stages before the core processes a possible final
+   // CLOSE. This preserves Telegram lifecycle ordering after a transient outage.
+   NexusPartialTruthProcessPending();
+   NEXUSCoreBase_OnTimer();
+  }
+
+void NEXUSCore_OnTradeTransaction(const MqlTradeTransaction &trans,
+                                  const MqlTradeRequest &request,
+                                  const MqlTradeResult &result)
+  {
+   // Core remains authoritative for execution state and final-close queuing.
+   NEXUSCoreBase_OnTradeTransaction(trans,request,result);
+   // Post-core hook can now distinguish a partial exit because the position is
+   // still present after MT5 has applied the exit deal.
+   NexusPartialTruthOnTradeTransaction(trans,request,result);
+  }
+
+// Restore the names expected by the outer UI65 shell. It undefines these after
+// this include and exposes its own thin UI-aware terminal event handlers.
+#define OnTimer            NEXUSCore_OnTimer
+#define OnTradeTransaction NEXUSCore_OnTradeTransaction
 
 // The UI65 shell repaints visual controls after delegated core events/timers.
 // MT5 OBJ_EDIT loses native keyboard focus if SELECTED is forced false during
@@ -53,4 +89,3 @@ bool UI65ObjectSetStringCompat(const long chart_id,const string name,
 #define ObjectDelete      UI65ObjectDeleteCompat
 #define ObjectSetInteger  UI65ObjectSetIntegerCompat
 #define ObjectSetString   UI65ObjectSetStringCompat
-

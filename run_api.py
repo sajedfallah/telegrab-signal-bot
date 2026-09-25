@@ -24,6 +24,12 @@ install_risk_firewall()
 from app.autotrade.live_event_runtime import install_live_snapshot_event_bridge
 install_live_snapshot_event_bridge()
 
+# History reconciliation runs in the API process. Install the identity/live
+# truth guard before importing the FastAPI module so RECON-CLOSE can never
+# close a signal while a fresh authoritative MT5 position is still OPEN.
+from app.autotrade.notification_queue_guard import install_notification_queue_guard
+install_notification_queue_guard()
+
 from app.combined_api import app
 
 
