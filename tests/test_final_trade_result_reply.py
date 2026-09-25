@@ -83,3 +83,11 @@ def test_final_result_sender_uses_reply_parameters():
     block = source[start:end]
     assert "bot.send_message" in block
     assert "ReplyParameters(message_id=int(parent_message_id))" in block
+
+
+def test_final_result_prefers_original_signal_anchor():
+    source = (Path(__file__).resolve().parents[1] / "app" / "main.py").read_text(encoding="utf-8")
+    start = source.index("async def _publish_result_with_fallback")
+    end = source.index("\n\nasync def ", start)
+    block = source[start:end]
+    assert "for raw in (original_message_id, last_message_id):" in block
