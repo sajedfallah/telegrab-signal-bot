@@ -4086,7 +4086,10 @@ async def _publish_result_to_channel(bot: Bot, target, row, parent_message_id: i
 async def _publish_result_with_fallback(bot: Bot, target, row, last_message_id, original_message_id, caption: str, label: str) -> tuple[int | None, str | None]:
     """Reply with text only; never render/download/upload a lifecycle screenshot."""
     parents: list[int] = []
-    for raw in (last_message_id, original_message_id):
+    # The canonical final-result target is the original Signal message.
+    # The latest lifecycle reply is only a recovery fallback when Telegram can
+    # no longer accept a reply to the original anchor.
+    for raw in (original_message_id, last_message_id):
         if raw is None:
             continue
         try:
