@@ -4787,8 +4787,12 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
             if opened_dt.tzinfo is None:
                 opened_dt = opened_dt.replace(tzinfo=timezone.utc)
             holding_seconds = max(0, int((close_dt - opened_dt).total_seconds()))
-        except (TypeError, ValueError, OverflowError):
+        except (TypeError, ValueError, OverflowError) as exc:
             holding_seconds = None
+            log.warning(
+                "[NEXUS][RESULT] holding-time calculation failed signal=%s opened_at=%r close_at=%s error=%s",
+                row["code"], opened_raw, close_dt.isoformat(), exc,
+            )
 
         market_type = str(row["market_type"] or "").upper()
         try:
@@ -4796,7 +4800,11 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
                 market_type, str(row["symbol"]), str(row["direction"]),
                 float(row["entry_price"]), exit_price
             )
-        except Exception:
+        except Exception as exc:
+            log.exception(
+                "[NEXUS][RESULT] result metric build failed signal=%s exit=%s: %s",
+                row["code"], exit_price, exc,
+            )
             result_pips, result_unit = 0.0, "PERCENT"
 
         reason = str(payload.get("close_reason") or "OTHER").upper()
