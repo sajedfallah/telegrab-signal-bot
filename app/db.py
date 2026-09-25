@@ -3058,6 +3058,7 @@ def reconcile_mt5_history(telegram_id: int, items: list[dict]) -> dict:
     """
     accepted = created = matched = repaired = 0
     skipped = 0
+    close_delivery_queue: list[tuple[int, dict, str]] = []
     with conn() as con:
         for item in items[:500]:
             event = str(item.get("event") or "").upper().strip()
@@ -3153,6 +3154,17 @@ def reconcile_mt5_history(telegram_id: int, items: list[dict]) -> dict:
                             (occurred_at, exit_price, float(item.get("profit") or 0), int(signal_row["id"])),
                         )
                         repaired += 1
+                if event == "CLOSE":
+                    queued_payload = dict(item)
+                    queued_payload["signal_id"] = str(signal_row["publish_token"] or signal_row["code"])
+                    queued_payload["event"] = "CLOSE"
+                    close_delivery_queue.append((int(telegram_id), queued_payload, ticket))
+    # Reconciliation owns broker truth, but Telegram final-result delivery must
+    # still flow through the durable MT5 event worker. Queue outside the DB
+    # transaction to avoid nested SQLite connections/locks. Event-key uniqueness
+    # makes repeated reconciliation idempotent.
+    for queued_uid, queued_payload, queued_ticket in close_delivery_queue:
+        enqueue_autotrade_trade_event(queued_uid, "CLOSE", queued_payload, queued_ticket)
     return {"accepted": accepted, "created": created, "matched": matched, "repaired": repaired, "skipped": skipped}
 
 
