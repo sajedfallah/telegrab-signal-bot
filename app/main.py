@@ -4737,7 +4737,34 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
         return
 
     if event == "CLOSE":
-        if str(row["status"]).upper() == "CLOSED":
+        # CLOSED alone is not proof that the Telegram lifecycle completed.
+        # History reconciliation may persist broker truth before the queued CLOSE
+        # notification is processed. Only short-circuit when the final result has
+        # already been delivered to every required destination.
+        prior_close_updates = [
+            u for u in db.signal_updates(int(row["id"]))
+            if str(u["action"]).upper() in {"MT5_CLOSE_DELIVERY", "MT5_CLOSE"}
+        ]
+        delivered_free = next(
+            (int(u["free_message_id"]) for u in reversed(prior_close_updates) if u["free_message_id"]),
+            None,
+        )
+        delivered_vip = next(
+            (int(u["vip_message_id"]) for u in reversed(prior_close_updates) if u["vip_message_id"]),
+            None,
+        )
+        destination = str(row["destination"] or "BOTH").upper()
+        close_delivery_complete = (
+            (destination == "FREE" and delivered_free is not None)
+            or (destination == "VIP" and delivered_vip is not None)
+            or (destination == "BOTH" and delivered_free is not None and delivered_vip is not None)
+        )
+        if str(row["status"]).upper() == "CLOSED" and close_delivery_complete:
+            db.update_trade_execution(
+                uid, ticket, str(payload.get("event_id") or f"CLOSE:{ticket}"),
+                signal_id=int(row["id"]), status="CLOSED",
+                destination=destination,
+            )
             return
         # Screenshot is optional for CLOSE. The final lifecycle result is
         # delivered as a reply even when MT5 chart capture is unavailable.
@@ -4795,12 +4822,14 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
         # signal_updates, so no channel message was sent. Publish before
         # marking CLOSED; at least one successful channel is required.
         # Post-signal lifecycle updates are text-only. Never render/capture/upload a chart.
-        free_mid = vip_mid = None
+        free_mid = delivered_free
+        vip_mid = delivered_vip
         reply_errors: list[str] = []
         # CLOSE can race the background publication queued after the accepted
-        # MT5 receipt. If no Telegram anchor exists yet, publish the signal
-        # fallback synchronously before attempting the result reply.
-        if not row["free_message_id"] and not row["vip_message_id"]:
+        # MT5 receipt. Recover any missing required root anchor synchronously.
+        needs_free_anchor = destination in {"FREE", "BOTH"} and not row["free_message_id"]
+        needs_vip_anchor = destination in {"VIP", "BOTH"} and not row["vip_message_id"]
+        if needs_free_anchor or needs_vip_anchor:
             try:
                 from .autotrade.api import _publish_mt5_admin_signal_async
                 await _publish_mt5_admin_signal_async(row, None)
@@ -4808,23 +4837,56 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
                 if refreshed is not None:
                     row = refreshed
             except Exception as exc:
+                log.exception(
+                    "[NEXUS][TELEGRAM] CLOSE anchor recovery failed signal=%s",
+                    row["code"],
+                )
                 reply_errors.append(f"SIGNAL_ANCHOR: {exc}")
-        if row["destination"] in {"FREE", "BOTH"}:
-            free_mid, err = await _publish_result_with_fallback(
+
+        # Retry only destinations whose final CLOSE reply is still missing.
+        # Successful partial delivery is persisted before raising, so a retry
+        # never duplicates the already-delivered final result.
+        new_free_mid = new_vip_mid = None
+        if destination in {"FREE", "BOTH"} and free_mid is None:
+            new_free_mid, err = await _publish_result_with_fallback(
                 bot, settings.free_channel_target, row,
                 row["free_last_message_id"], row["free_message_id"],
                 reply, "FREE",
             )
-            if err: reply_errors.append(err)
-        if row["destination"] in {"VIP", "BOTH"}:
-            vip_mid, err = await _publish_result_with_fallback(
+            if new_free_mid is not None:
+                free_mid = new_free_mid
+            if err:
+                reply_errors.append(err)
+        if destination in {"VIP", "BOTH"} and vip_mid is None:
+            new_vip_mid, err = await _publish_result_with_fallback(
                 bot, settings.vip_channel_id, row,
                 row["vip_last_message_id"], row["vip_message_id"],
                 reply, "VIP",
             )
-            if err: reply_errors.append(err)
-        if not free_mid and not vip_mid:
-            raise RuntimeError("MT5 CLOSE Telegram reply failed: " + " | ".join(reply_errors or ["no channel delivery"]))
+            if new_vip_mid is not None:
+                vip_mid = new_vip_mid
+            if err:
+                reply_errors.append(err)
+
+        if new_free_mid is not None or new_vip_mid is not None:
+            db.add_signal_update(
+                int(row["id"]), "MT5_CLOSE_DELIVERY",
+                reply, reply, str(profit), uid,
+                new_free_mid, new_vip_mid, None,
+            )
+
+        close_delivery_complete = (
+            (destination == "FREE" and free_mid is not None)
+            or (destination == "VIP" and vip_mid is not None)
+            or (destination == "BOTH" and free_mid is not None and vip_mid is not None)
+        )
+        if not close_delivery_complete:
+            raise RuntimeError(
+                "MT5 CLOSE Telegram reply incomplete: "
+                + " | ".join(reply_errors or [
+                    f"destination={destination} free={free_mid} vip={vip_mid}"
+                ])
+            )
 
         db.close_signal(
             int(row["id"]), exit_price,
