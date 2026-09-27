@@ -357,8 +357,9 @@
   }
 
   async function openTradesV2() {
+    const previewMode = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
     const experience = state.experience;
-    if (!experience?.features?.trades) {
+    if (!experience?.features?.trades && !previewMode) {
       render('subscriptions');
       return;
     }
@@ -389,6 +390,14 @@
 
   window.NexusTrades = { open: openTradesV2, detail: openDetail, liveDetail: openLiveDetail };
   if (window.NexusExperience) window.NexusExperience.renderTrades = openTradesV2;
+
+  if (new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi') {
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.remove('landing-active');
+      document.getElementById('nexusLanding')?.setAttribute('hidden', '');
+      window.setTimeout(() => openTradesV2(), 60);
+    }, { once: true });
+  }
 
   document.addEventListener('click', event => {
     const target = event.target.closest?.('[data-route="trades"],[data-home-go="trades"]');
