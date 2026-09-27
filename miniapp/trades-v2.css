@@ -215,3 +215,156 @@
   .mt5-kpi-metric{padding:11px}
   .mt5-kpi-account{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 }
+
+
+/* MINIAPP-TRADING-001B — interactive Uiverse-inspired MT5 KPI */
+.mt5-account-kpi.uiverse-inspired{
+  padding:20px;
+  border-radius:30px;
+  background:
+    radial-gradient(circle at 88% -8%,rgba(57,215,196,.13),transparent 34%),
+    #07090d;
+  border:1px solid rgba(255,255,255,.07);
+  box-shadow:0 18px 40px rgba(0,0,0,.34);
+}
+.mt5-account-kpi.uiverse-inspired .mt5-kpi-head{margin-bottom:18px}
+.mt5-kpi-switch{
+  --active-index:0;
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:0;
+  padding:4px;
+  margin-bottom:17px;
+  border-radius:18px;
+  background:#171b22;
+  border:1px solid rgba(255,255,255,.05);
+  overflow:hidden;
+}
+.mt5-kpi-switch-slider{
+  position:absolute;
+  z-index:0;
+  top:4px;
+  bottom:4px;
+  left:4px;
+  width:calc((100% - 8px) / 4);
+  border-radius:14px;
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.10);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  box-shadow:0 5px 12px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.08);
+  transform:translateX(calc(var(--active-index) * 100%));
+  transition:transform .34s cubic-bezier(.22,.9,.32,1);
+}
+.mt5-kpi-switch button{
+  position:relative;
+  z-index:1;
+  min-width:0;
+  padding:9px 4px;
+  border:0;
+  border-radius:14px;
+  background:transparent;
+  color:#7f8998;
+  font:inherit;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.01em;
+  cursor:pointer;
+}
+.mt5-kpi-switch button.active{color:#fff}
+.mt5-kpi-main{margin-bottom:14px}
+.mt5-kpi-main-label{
+  color:var(--muted);
+  font-size:11px;
+  font-weight:700;
+}
+.mt5-kpi-main-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:5px;
+}
+.mt5-kpi-main-value{
+  min-width:0;
+  color:#fff;
+  font-size:clamp(31px,9vw,38px);
+  line-height:1.04;
+  font-weight:950;
+  letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.mt5-kpi-main-stats{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:9px;
+  font-size:11px;
+  font-weight:850;
+  font-variant-numeric:tabular-nums;
+}
+.mt5-kpi-main-stats.positive{color:var(--accent2)}
+.mt5-kpi-main-stats.negative{color:var(--danger)}
+.mt5-kpi-main-stats.neutral{color:var(--muted)}
+.mt5-kpi-chart{
+  width:100%;
+  height:96px;
+  margin-top:8px;
+  overflow:hidden;
+  border-radius:15px;
+  color:var(--accent2);
+  background:
+    linear-gradient(180deg,rgba(57,215,196,.055),rgba(57,215,196,.012)),
+    #0d1117;
+  border:1px solid rgba(255,255,255,.045);
+}
+.mt5-account-kpi.uiverse-inspired.negative .mt5-kpi-chart{color:var(--danger)}
+.mt5-account-kpi.uiverse-inspired.neutral .mt5-kpi-chart{color:#9aa4b3}
+.mt5-kpi-chart svg{
+  width:100%;
+  height:100%;
+  display:block;
+  transform:translateX(1px) scale(1.015);
+  transform-origin:center;
+}
+.mt5-kpi-chart .line{
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.15;
+  vector-effect:non-scaling-stroke;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  stroke-dasharray:180;
+  stroke-dashoffset:180;
+  animation:mt5KpiDraw .9s ease-out forwards;
+}
+.mt5-kpi-chart .area{stroke:none}
+@keyframes mt5KpiDraw{to{stroke-dashoffset:0}}
+.mt5-chart-placeholder{
+  height:100%;
+  display:grid;
+  place-items:center;
+  padding:14px;
+  text-align:center;
+  color:var(--muted);
+  font-size:9px;
+  line-height:1.7;
+}
+.mt5-account-kpi.uiverse-inspired .mt5-kpi-foot{
+  margin-top:12px;
+  border-top:0;
+  padding-top:0;
+}
+.mt5-account-kpi.uiverse-inspired[data-connection="stale"] .mt5-kpi-chart,
+.mt5-account-kpi.uiverse-inspired[data-connection="offline"] .mt5-kpi-chart{
+  filter:saturate(.5);
+  opacity:.72;
+}
+@media(max-width:370px){
+  .mt5-account-kpi.uiverse-inspired{padding:16px;border-radius:25px}
+  .mt5-kpi-switch button{font-size:9px;padding:8px 2px}
+  .mt5-kpi-main-value{font-size:29px}
+  .mt5-kpi-chart{height:88px}
+}
