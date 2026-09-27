@@ -1,5 +1,5 @@
 (() => {
-  const tradeState = { tab: 'open', offset: 0, limit: 20, loading: false };
+  const tradeState = { tab: 'open', offset: 0, limit: 20, loading: false, lastHealth: null, balanceHidden: localStorage.getItem('nexus-hide-balance') === '1', activeKpi: 'balance' };
 
   function h(value) {
     return String(value ?? '').replace(/[&<>'"]/g, c => ({
@@ -28,6 +28,253 @@
 
   function check(yes, label) {
     return `<span class="${yes ? 'ok' : 'off'}">${yes ? icon('check') : icon('close')}<b>${h(label)}</b></span>`;
+  }
+
+  function money(value, currency = 'USD') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency || 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    } catch (_) {
+      return `${n.toFixed(2)} ${currency || 'USD'}`;
+    }
+  }
+
+  function signedMoney(value, currency = 'USD') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const absolute = money(Math.abs(n), currency);
+    if (n > 0) return `+${absolute}`;
+    if (n < 0) return `-${absolute}`;
+    return absolute;
+  }
+
+  function signedPercent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
+  }
+
+  function relativeSync(value) {
+    if (!value) return 'بدون Sync';
+    const ts = new Date(value).getTime();
+    if (!Number.isFinite(ts)) return dt(value);
+    const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (seconds < 60) return `${seconds} ثانیه پیش`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} دقیقه پیش`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} ساعت پیش`;
+  }
+
+  function maskedAccount(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 'MT5 —';
+    return `****${raw.slice(-4)}`;
+  }
+
+  function eyeIcon(hidden) {
+    return hidden
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 4.3A10.5 10.5 0 0 1 12 4c5.2 0 8.8 4.6 9.7 6a1.7 1.7 0 0 1 0 2c-.5.8-1.8 2.6-3.8 4M6.2 6.2C4.3 7.4 3 9.2 2.3 10.1a1.7 1.7 0 0 0 0 2C3.2 13.4 6.8 18 12 18c1.1 0 2.1-.2 3-.5"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 10.1C3.2 8.6 6.8 4 12 4s8.8 4.6 9.7 6.1a1.7 1.7 0 0 1 0 1.8C20.8 13.4 17.2 18 12 18s-8.8-4.6-9.7-6.1a1.7 1.7 0 0 1 0-1.8Z"/><circle cx="12" cy="11" r="3"/></svg>';
+  }
+
+  function normalizeAccountKpi(data) {
+    const preview = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
+    const source = data?.account_metrics || data?.financials || data?.mt5?.metrics || {};
+    const stateData = data?.state || {};
+    const rawState = String(stateData.state || '').toUpperCase();
+    let connection = rawState === 'HEALTHY' ? 'LIVE' : rawState === 'DISCONNECTED' ? 'OFFLINE' : 'STALE';
+
+    const actual = {
+      connection,
+      account_number: data?.mt5?.account_number,
+      broker: data?.mt5?.broker || data?.broker,
+      balance: source.balance,
+      equity: source.equity,
+      open_pnl: source.open_pnl ?? source.floating_pnl,
+      today_pnl: source.today_pnl,
+      today_pnl_percent: source.today_pnl_percent,
+      currency: source.currency || 'USD',
+      last_seen_at: stateData.last_sync_at || data?.mt5?.last_seen_at,
+    };
+
+    if (!preview) return actual;
+
+    return {
+      connection: 'LIVE',
+      account_number: actual.account_number || '50254',
+      broker: actual.broker || 'Roco Broker Ltd',
+      balance: Number.isFinite(Number(actual.balance)) ? actual.balance : 10428.50,
+      equity: Number.isFinite(Number(actual.equity)) ? actual.equity : 10512.30,
+      open_pnl: Number.isFinite(Number(actual.open_pnl)) ? actual.open_pnl : 83.80,
+      today_pnl: Number.isFinite(Number(actual.today_pnl)) ? actual.today_pnl : 83.80,
+      today_pnl_percent: Number.isFinite(Number(actual.today_pnl_percent)) ? actual.today_pnl_percent : 0.81,
+      currency: actual.currency || 'USD',
+      last_seen_at: actual.last_seen_at || new Date(Date.now() - 4000).toISOString(),
+      preview: true,
+    };
+  }
+
+  function kpiConfig(m) {
+    const configs = {
+      balance: {
+        label: 'Balance',
+        title: 'Account Balance',
+        value: money(m.balance, m.currency),
+        subLeft: signedMoney(m.today_pnl, m.currency) + ' Today',
+        subRight: signedPercent(m.today_pnl_percent),
+        trend: Number(m.today_pnl || 0),
+      },
+      equity: {
+        label: 'Equity',
+        title: 'Live Equity',
+        value: money(m.equity, m.currency),
+        subLeft: 'Balance ' + money(m.balance, m.currency),
+        subRight: signedMoney(Number(m.equity || 0) - Number(m.balance || 0), m.currency),
+        trend: Number(m.equity || 0) - Number(m.balance || 0),
+      },
+      today: {
+        label: 'Today',
+        title: 'Today P&L',
+        value: signedMoney(m.today_pnl, m.currency),
+        subLeft: 'Daily Performance',
+        subRight: signedPercent(m.today_pnl_percent),
+        trend: Number(m.today_pnl || 0),
+      },
+      floating: {
+        label: 'Floating',
+        title: 'Open P&L',
+        value: signedMoney(m.open_pnl, m.currency),
+        subLeft: 'Equity ' + money(m.equity, m.currency),
+        subRight: 'Live',
+        trend: Number(m.open_pnl || 0),
+      },
+    };
+    return configs[tradeState.activeKpi] || configs.balance;
+  }
+
+  function previewSeries(key) {
+    const series = {
+      balance: [24,23,24,22,20,21,17,18,15,16,12,13,10,12,8,9,6,8,4,5,2],
+      equity: [27,26,24,25,21,19,20,16,17,13,15,11,12,8,10,6,8,5,6,3,4],
+      today: [31,29,30,26,27,23,24,20,22,18,19,14,16,12,13,9,11,7,8,4,5],
+      floating: [22,24,21,23,18,20,17,19,14,16,12,15,10,12,8,10,6,9,5,7,4],
+    };
+    return series[key] || series.balance;
+  }
+
+  function sparkPaths(values) {
+    const width = 100;
+    const height = 42;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(1, max - min);
+    const pts = values.map((v, i) => {
+      const x = (i / (values.length - 1)) * width;
+      const y = 4 + ((v - min) / span) * 31;
+      return [x, y];
+    });
+    const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(' ');
+    const area = `${line} L100,42 L0,42 Z`;
+    return { line, area };
+  }
+
+  function accountKpiCard(data) {
+    const m = normalizeAccountKpi(data);
+    const hidden = tradeState.balanceHidden;
+    const hasNumbers = [m.balance, m.equity, m.open_pnl].some(v => Number.isFinite(Number(v)));
+    const stale = m.connection !== 'LIVE';
+    const metric = kpiConfig(m);
+    const metricClass = metric.trend > 0 ? 'positive' : metric.trend < 0 ? 'negative' : 'neutral';
+    const privateValue = value => hidden ? '••••••••' : value;
+    const tabs = [
+      ['balance','Balance'],
+      ['equity','Equity'],
+      ['today','Today'],
+      ['floating','Floating'],
+    ];
+    const activeIndex = Math.max(0, tabs.findIndex(([key]) => key === tradeState.activeKpi));
+
+    if (!hasNumbers && !m.preview) {
+      return `<article class="mt5-account-kpi uiverse-inspired" data-connection="${h(m.connection.toLowerCase())}">
+        <div class="mt5-kpi-head">
+          <div><div class="mt5-kpi-kicker">MT5 ACCOUNT</div><div class="mt5-kpi-account">${h(maskedAccount(m.account_number))}${m.broker ? ` · ${h(m.broker)}` : ''}</div></div>
+          <span class="mt5-live-badge"><i></i>${h(m.connection)}</span>
+        </div>
+        <div class="mt5-kpi-empty"><span>Account Balance</span><strong>—</strong><p>پس از دریافت Snapshot مالی از MT5، موجودی زنده حساب اینجا نمایش داده می‌شود.</p></div>
+        <div class="mt5-kpi-sync">${stale ? 'Last known' : 'Synced'} · ${h(relativeSync(m.last_seen_at))}</div>
+      </article>`;
+    }
+
+    const series = m.preview ? previewSeries(tradeState.activeKpi) : null;
+    const paths = series ? sparkPaths(series) : null;
+
+    return `<article class="mt5-account-kpi uiverse-inspired ${metricClass}" data-connection="${h(m.connection.toLowerCase())}" data-active-kpi="${h(tradeState.activeKpi)}">
+      <div class="mt5-kpi-head">
+        <div>
+          <div class="mt5-kpi-kicker">MT5 ACCOUNT</div>
+          <div class="mt5-kpi-account">${h(maskedAccount(m.account_number))} · ${h(m.broker || 'MetaTrader 5')}</div>
+        </div>
+        <span class="mt5-live-badge"><i></i>${h(m.connection)}</span>
+      </div>
+
+      <div class="mt5-kpi-switch" style="--active-index:${activeIndex}">
+        <div class="mt5-kpi-switch-slider" aria-hidden="true"></div>
+        ${tabs.map(([key,label]) => `<button type="button" data-kpi-tab="${key}" class="${tradeState.activeKpi === key ? 'active' : ''}">${label}</button>`).join('')}
+      </div>
+
+      <div class="mt5-kpi-main">
+        <div class="mt5-kpi-main-label">${h(metric.title)}</div>
+        <div class="mt5-kpi-main-row">
+          <strong class="mt5-kpi-main-value" dir="ltr">${h(privateValue(metric.value))}</strong>
+          <button class="mt5-privacy-toggle" type="button" data-balance-toggle aria-label="${hidden ? 'Show values' : 'Hide values'}">${eyeIcon(hidden)}</button>
+        </div>
+        <div class="mt5-kpi-main-stats ${metricClass}" dir="ltr">
+          <span>${h(privateValue(metric.subLeft))}</span>
+          <b>${h(privateValue(metric.subRight))}</b>
+        </div>
+      </div>
+
+      <div class="mt5-kpi-chart ${paths ? '' : 'empty'}">
+        ${paths ? `<svg viewBox="0 0 100 42" preserveAspectRatio="none" aria-label="${h(metric.title)} trend">
+          <defs>
+            <linearGradient id="mt5KpiArea-${h(tradeState.activeKpi)}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="currentColor" stop-opacity=".30"></stop>
+              <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+            </linearGradient>
+          </defs>
+          <path class="area" d="${paths.area}" fill="url(#mt5KpiArea-${h(tradeState.activeKpi)})"></path>
+          <path class="line" d="${paths.line}"></path>
+        </svg>` : '<div class="mt5-chart-placeholder">Trend data will appear here after MT5 history sync.</div>'}
+      </div>
+
+      <div class="mt5-kpi-foot">
+        <span class="mt5-kpi-sync">${stale ? 'Last known' : 'Synced'} · ${h(relativeSync(m.last_seen_at))}</span>
+        ${m.preview ? '<span class="mt5-preview-pill">UI PREVIEW</span>' : ''}
+      </div>
+    </article>`;
+  }
+
+  function renderAccountKpi(data) {
+    tradeState.lastHealth = data || tradeState.lastHealth || {};
+    const host = document.getElementById('tradeAccountKpi');
+    if (!host) return;
+    host.innerHTML = accountKpiCard(tradeState.lastHealth);
+    host.querySelector('[data-balance-toggle]')?.addEventListener('click', () => {
+      tradeState.balanceHidden = !tradeState.balanceHidden;
+      localStorage.setItem('nexus-hide-balance', tradeState.balanceHidden ? '1' : '0');
+      renderAccountKpi(tradeState.lastHealth);
+    });
+    host.querySelectorAll('[data-kpi-tab]').forEach(btn => btn.addEventListener('click', () => {
+      tradeState.activeKpi = btn.dataset.kpiTab || 'balance';
+      renderAccountKpi(tradeState.lastHealth);
+    }));
   }
 
   function healthCard(data) {
@@ -186,14 +433,16 @@
   }
 
   async function openTradesV2() {
+    const previewMode = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
     const experience = state.experience;
-    if (!experience?.features?.trades) {
+    if (!experience?.features?.trades && !previewMode) {
       render('subscriptions');
       return;
     }
     state.route = 'trades';
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.route === 'trades'));
     view.innerHTML = `<section class="page-head"><div><div class="eyebrow">MY EXECUTION</div><h1>معاملات من</h1></div></section>
+      <div id="tradeAccountKpi"></div>
       <div id="tradeHealthV2">${window.NexusProduct?.skeleton?.('health', 1) || '<div class="empty-state">در حال بررسی AutoTrade...</div>'}</div>
       <div class="plan-tabs trades-v2-tabs"><button class="tab active" data-trades-tab="open">باز</button><button class="tab" data-trades-tab="pending">Pending</button><button class="tab" data-trades-tab="history">تاریخچه</button></div>
       <div class="stack" id="tradesV2List">${window.NexusProduct?.skeleton?.('trades', 3) || '<div class="empty-state">در حال دریافت...</div>'}</div>
@@ -202,9 +451,11 @@
     document.getElementById('tradesV2More')?.addEventListener('click', () => { tradeState.offset += tradeState.limit; loadTab({ append: true }); });
     try {
       const health = await api('/autotrade/status');
+      renderAccountKpi(health);
       const host = document.getElementById('tradeHealthV2');
       if (host) host.innerHTML = healthCard(health);
     } catch (err) {
+      renderAccountKpi({});
       const host = document.getElementById('tradeHealthV2');
       if (host) host.innerHTML = '<div class="status-panel">وضعیت AutoTrade در دسترس نیست.</div>';
     }
@@ -215,6 +466,14 @@
 
   window.NexusTrades = { open: openTradesV2, detail: openDetail, liveDetail: openLiveDetail };
   if (window.NexusExperience) window.NexusExperience.renderTrades = openTradesV2;
+
+  if (new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi') {
+    window.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.remove('landing-active');
+      document.getElementById('nexusLanding')?.setAttribute('hidden', '');
+      window.setTimeout(() => openTradesV2(), 60);
+    }, { once: true });
+  }
 
   document.addEventListener('click', event => {
     const target = event.target.closest?.('[data-route="trades"],[data-home-go="trades"]');

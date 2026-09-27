@@ -7,6 +7,7 @@ if (tg) {
 }
 
 const API = '/miniapp/api';
+const UI_PREVIEW = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
 const state = { bootstrap: null, route: 'home', planCategory: 'vip' };
 let bootstrapUnavailable = false;
 const routes = {
@@ -30,6 +31,7 @@ async function api(path, options = {}) {
 }
 
 async function bootstrap(allowDeferred = true) {
+  if (UI_PREVIEW) return;
   const webApp = telegramWebApp();
   webApp?.ready?.();
   if (!webApp?.initData) {
@@ -54,6 +56,7 @@ async function bootstrap(allowDeferred = true) {
 }
 
 function renderAuthUnavailable() {
+  if (UI_PREVIEW) return;
   if (!['home', 'signals'].includes(state.route)) return;
   view.innerHTML = '<div class="empty-state nexus-auth-error">دریافت اطلاعات NEXUS با مشکل مواجه شد. لطفاً Mini App را از داخل Telegram باز کنید یا دوباره تلاش کنید.<br><button class="btn ghost" id="retryNexusBootstrap" type="button">تلاش مجدد</button></div>';
   document.getElementById('retryNexusBootstrap')?.addEventListener('click', bootstrap);

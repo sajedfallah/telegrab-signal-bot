@@ -1,10 +1,26 @@
 (() => {
+  const previewMode = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
   const landing = document.getElementById('nexusLanding');
   const enterButton = document.getElementById('enterNexus');
   const appShell = document.querySelector('.app-shell');
   if (!landing || !enterButton || !appShell) {
     document.body.classList.remove('landing-active');
     appShell?.removeAttribute('aria-hidden');
+    return;
+  }
+
+  if (previewMode) {
+    landing.hidden = true;
+    appShell.removeAttribute('aria-hidden');
+    appShell.style.visibility = '';
+    appShell.style.pointerEvents = '';
+    document.body.classList.remove('landing-active');
+    window.NexusLanding = {
+      show() {},
+      enter() {},
+      reset() {},
+      reveal() {},
+    };
     return;
   }
 
