@@ -368,3 +368,9 @@
   .mt5-kpi-main-value{font-size:29px}
   .mt5-kpi-chart{height:88px}
 }
+
+/* MINIAPP-TRADING-001C — Balance emphasis */
+.mt5-account-kpi[data-active-kpi="balance"] .mt5-kpi-main-value{
+  color:var(--accent2);
+  text-shadow:0 0 22px rgba(110,231,216,.12);
+}
