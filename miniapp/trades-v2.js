@@ -1,5 +1,5 @@
 (() => {
-  const tradeState = { tab: 'open', offset: 0, limit: 20, loading: false };
+  const tradeState = { tab: 'open', offset: 0, limit: 20, loading: false, lastHealth: null, balanceHidden: localStorage.getItem('nexus-hide-balance') === '1' };
 
   function h(value) {
     return String(value ?? '').replace(/[&<>'"]/g, c => ({
@@ -28,6 +28,177 @@
 
   function check(yes, label) {
     return `<span class="${yes ? 'ok' : 'off'}">${yes ? icon('check') : icon('close')}<b>${h(label)}</b></span>`;
+  }
+
+  function money(value, currency = 'USD') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    try {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency || 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(n);
+    } catch (_) {
+      return `${n.toFixed(2)} ${currency || 'USD'}`;
+    }
+  }
+
+  function signedMoney(value, currency = 'USD') {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    const absolute = money(Math.abs(n), currency);
+    if (n > 0) return `+${absolute}`;
+    if (n < 0) return `-${absolute}`;
+    return absolute;
+  }
+
+  function signedPercent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return `${n > 0 ? '+' : ''}${n.toFixed(2)}%`;
+  }
+
+  function relativeSync(value) {
+    if (!value) return 'بدون Sync';
+    const ts = new Date(value).getTime();
+    if (!Number.isFinite(ts)) return dt(value);
+    const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
+    if (seconds < 60) return `${seconds} ثانیه پیش`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} دقیقه پیش`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours} ساعت پیش`;
+  }
+
+  function maskedAccount(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return 'MT5 —';
+    return `****${raw.slice(-4)}`;
+  }
+
+  function eyeIcon(hidden) {
+    return hidden
+      ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.7 2.7M9.9 4.3A10.5 10.5 0 0 1 12 4c5.2 0 8.8 4.6 9.7 6a1.7 1.7 0 0 1 0 2c-.5.8-1.8 2.6-3.8 4M6.2 6.2C4.3 7.4 3 9.2 2.3 10.1a1.7 1.7 0 0 0 0 2C3.2 13.4 6.8 18 12 18c1.1 0 2.1-.2 3-.5"/></svg>'
+      : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.3 10.1C3.2 8.6 6.8 4 12 4s8.8 4.6 9.7 6.1a1.7 1.7 0 0 1 0 1.8C20.8 13.4 17.2 18 12 18s-8.8-4.6-9.7-6.1a1.7 1.7 0 0 1 0-1.8Z"/><circle cx="12" cy="11" r="3"/></svg>';
+  }
+
+  function normalizeAccountKpi(data) {
+    const preview = new URLSearchParams(location.search).get('uiPreview') === 'mt5-kpi';
+    const source = data?.account_metrics || data?.financials || data?.mt5?.metrics || {};
+    const stateData = data?.state || {};
+    const rawState = String(stateData.state || '').toUpperCase();
+    let connection = rawState === 'HEALTHY' ? 'LIVE' : rawState === 'DISCONNECTED' ? 'OFFLINE' : 'STALE';
+
+    const actual = {
+      connection,
+      account_number: data?.mt5?.account_number,
+      broker: data?.mt5?.broker || data?.broker,
+      balance: source.balance,
+      equity: source.equity,
+      open_pnl: source.open_pnl ?? source.floating_pnl,
+      today_pnl: source.today_pnl,
+      today_pnl_percent: source.today_pnl_percent,
+      currency: source.currency || 'USD',
+      last_seen_at: stateData.last_sync_at || data?.mt5?.last_seen_at,
+    };
+
+    if (!preview) return actual;
+
+    return {
+      connection: 'LIVE',
+      account_number: actual.account_number || '50254',
+      broker: actual.broker || 'Roco Broker Ltd',
+      balance: Number.isFinite(Number(actual.balance)) ? actual.balance : 10428.50,
+      equity: Number.isFinite(Number(actual.equity)) ? actual.equity : 10512.30,
+      open_pnl: Number.isFinite(Number(actual.open_pnl)) ? actual.open_pnl : 83.80,
+      today_pnl: Number.isFinite(Number(actual.today_pnl)) ? actual.today_pnl : 83.80,
+      today_pnl_percent: Number.isFinite(Number(actual.today_pnl_percent)) ? actual.today_pnl_percent : 0.81,
+      currency: actual.currency || 'USD',
+      last_seen_at: actual.last_seen_at || new Date(Date.now() - 4000).toISOString(),
+      preview: true,
+    };
+  }
+
+  function accountKpiCard(data) {
+    const m = normalizeAccountKpi(data);
+    const hidden = tradeState.balanceHidden;
+    const hasNumbers = [m.balance, m.equity, m.open_pnl].some(v => Number.isFinite(Number(v)));
+    const stale = m.connection !== 'LIVE';
+    const pnl = Number(m.today_pnl || 0);
+    const openPnl = Number(m.open_pnl || 0);
+    const pnlClass = pnl > 0 ? 'positive' : pnl < 0 ? 'negative' : 'neutral';
+    const openClass = openPnl > 0 ? 'positive' : openPnl < 0 ? 'negative' : 'neutral';
+    const privateValue = value => hidden ? '••••••••' : value;
+
+    if (!hasNumbers && !m.preview) {
+      return `<article class="mt5-account-kpi" data-connection="${h(m.connection.toLowerCase())}">
+        <div class="mt5-kpi-head">
+          <div>
+            <div class="mt5-kpi-kicker">MT5 ACCOUNT</div>
+            <div class="mt5-kpi-account">${h(maskedAccount(m.account_number))}${m.broker ? ` · ${h(m.broker)}` : ''}</div>
+          </div>
+          <span class="mt5-live-badge"><i></i>${h(m.connection)}</span>
+        </div>
+        <div class="mt5-kpi-empty">
+          <span>Account Balance</span>
+          <strong>—</strong>
+          <p>پس از دریافت Snapshot مالی از MT5، موجودی زنده حساب اینجا نمایش داده می‌شود.</p>
+        </div>
+        <div class="mt5-kpi-sync">${stale ? 'Last known' : 'Synced'} · ${h(relativeSync(m.last_seen_at))}</div>
+      </article>`;
+    }
+
+    return `<article class="mt5-account-kpi" data-connection="${h(m.connection.toLowerCase())}">
+      <div class="mt5-kpi-head">
+        <div>
+          <div class="mt5-kpi-kicker">MT5 ACCOUNT</div>
+          <div class="mt5-kpi-account">${h(maskedAccount(m.account_number))} · ${h(m.broker || 'MetaTrader 5')}</div>
+        </div>
+        <span class="mt5-live-badge"><i></i>${h(m.connection)}</span>
+      </div>
+
+      <div class="mt5-balance-section">
+        <div class="mt5-balance-label">Account Balance</div>
+        <div class="mt5-balance-line">
+          <strong class="mt5-balance-value" dir="ltr">${h(privateValue(money(m.balance, m.currency)))}</strong>
+          <button class="mt5-privacy-toggle" type="button" data-balance-toggle aria-label="${hidden ? 'Show balance' : 'Hide balance'}">${eyeIcon(hidden)}</button>
+        </div>
+        <div class="mt5-daily-pnl ${pnlClass}" dir="ltr">
+          <span>${h(privateValue(signedMoney(m.today_pnl, m.currency)))} Today</span>
+          <b>${h(privateValue(signedPercent(m.today_pnl_percent)))}</b>
+        </div>
+      </div>
+
+      <div class="mt5-kpi-metrics">
+        <div class="mt5-kpi-metric">
+          <span>Equity</span>
+          <strong dir="ltr">${h(privateValue(money(m.equity, m.currency)))}</strong>
+        </div>
+        <div class="mt5-kpi-metric">
+          <span>Open P&amp;L</span>
+          <strong class="${openClass}" dir="ltr">${h(privateValue(signedMoney(m.open_pnl, m.currency)))}</strong>
+        </div>
+      </div>
+
+      <div class="mt5-kpi-foot">
+        <span class="mt5-kpi-sync">${stale ? 'Last known' : 'Synced'} · ${h(relativeSync(m.last_seen_at))}</span>
+        ${m.preview ? '<span class="mt5-preview-pill">UI PREVIEW</span>' : ''}
+      </div>
+    </article>`;
+  }
+
+  function renderAccountKpi(data) {
+    tradeState.lastHealth = data || tradeState.lastHealth || {};
+    const host = document.getElementById('tradeAccountKpi');
+    if (!host) return;
+    host.innerHTML = accountKpiCard(tradeState.lastHealth);
+    host.querySelector('[data-balance-toggle]')?.addEventListener('click', () => {
+      tradeState.balanceHidden = !tradeState.balanceHidden;
+      localStorage.setItem('nexus-hide-balance', tradeState.balanceHidden ? '1' : '0');
+      renderAccountKpi(tradeState.lastHealth);
+    });
   }
 
   function healthCard(data) {
@@ -194,6 +365,7 @@
     state.route = 'trades';
     document.querySelectorAll('.nav-item').forEach(btn => btn.classList.toggle('active', btn.dataset.route === 'trades'));
     view.innerHTML = `<section class="page-head"><div><div class="eyebrow">MY EXECUTION</div><h1>معاملات من</h1></div></section>
+      <div id="tradeAccountKpi"></div>
       <div id="tradeHealthV2">${window.NexusProduct?.skeleton?.('health', 1) || '<div class="empty-state">در حال بررسی AutoTrade...</div>'}</div>
       <div class="plan-tabs trades-v2-tabs"><button class="tab active" data-trades-tab="open">باز</button><button class="tab" data-trades-tab="pending">Pending</button><button class="tab" data-trades-tab="history">تاریخچه</button></div>
       <div class="stack" id="tradesV2List">${window.NexusProduct?.skeleton?.('trades', 3) || '<div class="empty-state">در حال دریافت...</div>'}</div>
@@ -202,9 +374,11 @@
     document.getElementById('tradesV2More')?.addEventListener('click', () => { tradeState.offset += tradeState.limit; loadTab({ append: true }); });
     try {
       const health = await api('/autotrade/status');
+      renderAccountKpi(health);
       const host = document.getElementById('tradeHealthV2');
       if (host) host.innerHTML = healthCard(health);
     } catch (err) {
+      renderAccountKpi({});
       const host = document.getElementById('tradeHealthV2');
       if (host) host.innerHTML = '<div class="status-panel">وضعیت AutoTrade در دسترس نیست.</div>';
     }
