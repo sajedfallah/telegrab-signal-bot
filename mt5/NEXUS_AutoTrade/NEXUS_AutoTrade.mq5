@@ -1199,14 +1199,44 @@ string BuildLiveOrdersJson()
    return out;
   }
 
+string BuildLiveQuotesJson()
+  {
+   string requested[]={
+      "XAUUSD","XAGUSD",
+      "EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD","NZDUSD","EURJPY","GBPJPY",
+      "BTCUSD","ETHUSD","SOLUSD","XRPUSD","BNBUSD",
+      "US30","US100","NAS100","SPX500","GER40","UK100"
+   };
+   string out="";
+   for(int i=0;i<ArraySize(requested);i++)
+     {
+      string canonical=requested[i];
+      string broker_symbol=g_mapper.Resolve(canonical,InpEnableAutoSymbolMapping);
+      if(broker_symbol=="") continue;
+      MqlTick tick;
+      ResetLastError();
+      if(!SymbolInfoTick(broker_symbol,tick)) continue;
+      if(tick.bid<=0 || tick.ask<=0 || tick.ask<tick.bid) continue;
+      string item=StringFormat(
+         "{\"symbol\":\"%s\",\"broker_symbol\":\"%s\",\"bid\":%s,\"ask\":%s,\"observed_at_ms\":%I64d}",
+         NexusJsonEscape(canonical),NexusJsonEscape(broker_symbol),
+         DoubleToString(tick.bid,8),DoubleToString(tick.ask,8),(long)tick.time_msc
+      );
+      if(out!="") out+=",";
+      out+=item;
+     }
+   return out;
+  }
+
 void DoLiveSync()
   {
    datetime now=TimeCurrent();
    if(g_last_live_sync>0 && (now-g_last_live_sync)<MathMax(1,InpLiveSyncSeconds)) return;
    g_last_live_sync=now;
    string response;
-   if(g_api.LiveState(BuildLivePositionsJson(),BuildLiveOrdersJson(),response))
-      Print("NEXUS LIVE SYNC OK: positions/orders snapshot delivered");
+   string quotes=BuildLiveQuotesJson();
+   if(g_api.LiveState(BuildLivePositionsJson(),BuildLiveOrdersJson(),quotes,response))
+      Print("NEXUS LIVE SYNC OK: positions/orders/quotes snapshot delivered");
    else
       Print("NEXUS LIVE SYNC FAILED: ",g_api.LastError());
   }
