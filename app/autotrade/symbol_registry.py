@@ -29,11 +29,18 @@ def normalize_symbol(value: str) -> str:
 
 def infer_category(symbol: str) -> str:
     s = normalize_symbol(symbol)
-    if s.startswith("XAU"):
+    if s.startswith(("XAU", "XAG")) or s.startswith(("GOLD", "SILVER")):
         return "GOLD"
     if any(s.startswith(x) for x in CANONICAL_SYMBOLS["CRYPTO"]):
         return "CRYPTO"
-    if s in CANONICAL_SYMBOLS["INDEX"]:
+    index_aliases = {
+        "DOWJONES", "US30", "DJ30",
+        "NASDAQ", "NAS100", "US100", "USTEC",
+        "SPX500", "SP500", "US500",
+        "GER40", "DAX40", "DE40",
+        "UK100", "FTSE100",
+    }
+    if s in CANONICAL_SYMBOLS["INDEX"] or s in index_aliases:
         return "INDEX"
     if len(s) >= 6 and s[:6].isalpha():
         return "FOREX"
