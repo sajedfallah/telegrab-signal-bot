@@ -12,7 +12,7 @@ from . import db
 from .config import settings
 from .miniapp_api import _auth_user
 from .autotrade.service import signal_to_payload
-from .autotrade.symbol_registry import normalize_symbol
+from .autotrade.symbol_registry import infer_category, normalize_symbol
 from .autotrade.trailing_profiles import TRAILING_PROFILES, profile_snapshot
 
 
@@ -201,7 +201,34 @@ def calculate(req: CalculateRequest, x_telegram_init_data: str | None = Header(d
 @router.get("/market-quote")
 def market_quote(symbol: str = Query(min_length=3, max_length=32), x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     _admin(x_telegram_init_data)
-    raise HTTPException(status_code=503, detail="authoritative MT5 bid/ask quote feed is not available through this backend")
+    account = _admin_account()
+    if not account:
+        raise HTTPException(status_code=503, detail="no Admin MT5 account is configured")
+    canonical = normalize_symbol(symbol)
+    quote = db.mt5_market_quote(account, canonical)
+    if not quote:
+        raise HTTPException(status_code=503, detail=f"MT5 quote is not available for {canonical}")
+    try:
+        seen = datetime.fromisoformat(str(quote["last_seen_at"]).replace("Z", "+00:00"))
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        age = max(0.0, (datetime.now(timezone.utc) - seen.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=503, detail=f"MT5 quote timestamp is invalid for {canonical}")
+    fresh = age <= 15.0
+    if not fresh:
+        raise HTTPException(status_code=503, detail=f"MT5 quote is stale for {canonical}")
+    return {
+        "ok": True,
+        "symbol": canonical,
+        "broker_symbol": str(quote["broker_symbol"]),
+        "bid": float(quote["bid"]),
+        "ask": float(quote["ask"]),
+        "fresh": True,
+        "age_seconds": round(age, 1),
+        "observed_at_ms": int(quote["observed_at_ms"] or 0),
+        "account_number": account,
+    }
 
 
 @router.post("/signals", status_code=201)
@@ -218,7 +245,7 @@ def create_signal(req: CreateSignalRequest, x_telegram_init_data: str | None = H
         trailing_cfg = profile_snapshot(trailing)
     try:
         row = db.issue_mt5_admin_signal(
-            market_type="GOLD" if normalize_symbol(req.symbol).startswith("XAU") else "FOREX",
+            market_type=infer_category(req.symbol),
             symbol=normalize_symbol(req.symbol), direction=req.direction, entry_price=req.entry,
             stop_loss=req.stop_loss, targets=[float(value) for value in req.targets],
             risk_percent=float(req.risk_percent or 0), rr_ratio=None, order_type="MARKET",

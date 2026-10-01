@@ -761,6 +761,21 @@ def init_db() -> None:
         """)
         con.execute("CREATE INDEX IF NOT EXISTS idx_mt5_live_account_status ON mt5_live_state(account_number,status,last_seen_at)")
         con.execute("CREATE INDEX IF NOT EXISTS idx_mt5_live_signal ON mt5_live_state(account_number,signal_code,status)")
+        con.execute("""
+            CREATE TABLE IF NOT EXISTS mt5_symbol_quotes (
+                account_number TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                broker_symbol TEXT NOT NULL,
+                bid REAL NOT NULL,
+                ask REAL NOT NULL,
+                observed_at_ms INTEGER NOT NULL DEFAULT 0,
+                broker TEXT,
+                server TEXT,
+                last_seen_at TEXT NOT NULL,
+                PRIMARY KEY(account_number,symbol)
+            )
+        """)
+        con.execute("CREATE INDEX IF NOT EXISTS idx_mt5_symbol_quotes_fresh ON mt5_symbol_quotes(account_number,last_seen_at)")
         ecols = _columns(con, "autotrade_trade_executions")
         execution_migrations = {
             "gross_profit": "ALTER TABLE autotrade_trade_executions ADD COLUMN gross_profit REAL NOT NULL DEFAULT 0",
@@ -2243,7 +2258,7 @@ def record_mt5_heartbeat(account_number: str, *, role: str = "CLIENT", ea_versio
         )
 
 
-def upsert_mt5_live_snapshot(account_number: str, *, broker: str = "", server: str = "", ea_version: str = "", positions: list[dict] | None = None, orders: list[dict] | None = None) -> dict:
+def upsert_mt5_live_snapshot(account_number: str, *, broker: str = "", server: str = "", ea_version: str = "", positions: list[dict] | None = None, orders: list[dict] | None = None, quotes: list[dict] | None = None) -> dict:
     """Replace the account's authoritative live MT5 snapshot atomically.
 
     The snapshot is the source of truth for the Telegram Admin Live Center.
@@ -2256,8 +2271,30 @@ def upsert_mt5_live_snapshot(account_number: str, *, broker: str = "", server: s
     now = now_iso()
     positions = positions or []
     orders = orders or []
+    quotes = quotes or []
     with conn() as con:
         seen_pos=[]; seen_ord=[]
+        quote_count=0
+        for item in quotes[:100]:
+            symbol=str(item.get("symbol") or "").strip().upper()
+            broker_symbol=str(item.get("broker_symbol") or "").strip()
+            try:
+                bid=float(item.get("bid") or 0)
+                ask=float(item.get("ask") or 0)
+                observed_at_ms=int(item.get("observed_at_ms") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not symbol or not broker_symbol or not math.isfinite(bid) or not math.isfinite(ask) or bid<=0 or ask<=0 or ask<bid:
+                continue
+            con.execute("""INSERT INTO mt5_symbol_quotes
+                (account_number,symbol,broker_symbol,bid,ask,observed_at_ms,broker,server,last_seen_at)
+                VALUES(?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(account_number,symbol) DO UPDATE SET
+                 broker_symbol=excluded.broker_symbol,bid=excluded.bid,ask=excluded.ask,
+                 observed_at_ms=excluded.observed_at_ms,broker=excluded.broker,server=excluded.server,
+                 last_seen_at=excluded.last_seen_at""",
+                (account,symbol,broker_symbol,bid,ask,observed_at_ms,broker,server,now))
+            quote_count+=1
         for item in positions[:200]:
             ident=str(item.get("identifier") or item.get("ticket") or "").strip()
             ticket=str(item.get("ticket") or "").strip()
@@ -2298,7 +2335,16 @@ def upsert_mt5_live_snapshot(account_number: str, *, broker: str = "", server: s
         else:
             con.execute("UPDATE mt5_live_state SET status='CANCELLED' WHERE account_number=? AND state_type='ORDER' AND status='PENDING'", (account,))
         con.execute("UPDATE mt5_heartbeats_v060 SET last_seen_at=?,ea_version=COALESCE(?,ea_version) WHERE account_number=?", (now,ea_version or None,account))
-    return {"account_number":account,"positions":len(seen_pos),"orders":len(seen_ord),"last_seen_at":now}
+    return {"account_number":account,"positions":len(seen_pos),"orders":len(seen_ord),"quotes":quote_count,"last_seen_at":now}
+
+
+def mt5_market_quote(account_number: str, symbol: str) -> dict | None:
+    with conn() as con:
+        row=con.execute(
+            "SELECT * FROM mt5_symbol_quotes WHERE account_number=? AND symbol=? LIMIT 1",
+            (str(account_number).strip(), str(symbol).strip().upper()),
+        ).fetchone()
+        return dict(row) if row else None
 
 
 def mt5_live_positions(account_number: str, *, nexus_only: bool = True) -> list[dict]:

@@ -38,6 +38,18 @@ private:
       if(out=="SILVER" || StringFind(out,"SILVER")==0)
          return "XAGUSD";
 
+      // Common index aliases across MT5 brokers.
+      if(out=="US30" || out=="DJ30" || out=="DOW30" || out=="DOWJONES")
+         return "DOWJONES";
+      if(out=="NAS100" || out=="US100" || out=="USTEC" || out=="NASDAQ")
+         return "NASDAQ";
+      if(out=="SP500" || out=="US500" || out=="SPX500")
+         return "SPX500";
+      if(out=="GER40" || out=="DAX40" || out=="DE40")
+         return "GER40";
+      if(out=="UK100" || out=="FTSE100")
+         return "UK100";
+
       return out;
      }
 

@@ -197,11 +197,11 @@ public:
       return false;
      }
 
-   bool LiveState(const string positions_json,const string orders_json,string &response)
+   bool LiveState(const string positions_json,const string orders_json,const string quotes_json,string &response)
      {
-      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"broker\":\"%s\",\"server\":\"%s\",\"ea_version\":\"%s\",\"positions\":[%s],\"orders\":[%s]}",
+      string body=StringFormat("{\"license_key\":\"%s\",\"account_number\":\"%s\",\"broker\":\"%s\",\"server\":\"%s\",\"ea_version\":\"%s\",\"positions\":[%s],\"orders\":[%s],\"quotes\":[%s]}",
          NexusJsonEscape(m_license),NexusJsonEscape(m_account),NexusJsonEscape(AccountInfoString(ACCOUNT_COMPANY)),
-         NexusJsonEscape(AccountInfoString(ACCOUNT_SERVER)),NexusJsonEscape(m_version),positions_json,orders_json);
+         NexusJsonEscape(AccountInfoString(ACCOUNT_SERVER)),NexusJsonEscape(m_version),positions_json,orders_json,quotes_json);
       return Request("POST","/api/v1/autotrade/live-state",body,true,response,true);
      }
 
