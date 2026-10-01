@@ -119,6 +119,21 @@ class MT5LiveStateItem(BaseModel):
     nexus_managed: bool = True
     order_type: str = Field(default="MARKET", max_length=32)
 
+class MT5QuoteItem(BaseModel):
+    symbol: str = Field(min_length=3, max_length=32)
+    broker_symbol: str = Field(min_length=1, max_length=64)
+    bid: float = Field(gt=0, le=1e12)
+    ask: float = Field(gt=0, le=1e12)
+    observed_at_ms: int = Field(default=0, ge=0, le=9_223_372_036_854_775_807)
+
+    @field_validator("bid", "ask")
+    @classmethod
+    def validate_quote_price(cls, value):
+        if not math.isfinite(float(value)):
+            raise ValueError("quote price must be finite")
+        return float(value)
+
+
 class MT5LiveStateRequest(BaseModel):
     license_key: str = ""
     account_number: str = Field(min_length=3, max_length=32)
@@ -127,6 +142,7 @@ class MT5LiveStateRequest(BaseModel):
     ea_version: str = Field(default="", max_length=32)
     positions: list[MT5LiveStateItem] = Field(default_factory=list, max_length=200)
     orders: list[MT5LiveStateItem] = Field(default_factory=list, max_length=200)
+    quotes: list[MT5QuoteItem] = Field(default_factory=list, max_length=100)
 
 
 class HistoryReconcileItem(BaseModel):
@@ -779,7 +795,16 @@ def live_state(
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     positions=[i.model_dump() for i in req.positions]
     orders=[i.model_dump() for i in req.orders]
-    result=db.upsert_mt5_live_snapshot(account, broker=broker_h or req.broker, server=server_h or req.server, ea_version=version_h or req.ea_version, positions=positions, orders=orders)
+    quotes=[i.model_dump() for i in req.quotes]
+    result=db.upsert_mt5_live_snapshot(
+        account,
+        broker=broker_h or req.broker,
+        server=server_h or req.server,
+        ea_version=version_h or req.ea_version,
+        positions=positions,
+        orders=orders,
+        quotes=quotes,
+    )
 
     # Missed receipt fallback: a broker-confirmed live NEXUS position is enough
     # to repair an execution receipt/ledger when the original receipt request
