@@ -12,17 +12,30 @@ Describe the change and why it is needed.
 
 ## Validation
 
-- [ ] Branch started from current `main`
-- [ ] Relevant local tests passed
-- [ ] GitHub Actions are green
-- [ ] Vercel Preview is READY (frontend changes)
-- [ ] Telegram E2E checked with valid initData when authenticated behavior changed
-- [ ] No secrets, `.env`, DB files or generated runtime artifacts are committed
+- [ ] Branch was created from the latest `main`.
+- [ ] Scope is focused; unrelated historical branches were not merged wholesale.
+- [ ] Relevant local tests pass.
+- [ ] Required GitHub Actions are green.
+- [ ] Vercel Preview is `Ready` for Mini App/frontend changes.
+- [ ] Authenticated Mini App changes were validated from Telegram with valid `initData`.
+- [ ] No `.env`, token, credential, database, receipt, generated runtime file, or other secret is tracked.
+
+## NEXUS production boundaries
+
+- [ ] Backend / VPS impact reviewed.
+- [ ] Telegram lifecycle impact reviewed.
+- [ ] AutoTrade execution gating impact reviewed.
+- [ ] MT5 / broker-truth impact reviewed.
+- [ ] Gold/Forex data remains broker/MT5 sourced; no synthetic market truth was introduced.
+
+## Preview / evidence
+
+Vercel Preview URL or PR deployment status:
 
 ## Production impact
 
-Describe production impact, migration requirements, and rollback path. Write `none` if not applicable.
+Describe affected runtime/services, migration requirements, or write `Frontend/docs only`.
 
-## Vercel Preview
+## Rollback
 
-Paste the Preview URL posted by `vercel[bot]`, if applicable.
+Describe the revert / known-good deployment path, or write `Revert this PR`.
