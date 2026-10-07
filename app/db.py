@@ -3361,6 +3361,34 @@ def signal_updates(signal_id: int):
         return list(con.execute("SELECT * FROM signal_updates WHERE signal_id=? ORDER BY id", (signal_id,)).fetchall())
 
 
+def analytics_closed_signals(start_iso: str, end_iso: str):
+    """Return the exact closed-signal projection used by analytics for the current cycle."""
+    cycle = current_cycle_id()
+    with conn() as con:
+        return list(con.execute(
+            """
+            SELECT id,code,market_type,symbol,direction,entry_price,exit_price,result_value,result_unit,
+                   rr_ratio,destination,trailing_code,trailing_name,created_at,closed_at
+            FROM signals
+            WHERE status='CLOSED' AND closed_at>=? AND closed_at<?
+              AND COALESCE(cycle_id, ?) = ?
+            ORDER BY closed_at DESC
+            """,
+            (str(start_iso), str(end_iso), cycle, cycle),
+        ).fetchall())
+
+
+def analytics_active_signal_count() -> int:
+    """Count non-closed signals for the current cycle using the existing analytics semantics."""
+    cycle = current_cycle_id()
+    with conn() as con:
+        return int(con.execute(
+            "SELECT COUNT(*) FROM signals "
+            "WHERE status<>'CLOSED' AND COALESCE(cycle_id,?)=?",
+            (cycle, cycle),
+        ).fetchone()[0])
+
+
 def current_cycle_id() -> str:
     return str(get_setting("current_cycle_id", "CYCLE-LEGACY")).strip() or "CYCLE-LEGACY"
 
