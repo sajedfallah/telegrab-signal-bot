@@ -280,3 +280,21 @@ After this PR is reviewed/green, the next bounded task should be:
 DATA-ACCESS-CONSOLIDATION-001:
 Inventory every direct SQL statement outside app/db.py, map callers/tests and migrate only duplicated queries behind app/db.py repository functions without changing schema, signal semantics or execution behavior.
 ```
+
+
+## DATA-ACCESS-CONSOLIDATION-002
+
+Status: implemented on the consolidation branch.
+
+Priority direct SQL was moved behind new exact-contract helpers in `app/db.py`:
+
+- payment receipt idempotency -> `find_invoice_payment`
+- Mini App execution history -> `miniapp_execution_history`
+- Admin MT5 account resolution -> `latest_admin_mt5_account`
+- Admin heartbeat row -> `admin_mt5_heartbeat`
+- Admin signal live row -> `mt5_latest_managed_signal_state`
+- Admin active managed live rows -> `mt5_managed_active_state`
+
+Regression coverage locks filtering, projection, ordering, configured fallback, role filtering, case-insensitive signal matching and managed OPEN/PENDING semantics. No schema or signal/execution semantics changed.
+
+Remaining direct SQL is deferred where equivalence has not yet been demonstrated.
