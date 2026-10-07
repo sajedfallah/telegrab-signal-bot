@@ -183,11 +183,16 @@ See:
 4. Added canonical testing/verification contract.
 5. Updated README to point to current Sources-of-Truth.
 6. Consolidated duplicate PR templates into one canonical template.
+7. Completed DATA-ACCESS-CONSOLIDATION-001 for four behavior-equivalent duplicate queries.
+8. Added focused data-access regression coverage and wired it into Mini App CI.
 
 ## FILES MODIFIED
 
 - `README.md`
 - `.github/pull_request_template.md`
+- `app/miniapp_api.py`
+- `app/miniapp_admin_api.py`
+- `.github/workflows/miniapp-ci.yml`
 
 ## FILES REMOVED
 
@@ -200,6 +205,8 @@ See:
 - `DEPLOYMENT.md`
 - `TESTING.md`
 - `REPOSITORY_CONSOLIDATION_REPORT.md`
+- `DATA_ACCESS_CONSOLIDATION_001.md`
+- `tests/test_data_access_consolidation.py`
 
 ## TEST RESULTS
 
@@ -214,7 +221,7 @@ At report creation time:
 
 ## REGRESSION CHECK
 
-Because this branch intentionally avoids runtime source changes, behavioral flows are expected to remain unchanged, but runtime PASS is not fabricated.
+This branch now contains bounded data-access refactors in Mini App/Admin API callers. The changes replace behavior-equivalent inline SQL with existing `app.db` helpers only; behavioral PASS is still based on executable regression/CI evidence rather than assumption.
 
 Telegram receive/actions, signal creation/persistence/publication, Mini App loading, admin loading, lifecycle events, MT5 handoff, position events, close/result replies, initData and production API paths: **NOT VERIFIED at runtime by this audit environment**.
 
@@ -257,13 +264,13 @@ CI: to be checked after PR creation
 
 **PARTIAL**
 
-Canonical documentation and one verified duplicate are consolidated, but higher-risk runtime/database/frontend cleanup remains intentionally deferred.
+Canonical documentation, one verified governance duplicate, and four exact-equivalent API-layer SQL duplications are consolidated. Higher-risk SQL/runtime/frontend cleanup remains intentionally deferred.
 
 ## FINAL DECISION
 
 **NOT READY** for declaring the entire repository fully consolidated.
 
-The current branch is suitable for review as a safe governance/documentation baseline. Subsequent bounded consolidation should migrate direct SQL behind `app/db.py` and perform frontend reachability cleanup with executable regression evidence.
+The current branch is suitable for review as a bounded consolidation baseline. DATA-ACCESS-CONSOLIDATION-001 migrated only exact-equivalent duplicates; remaining direct SQL stays deferred where query semantics differ. Future work should continue query-by-query with focused regression evidence.
 
 ## NEXT COMMAND
 
