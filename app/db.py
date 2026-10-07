@@ -1155,6 +1155,26 @@ def find_invoice_payment(telegram_id: int, invoice_id: int):
         ).fetchone()
 
 
+def set_payment_delivery_state(
+    payment_id: int, *, delivered: bool,
+    receipt_file_id: str | None = None,
+    receipt_message_id: int | None = None,
+    error_text: str | None = None,
+) -> None:
+    """Persist Mini App admin-delivery outcome atomically with the legacy field semantics."""
+    with conn() as con:
+        if delivered:
+            con.execute(
+                "UPDATE payments SET receipt_file_id=?,receipt_message_id=? WHERE id=?",
+                (str(receipt_file_id or ""), receipt_message_id, int(payment_id)),
+            )
+        else:
+            con.execute(
+                "UPDATE payments SET status='failed',admin_note=? WHERE id=?",
+                (str(error_text or ""), int(payment_id)),
+            )
+
+
 def get_payment(payment_id: int):
     with conn() as con:
         return con.execute("SELECT * FROM payments WHERE id=?", (payment_id,)).fetchone()
@@ -2974,6 +2994,110 @@ def enqueue_autotrade_trade_event(telegram_id: int, event_name: str, payload: di
                 "QUEUED", now, now,
             ),
         )
+
+def reconcile_live_trade_execution(
+    telegram_id: int, signal_id: int, ticket: str, event_type: str,
+    payload: dict, *, destination: str = "BOTH",
+) -> dict[str, object]:
+    """Atomically reconcile live MT5 state to one business execution.
+
+    Business identity is (telegram_id, ticket, signal_id, event_type). Transport
+    event_id remains unique for retries, but a different event_id for the same
+    business execution must not create a second ledger row.
+    """
+    uid = int(telegram_id)
+    sid = int(signal_id)
+    ticket = str(ticket).strip()
+    event_type = str(event_type).upper().strip()
+    if event_type not in {"OPEN", "PENDING"}:
+        raise ValueError("live repair supports OPEN/PENDING only")
+    if not ticket:
+        raise ValueError("ticket is required")
+
+    event_id = str(payload.get("event_id") or "").strip()
+    if not event_id:
+        raise ValueError("event_id is required")
+    destination = str(destination or "BOTH").upper()
+    now = now_iso()
+    normalized = dict(payload)
+    normalized["event_id"] = event_id
+    normalized["event"] = event_type
+
+    with conn() as con:
+        existing = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=? "
+            "ORDER BY id DESC LIMIT 1",
+            (uid, ticket, sid, event_type),
+        ).fetchone()
+        if existing:
+            con.execute(
+                "UPDATE autotrade_trade_executions "
+                "SET signal_id=?,status='RECONCILED',destination=?,updated_at=? WHERE id=?",
+                (sid, destination, now, int(existing["id"])),
+            )
+            return {
+                "created": False,
+                "id": int(existing["id"]),
+                "event_id": str(existing["event_id"]),
+            }
+
+        event_key = f"mt5:{uid}:{ticket}:{event_id}"
+        con.execute(
+            """INSERT OR IGNORE INTO autotrade_notifications
+               (telegram_id,event_key,event_type,signal_id,command_id,payload_json,created_at)
+               VALUES(?,?,?,?,?,?,?)""",
+            (
+                uid, event_key, "MT5_TRADE_EVENT", None, None,
+                json.dumps(normalized, ensure_ascii=False, separators=(",", ":")), now,
+            ),
+        )
+        cur = con.execute(
+            """INSERT OR IGNORE INTO autotrade_trade_executions
+               (telegram_id,signal_id,ticket,event_id,event_type,destination,symbol,direction,volume,
+                entry_price,stop_loss,take_profit,exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,cycle_id,status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                uid, sid, ticket, event_id, event_type, destination,
+                str(normalized.get("symbol") or "").upper(),
+                str(normalized.get("direction") or "").upper(),
+                float(normalized.get("volume") or 0),
+                float(normalized.get("entry_price") or 0),
+                float(normalized.get("stop_loss") or 0),
+                float(normalized.get("take_profit") or 0),
+                float(normalized.get("exit_price") or 0),
+                float(normalized.get("profit") or 0),
+                float(normalized.get("gross_profit") or normalized.get("profit") or 0),
+                float(normalized.get("commission") or 0),
+                float(normalized.get("swap") or 0),
+                float(normalized.get("slippage") or 0),
+                float(normalized.get("risk_cash") or 0),
+                float(normalized.get("realized_r") or 0) if normalized.get("realized_r") is not None else None,
+                str(normalized.get("position_id") or "") or None,
+                str(normalized.get("deal_id") or ticket) or None,
+                str(normalized.get("cycle_id") or get_setting("current_cycle_id", "CYCLE-LEGACY", con=con)),
+                "RECONCILED", now, now,
+            ),
+        )
+        if cur.rowcount == 1:
+            return {"created": True, "id": int(cur.lastrowid), "event_id": event_id}
+
+        # Same transport event may already exist; normalize it to the requested
+        # business identity within the same transaction rather than duplicating it.
+        row = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND event_id=? LIMIT 1",
+            (uid, ticket, event_id),
+        ).fetchone()
+        if not row:
+            raise RuntimeError("live execution reconciliation lost its ledger row")
+        con.execute(
+            "UPDATE autotrade_trade_executions "
+            "SET signal_id=?,event_type=?,status='RECONCILED',destination=?,updated_at=? WHERE id=?",
+            (sid, event_type, destination, now, int(row["id"])),
+        )
+        return {"created": False, "id": int(row["id"]), "event_id": str(row["event_id"])}
+
 
 def has_trade_execution(telegram_id: int, ticket: str, event_id: str) -> bool:
     with conn() as con:
