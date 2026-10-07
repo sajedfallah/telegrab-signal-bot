@@ -208,3 +208,124 @@ def test_phase2_migrated_callers_use_canonical_helpers_without_priority_sql():
     assert "db.admin_mt5_heartbeat(account)" in admin
     assert "db.mt5_latest_managed_signal_state(account, code)" in admin
     assert "db.mt5_managed_active_state(account)" in admin
+
+
+def test_payment_delivery_state_is_idempotent_and_preserves_legacy_fields(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    uid = 990030
+    db.upsert_user(uid, "delivery", "Delivery")
+    payment_id = db.create_payment(uid, "30", 30, "test", "irr", "placeholder", "photo")
+
+    db.set_payment_delivery_state(
+        payment_id,
+        delivered=True,
+        receipt_file_id="tg-file-1",
+        receipt_message_id=501,
+    )
+    db.set_payment_delivery_state(
+        payment_id,
+        delivered=True,
+        receipt_file_id="tg-file-1",
+        receipt_message_id=501,
+    )
+    row = db.get_payment(payment_id)
+    assert str(row["status"]) == "pending"
+    assert str(row["receipt_file_id"]) == "tg-file-1"
+    assert int(row["receipt_message_id"]) == 501
+
+    failed_id = db.create_payment(uid, "30", 30, "failed", "irr", "placeholder-2", "photo")
+    note = "Mini App admin delivery failed: TelegramError"
+    db.set_payment_delivery_state(failed_id, delivered=False, error_text=note)
+    db.set_payment_delivery_state(failed_id, delivered=False, error_text=note)
+    failed = db.get_payment(failed_id)
+    assert str(failed["status"]) == "failed"
+    assert str(failed["admin_note"]) == note
+
+
+def test_atomic_live_repair_deduplicates_business_identity_across_transport_event_ids(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    uid = 990040
+    db.upsert_user(uid, "repair", "Repair")
+    signal = db.create_signal(
+        "FOREX", "EURUSD", "BUY", 1.10, 1.09, 1.11, None, None,
+        1.0, 1.0, None, "BOTH", uid,
+    )
+    sid = int(signal["id"])
+    base = {
+        "event": "OPEN", "ticket": "T-REPAIR", "signal_id": str(signal["code"]),
+        "symbol": "EURUSD", "direction": "BUY", "volume": 0.01,
+        "entry_price": 1.10, "stop_loss": 1.09, "take_profit": 1.11,
+        "destination": "BOTH", "position_id": "POS-1",
+    }
+
+    first = db.reconcile_live_trade_execution(
+        uid, sid, "T-REPAIR", "OPEN", {**base, "event_id": "LIVE-OPEN-POS-1"},
+        destination="BOTH",
+    )
+    second = db.reconcile_live_trade_execution(
+        uid, sid, "T-REPAIR", "OPEN", {**base, "event_id": "MT5-ORIGINAL-999"},
+        destination="BOTH",
+    )
+
+    assert first["created"] is True
+    assert second["created"] is False
+    assert int(first["id"]) == int(second["id"])
+
+    with db.conn() as con:
+        rows = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type='OPEN'",
+            (uid, "T-REPAIR", sid),
+        ).fetchall()
+        notifications = con.execute(
+            "SELECT * FROM autotrade_notifications WHERE telegram_id=? AND event_type='MT5_TRADE_EVENT'",
+            (uid,),
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert str(rows[0]["status"]) == "RECONCILED"
+    assert str(rows[0]["event_id"]) == "LIVE-OPEN-POS-1"
+    assert len(notifications) == 1
+
+
+def test_atomic_live_repair_reuses_same_transport_event_without_duplicate(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    uid = 990041
+    db.upsert_user(uid, "repair2", "Repair2")
+    signal = db.create_signal(
+        "FOREX", "GBPUSD", "BUY", 1.25, 1.24, 1.26, None, None,
+        1.0, 1.0, None, "BOTH", uid,
+    )
+    sid = int(signal["id"])
+    payload = {
+        "event": "PENDING", "ticket": "T-PEND", "signal_id": str(signal["code"]),
+        "symbol": "GBPUSD", "direction": "BUY", "volume": 0.02,
+        "entry_price": 1.25, "stop_loss": 1.24, "take_profit": 1.26,
+        "event_id": "LIVE-PENDING-ORDER-1", "destination": "BOTH",
+        "position_id": "ORDER-1",
+    }
+
+    a = db.reconcile_live_trade_execution(uid, sid, "T-PEND", "PENDING", payload)
+    b = db.reconcile_live_trade_execution(uid, sid, "T-PEND", "PENDING", payload)
+
+    assert a["created"] is True
+    assert b["created"] is False
+    with db.conn() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type='PENDING'",
+            (uid, "T-PEND", sid),
+        ).fetchone()[0]
+    assert count == 1
+
+
+def test_phase3_callers_no_longer_embed_payment_delivery_or_live_repair_sql():
+    miniapp = (ROOT / "app/miniapp_api.py").read_text(encoding="utf-8")
+    autotrade = (ROOT / "app/autotrade/api.py").read_text(encoding="utf-8")
+
+    assert "UPDATE payments SET receipt_file_id=?,receipt_message_id=? WHERE id=?" not in miniapp
+    assert "UPDATE payments SET status='failed',admin_note=? WHERE id=?" not in miniapp
+    assert "db.set_payment_delivery_state(" in miniapp
+
+    assert "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=?" not in autotrade
+    assert "db.reconcile_live_trade_execution(" in autotrade
