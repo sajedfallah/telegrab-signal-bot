@@ -135,15 +135,9 @@ def _plans() -> list[dict[str, Any]]:
 
 def _autotrade(uid: int) -> dict[str, Any]:
     ent = _entitlements(uid)
+    mt5 = db.mt5_account(uid)
+    exchange = db.exchange_account(uid)
     with db.conn() as con:
-        mt5 = con.execute(
-            "SELECT account_number,broker,server,status,ea_version,bound_at,last_seen_at "
-            "FROM autotrade_mt5_accounts WHERE telegram_id=? LIMIT 1", (uid,),
-        ).fetchone()
-        exchange = con.execute(
-            "SELECT exchange,account_label,status,bound_at,last_seen_at "
-            "FROM autotrade_exchange_accounts WHERE telegram_id=? LIMIT 1", (uid,),
-        ).fetchone()
         history = con.execute(
             "SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at "
             "FROM autotrade_trade_executions WHERE telegram_id=? ORDER BY id DESC LIMIT 20", (uid,),
@@ -366,11 +360,7 @@ async def submit_receipt(payload: ReceiptRequest, x_telegram_init_data: str | No
                 if not first_file_id and msg.photo:
                     first_file_id = msg.photo[-1].file_id
                     first_message_id = int(msg.message_id)
-                with db.conn() as con:
-                    con.execute(
-                        "INSERT OR REPLACE INTO admin_receipts(payment_id,admin_id,message_id,created_at) VALUES(?,?,?,?)",
-                        (payment_id, int(admin_id), int(msg.message_id), db.now_iso()),
-                    )
+                db.save_admin_receipt(payment_id, int(admin_id), int(msg.message_id))
             except Exception as exc:
                 errors.append(f"{admin_id}:{type(exc).__name__}")
     finally:
