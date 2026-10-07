@@ -1144,6 +1144,17 @@ def user_payments(telegram_id: int, status: str = "all", limit: int = 30):
         ).fetchall())
 
 
+def find_invoice_payment(telegram_id: int, invoice_id: int):
+    """Return the newest pending/approved payment for a user+invoice idempotency check."""
+    with conn() as con:
+        return con.execute(
+            "SELECT id,status FROM payments "
+            "WHERE invoice_id=? AND telegram_id=? AND status IN ('pending','approved') "
+            "ORDER BY id DESC LIMIT 1",
+            (int(invoice_id), int(telegram_id)),
+        ).fetchone()
+
+
 def get_payment(payment_id: int):
     with conn() as con:
         return con.execute("SELECT * FROM payments WHERE id=?", (payment_id,)).fetchone()
@@ -2332,6 +2343,57 @@ def mt5_live_accounts() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def latest_admin_mt5_account(configured_accounts: tuple[str, ...] = ()) -> str | None:
+    """Resolve the Admin MT5 account using the existing configured-first fallback contract."""
+    configured = tuple(str(value).strip() for value in configured_accounts if str(value).strip())
+    with conn() as con:
+        if configured:
+            marks = ",".join("?" for _ in configured)
+            row = con.execute(
+                f"SELECT account_number FROM mt5_heartbeats_v060 "
+                f"WHERE role='ADMIN' AND account_number IN ({marks}) "
+                f"ORDER BY last_seen_at DESC LIMIT 1",
+                configured,
+            ).fetchone()
+            return str(row["account_number"]) if row else configured[0]
+        row = con.execute(
+            "SELECT account_number FROM mt5_heartbeats_v060 "
+            "WHERE role='ADMIN' ORDER BY last_seen_at DESC LIMIT 1"
+        ).fetchone()
+        return str(row["account_number"]) if row else None
+
+
+def admin_mt5_heartbeat(account_number: str):
+    with conn() as con:
+        return con.execute(
+            "SELECT account_number,ea_version,last_seen_at FROM mt5_heartbeats_v060 "
+            "WHERE role='ADMIN' AND account_number=? LIMIT 1",
+            (str(account_number),),
+        ).fetchone()
+
+
+def mt5_latest_managed_signal_state(account_number: str, signal_code: str):
+    """Return the newest managed OPEN/PENDING live row, preserving Mini App case-insensitive matching."""
+    with conn() as con:
+        return con.execute(
+            "SELECT * FROM mt5_live_state WHERE account_number=? "
+            "AND UPPER(COALESCE(signal_code,''))=UPPER(?) "
+            "AND nexus_managed=1 AND UPPER(status) IN ('OPEN','PENDING') "
+            "ORDER BY last_seen_at DESC LIMIT 1",
+            (str(account_number), str(signal_code)),
+        ).fetchone()
+
+
+def mt5_managed_active_state(account_number: str):
+    """Return managed OPEN/PENDING rows in the Admin Mini App's canonical freshness order."""
+    with conn() as con:
+        return list(con.execute(
+            "SELECT * FROM mt5_live_state WHERE account_number=? AND nexus_managed=1 "
+            "AND UPPER(status) IN ('OPEN','PENDING') ORDER BY last_seen_at DESC",
+            (str(account_number),),
+        ).fetchall())
+
+
 def mt5_signal_live_state(signal_id: int) -> dict:
     """Return the authoritative MT5 receipt + latest execution snapshot for the signal issuer."""
     signal = get_signal(signal_id)
@@ -2943,6 +3005,16 @@ def update_trade_execution(
             "WHERE telegram_id=? AND ticket=? AND event_id=?",
             tuple(args),
         )
+
+def miniapp_execution_history(telegram_id: int, *, limit: int = 20):
+    """Return the Mini App execution projection in newest-first insertion order."""
+    with conn() as con:
+        return list(con.execute(
+            "SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at "
+            "FROM autotrade_trade_executions WHERE telegram_id=? ORDER BY id DESC LIMIT ?",
+            (int(telegram_id), max(1, min(int(limit), 100))),
+        ).fetchall())
+
 
 def autotrade_trade_executions(telegram_id: int, *, start_iso: str | None = None,
                                 end_iso: str | None = None, limit: int = 500):
