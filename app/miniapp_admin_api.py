@@ -260,10 +260,7 @@ def _signal_item(row: Any) -> dict[str, Any]:
 @router.get("/signals")
 def signals(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     _admin(x_telegram_init_data)
-    with db.conn() as con:
-        rows = con.execute(
-            "SELECT * FROM signals WHERE issuer_type='MT5_ADMIN' ORDER BY id DESC LIMIT 100"
-        ).fetchall()
+    rows = db.list_mt5_admin_signals(100)
     return {"ok": True, "mt5_admin": _admin_mt5_status(), "items": [_signal_item(row) for row in rows]}
 
 
