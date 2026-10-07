@@ -3024,6 +3024,10 @@ def reconcile_live_trade_execution(
     normalized["event"] = event_type
 
     with conn() as con:
+        # Acquire the SQLite write reservation before the business-identity read.
+        # Without this, two deferred transactions could both observe "missing"
+        # and insert different transport event_ids for one business execution.
+        con.execute("BEGIN IMMEDIATE")
         existing = con.execute(
             "SELECT * FROM autotrade_trade_executions "
             "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=? "
