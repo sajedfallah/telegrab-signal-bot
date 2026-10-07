@@ -2,12 +2,24 @@
 
 > **Canonical repository:** `sajedfallah/telegrab-signal-bot`  
 > **Canonical branch:** `main`  
-> **Last repository status update:** 2026-09-18  
+> **Last repository status update:** 2026-10-06  
 > **Core source baseline:** NEXUS Core v7.0.3  
 > **Current Mini App production cutover:** PR #51 / `ccaaa11f80805efad148536479ad377b9e9190d9`  
 > **Repository governance snapshot:** 2026-09-18; canonical live head is always `main`  
 
 NEXUS is the Telegram trading platform that contains the Telegram bot, Mini App, subscription/payment flows, AutoTrade integration, MT5 components, signal lifecycle, content/academy modules, and supporting APIs.
+
+## Canonical documentation
+
+Current-state documentation is consolidated here:
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — canonical runtime, ownership and lifecycle contract.
+- [CONFIGURATION.md](CONFIGURATION.md) — environment/configuration and secret-handling contract.
+- [DEPLOYMENT.md](DEPLOYMENT.md) — frontend/VPS/Telegram/MT5 deployment boundaries and release gate.
+- [TESTING.md](TESTING.md) — CI-discovered commands and regression matrix.
+
+Versioned reports and historical release notes remain evidence/history; they are not independent current Sources-of-Truth.
+
 
 ## Project dashboard
 

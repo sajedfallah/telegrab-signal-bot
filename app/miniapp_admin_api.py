@@ -33,35 +33,14 @@ def _admin(init_data: str | None) -> dict[str, Any]:
 
 def _admin_account() -> str | None:
     configured = tuple(str(value).strip() for value in settings.nexus_admin_mt5_accounts if str(value).strip())
-    with db.conn() as con:
-        if configured:
-            marks = ",".join("?" for _ in configured)
-            row = con.execute(
-                f"SELECT account_number FROM mt5_heartbeats_v060 "
-                f"WHERE role='ADMIN' AND account_number IN ({marks}) "
-                f"ORDER BY last_seen_at DESC LIMIT 1",
-                configured,
-            ).fetchone()
-            if row:
-                return str(row["account_number"])
-            return configured[0]
-        row = con.execute(
-            "SELECT account_number FROM mt5_heartbeats_v060 "
-            "WHERE role='ADMIN' ORDER BY last_seen_at DESC LIMIT 1"
-        ).fetchone()
-        return str(row["account_number"]) if row else None
+    return db.latest_admin_mt5_account(configured)
 
 
 def _admin_mt5_status() -> dict[str, Any]:
     account = _admin_account()
     if not account:
         return {"online": False, "status": "OFFLINE", "account_number": None, "last_seen_at": None, "age_seconds": None}
-    with db.conn() as con:
-        row = con.execute(
-            "SELECT account_number,ea_version,last_seen_at FROM mt5_heartbeats_v060 "
-            "WHERE role='ADMIN' AND account_number=? LIMIT 1",
-            (account,),
-        ).fetchone()
+    row = db.admin_mt5_heartbeat(account)
     if not row:
         return {"online": False, "status": "OFFLINE", "account_number": account, "last_seen_at": None, "age_seconds": None}
     age = None
@@ -88,13 +67,7 @@ def _live_for_signal(row: Any) -> dict[str, Any] | None:
     code = str(row["code"] or "")
     if not account or not code:
         return None
-    with db.conn() as con:
-        live = con.execute(
-            "SELECT * FROM mt5_live_state WHERE account_number=? AND UPPER(COALESCE(signal_code,''))=UPPER(?) "
-            "AND nexus_managed=1 AND UPPER(status) IN ('OPEN','PENDING') "
-            "ORDER BY last_seen_at DESC LIMIT 1",
-            (account, code),
-        ).fetchone()
+    live = db.mt5_latest_managed_signal_state(account, code)
     if not live:
         return None
     age = None
@@ -260,10 +233,7 @@ def _signal_item(row: Any) -> dict[str, Any]:
 @router.get("/signals")
 def signals(x_telegram_init_data: str | None = Header(default=None, alias="X-Telegram-Init-Data")):
     _admin(x_telegram_init_data)
-    with db.conn() as con:
-        rows = con.execute(
-            "SELECT * FROM signals WHERE issuer_type='MT5_ADMIN' ORDER BY id DESC LIMIT 100"
-        ).fetchall()
+    rows = db.list_mt5_admin_signals(100)
     return {"ok": True, "mt5_admin": _admin_mt5_status(), "items": [_signal_item(row) for row in rows]}
 
 
@@ -293,12 +263,7 @@ def positions(x_telegram_init_data: str | None = Header(default=None, alias="X-T
     account = mt5.get("account_number")
     if not account:
         return {"ok": True, "mt5_admin": mt5, "positions": [], "orders": []}
-    with db.conn() as con:
-        rows = con.execute(
-            "SELECT * FROM mt5_live_state WHERE account_number=? AND nexus_managed=1 "
-            "AND UPPER(status) IN ('OPEN','PENDING') ORDER BY last_seen_at DESC",
-            (account,),
-        ).fetchall()
+    rows = db.mt5_managed_active_state(account)
     open_rows, pending_rows = [], []
     for raw in rows:
         item = dict(raw)

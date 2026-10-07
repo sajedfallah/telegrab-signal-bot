@@ -1144,6 +1144,37 @@ def user_payments(telegram_id: int, status: str = "all", limit: int = 30):
         ).fetchall())
 
 
+def find_invoice_payment(telegram_id: int, invoice_id: int):
+    """Return the newest pending/approved payment for a user+invoice idempotency check."""
+    with conn() as con:
+        return con.execute(
+            "SELECT id,status FROM payments "
+            "WHERE invoice_id=? AND telegram_id=? AND status IN ('pending','approved') "
+            "ORDER BY id DESC LIMIT 1",
+            (int(invoice_id), int(telegram_id)),
+        ).fetchone()
+
+
+def set_payment_delivery_state(
+    payment_id: int, *, delivered: bool,
+    receipt_file_id: str | None = None,
+    receipt_message_id: int | None = None,
+    error_text: str | None = None,
+) -> None:
+    """Persist Mini App admin-delivery outcome atomically with the legacy field semantics."""
+    with conn() as con:
+        if delivered:
+            con.execute(
+                "UPDATE payments SET receipt_file_id=?,receipt_message_id=? WHERE id=?",
+                (str(receipt_file_id or ""), receipt_message_id, int(payment_id)),
+            )
+        else:
+            con.execute(
+                "UPDATE payments SET status='failed',admin_note=? WHERE id=?",
+                (str(error_text or ""), int(payment_id)),
+            )
+
+
 def get_payment(payment_id: int):
     with conn() as con:
         return con.execute("SELECT * FROM payments WHERE id=?", (payment_id,)).fetchone()
@@ -2332,6 +2363,57 @@ def mt5_live_accounts() -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def latest_admin_mt5_account(configured_accounts: tuple[str, ...] = ()) -> str | None:
+    """Resolve the Admin MT5 account using the existing configured-first fallback contract."""
+    configured = tuple(str(value).strip() for value in configured_accounts if str(value).strip())
+    with conn() as con:
+        if configured:
+            marks = ",".join("?" for _ in configured)
+            row = con.execute(
+                f"SELECT account_number FROM mt5_heartbeats_v060 "
+                f"WHERE role='ADMIN' AND account_number IN ({marks}) "
+                f"ORDER BY last_seen_at DESC LIMIT 1",
+                configured,
+            ).fetchone()
+            return str(row["account_number"]) if row else configured[0]
+        row = con.execute(
+            "SELECT account_number FROM mt5_heartbeats_v060 "
+            "WHERE role='ADMIN' ORDER BY last_seen_at DESC LIMIT 1"
+        ).fetchone()
+        return str(row["account_number"]) if row else None
+
+
+def admin_mt5_heartbeat(account_number: str):
+    with conn() as con:
+        return con.execute(
+            "SELECT account_number,ea_version,last_seen_at FROM mt5_heartbeats_v060 "
+            "WHERE role='ADMIN' AND account_number=? LIMIT 1",
+            (str(account_number),),
+        ).fetchone()
+
+
+def mt5_latest_managed_signal_state(account_number: str, signal_code: str):
+    """Return the newest managed OPEN/PENDING live row, preserving Mini App case-insensitive matching."""
+    with conn() as con:
+        return con.execute(
+            "SELECT * FROM mt5_live_state WHERE account_number=? "
+            "AND UPPER(COALESCE(signal_code,''))=UPPER(?) "
+            "AND nexus_managed=1 AND UPPER(status) IN ('OPEN','PENDING') "
+            "ORDER BY last_seen_at DESC LIMIT 1",
+            (str(account_number), str(signal_code)),
+        ).fetchone()
+
+
+def mt5_managed_active_state(account_number: str):
+    """Return managed OPEN/PENDING rows in the Admin Mini App's canonical freshness order."""
+    with conn() as con:
+        return list(con.execute(
+            "SELECT * FROM mt5_live_state WHERE account_number=? AND nexus_managed=1 "
+            "AND UPPER(status) IN ('OPEN','PENDING') ORDER BY last_seen_at DESC",
+            (str(account_number),),
+        ).fetchall())
+
+
 def mt5_signal_live_state(signal_id: int) -> dict:
     """Return the authoritative MT5 receipt + latest execution snapshot for the signal issuer."""
     signal = get_signal(signal_id)
@@ -2913,6 +2995,114 @@ def enqueue_autotrade_trade_event(telegram_id: int, event_name: str, payload: di
             ),
         )
 
+def reconcile_live_trade_execution(
+    telegram_id: int, signal_id: int, ticket: str, event_type: str,
+    payload: dict, *, destination: str = "BOTH",
+) -> dict[str, object]:
+    """Atomically reconcile live MT5 state to one business execution.
+
+    Business identity is (telegram_id, ticket, signal_id, event_type). Transport
+    event_id remains unique for retries, but a different event_id for the same
+    business execution must not create a second ledger row.
+    """
+    uid = int(telegram_id)
+    sid = int(signal_id)
+    ticket = str(ticket).strip()
+    event_type = str(event_type).upper().strip()
+    if event_type not in {"OPEN", "PENDING"}:
+        raise ValueError("live repair supports OPEN/PENDING only")
+    if not ticket:
+        raise ValueError("ticket is required")
+
+    event_id = str(payload.get("event_id") or "").strip()
+    if not event_id:
+        raise ValueError("event_id is required")
+    destination = str(destination or "BOTH").upper()
+    now = now_iso()
+    normalized = dict(payload)
+    normalized["event_id"] = event_id
+    normalized["event"] = event_type
+
+    with conn() as con:
+        # Acquire the SQLite write reservation before the business-identity read.
+        # Without this, two deferred transactions could both observe "missing"
+        # and insert different transport event_ids for one business execution.
+        con.execute("BEGIN IMMEDIATE")
+        existing = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=? "
+            "ORDER BY id DESC LIMIT 1",
+            (uid, ticket, sid, event_type),
+        ).fetchone()
+        if existing:
+            con.execute(
+                "UPDATE autotrade_trade_executions "
+                "SET signal_id=?,status='RECONCILED',destination=?,updated_at=? WHERE id=?",
+                (sid, destination, now, int(existing["id"])),
+            )
+            return {
+                "created": False,
+                "id": int(existing["id"]),
+                "event_id": str(existing["event_id"]),
+            }
+
+        event_key = f"mt5:{uid}:{ticket}:{event_id}"
+        con.execute(
+            """INSERT OR IGNORE INTO autotrade_notifications
+               (telegram_id,event_key,event_type,signal_id,command_id,payload_json,created_at)
+               VALUES(?,?,?,?,?,?,?)""",
+            (
+                uid, event_key, "MT5_TRADE_EVENT", None, None,
+                json.dumps(normalized, ensure_ascii=False, separators=(",", ":")), now,
+            ),
+        )
+        cur = con.execute(
+            """INSERT OR IGNORE INTO autotrade_trade_executions
+               (telegram_id,signal_id,ticket,event_id,event_type,destination,symbol,direction,volume,
+                entry_price,stop_loss,take_profit,exit_price,profit,gross_profit,commission,swap,slippage,risk_cash,realized_r,position_id,deal_id,cycle_id,status,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                uid, sid, ticket, event_id, event_type, destination,
+                str(normalized.get("symbol") or "").upper(),
+                str(normalized.get("direction") or "").upper(),
+                float(normalized.get("volume") or 0),
+                float(normalized.get("entry_price") or 0),
+                float(normalized.get("stop_loss") or 0),
+                float(normalized.get("take_profit") or 0),
+                float(normalized.get("exit_price") or 0),
+                float(normalized.get("profit") or 0),
+                float(normalized.get("gross_profit") or normalized.get("profit") or 0),
+                float(normalized.get("commission") or 0),
+                float(normalized.get("swap") or 0),
+                float(normalized.get("slippage") or 0),
+                float(normalized.get("risk_cash") or 0),
+                float(normalized.get("realized_r") or 0) if normalized.get("realized_r") is not None else None,
+                str(normalized.get("position_id") or "") or None,
+                str(normalized.get("deal_id") or ticket) or None,
+                str(normalized.get("cycle_id") or get_setting("current_cycle_id", "CYCLE-LEGACY", con=con)),
+                "RECONCILED", now, now,
+            ),
+        )
+        if cur.rowcount == 1:
+            return {"created": True, "id": int(cur.lastrowid), "event_id": event_id}
+
+        # Same transport event may already exist; normalize it to the requested
+        # business identity within the same transaction rather than duplicating it.
+        row = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND event_id=? LIMIT 1",
+            (uid, ticket, event_id),
+        ).fetchone()
+        if not row:
+            raise RuntimeError("live execution reconciliation lost its ledger row")
+        con.execute(
+            "UPDATE autotrade_trade_executions "
+            "SET signal_id=?,event_type=?,status='RECONCILED',destination=?,updated_at=? WHERE id=?",
+            (sid, event_type, destination, now, int(row["id"])),
+        )
+        return {"created": False, "id": int(row["id"]), "event_id": str(row["event_id"])}
+
+
 def has_trade_execution(telegram_id: int, ticket: str, event_id: str) -> bool:
     with conn() as con:
         return con.execute(
@@ -2943,6 +3133,16 @@ def update_trade_execution(
             "WHERE telegram_id=? AND ticket=? AND event_id=?",
             tuple(args),
         )
+
+def miniapp_execution_history(telegram_id: int, *, limit: int = 20):
+    """Return the Mini App execution projection in newest-first insertion order."""
+    with conn() as con:
+        return list(con.execute(
+            "SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at "
+            "FROM autotrade_trade_executions WHERE telegram_id=? ORDER BY id DESC LIMIT ?",
+            (int(telegram_id), max(1, min(int(limit), 100))),
+        ).fetchall())
+
 
 def autotrade_trade_executions(telegram_id: int, *, start_iso: str | None = None,
                                 end_iso: str | None = None, limit: int = 500):
@@ -3159,6 +3359,34 @@ def reconcile_mt5_history(telegram_id: int, items: list[dict]) -> dict:
 def signal_updates(signal_id: int):
     with conn() as con:
         return list(con.execute("SELECT * FROM signal_updates WHERE signal_id=? ORDER BY id", (signal_id,)).fetchall())
+
+
+def analytics_closed_signals(start_iso: str, end_iso: str):
+    """Return the exact closed-signal projection used by analytics for the current cycle."""
+    cycle = current_cycle_id()
+    with conn() as con:
+        return list(con.execute(
+            """
+            SELECT id,code,market_type,symbol,direction,entry_price,exit_price,result_value,result_unit,
+                   rr_ratio,destination,trailing_code,trailing_name,created_at,closed_at
+            FROM signals
+            WHERE status='CLOSED' AND closed_at>=? AND closed_at<?
+              AND COALESCE(cycle_id, ?) = ?
+            ORDER BY closed_at DESC
+            """,
+            (str(start_iso), str(end_iso), cycle, cycle),
+        ).fetchall())
+
+
+def analytics_active_signal_count() -> int:
+    """Count non-closed signals for the current cycle using the existing analytics semantics."""
+    cycle = current_cycle_id()
+    with conn() as con:
+        return int(con.execute(
+            "SELECT COUNT(*) FROM signals "
+            "WHERE status<>'CLOSED' AND COALESCE(cycle_id,?)=?",
+            (cycle, cycle),
+        ).fetchone()[0])
 
 
 def current_cycle_id() -> str:

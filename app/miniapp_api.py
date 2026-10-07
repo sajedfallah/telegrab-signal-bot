@@ -135,19 +135,9 @@ def _plans() -> list[dict[str, Any]]:
 
 def _autotrade(uid: int) -> dict[str, Any]:
     ent = _entitlements(uid)
-    with db.conn() as con:
-        mt5 = con.execute(
-            "SELECT account_number,broker,server,status,ea_version,bound_at,last_seen_at "
-            "FROM autotrade_mt5_accounts WHERE telegram_id=? LIMIT 1", (uid,),
-        ).fetchone()
-        exchange = con.execute(
-            "SELECT exchange,account_label,status,bound_at,last_seen_at "
-            "FROM autotrade_exchange_accounts WHERE telegram_id=? LIMIT 1", (uid,),
-        ).fetchone()
-        history = con.execute(
-            "SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at "
-            "FROM autotrade_trade_executions WHERE telegram_id=? ORDER BY id DESC LIMIT 20", (uid,),
-        ).fetchall()
+    mt5 = db.mt5_account(uid)
+    exchange = db.exchange_account(uid)
+    history = db.miniapp_execution_history(uid, limit=20)
     positions: list[dict[str, Any]] = []
     orders: list[dict[str, Any]] = []
     if mt5 and mt5["account_number"]:
@@ -303,11 +293,7 @@ async def submit_receipt(payload: ReceiptRequest, x_telegram_init_data: str | No
         raise HTTPException(status_code=404, detail="invoice not found")
     if not invoice_is_valid(invoice):
         raise HTTPException(status_code=409, detail="invoice is no longer payable")
-    with db.conn() as con:
-        existing = con.execute(
-            "SELECT id,status FROM payments WHERE invoice_id=? AND telegram_id=? AND status IN ('pending','approved') ORDER BY id DESC LIMIT 1",
-            (payload.invoice_id, uid),
-        ).fetchone()
+    existing = db.find_invoice_payment(uid, payload.invoice_id)
     if existing:
         return {"ok": True, "payment_id": int(existing["id"]), "status": str(existing["status"]), "duplicate": True}
 
@@ -366,27 +352,25 @@ async def submit_receipt(payload: ReceiptRequest, x_telegram_init_data: str | No
                 if not first_file_id and msg.photo:
                     first_file_id = msg.photo[-1].file_id
                     first_message_id = int(msg.message_id)
-                with db.conn() as con:
-                    con.execute(
-                        "INSERT OR REPLACE INTO admin_receipts(payment_id,admin_id,message_id,created_at) VALUES(?,?,?,?)",
-                        (payment_id, int(admin_id), int(msg.message_id), db.now_iso()),
-                    )
+                db.save_admin_receipt(payment_id, int(admin_id), int(msg.message_id))
             except Exception as exc:
                 errors.append(f"{admin_id}:{type(exc).__name__}")
     finally:
         await bot.session.close()
 
-    with db.conn() as con:
-        if sent_any:
-            con.execute(
-                "UPDATE payments SET receipt_file_id=?,receipt_message_id=? WHERE id=?",
-                (first_file_id or f"miniapp:{payload.invoice_id}", first_message_id, payment_id),
-            )
-        else:
-            con.execute(
-                "UPDATE payments SET status='failed',admin_note=? WHERE id=?",
-                ("Mini App admin delivery failed: " + ",".join(errors[:5]), payment_id),
-            )
+    if sent_any:
+        db.set_payment_delivery_state(
+            payment_id,
+            delivered=True,
+            receipt_file_id=first_file_id or f"miniapp:{payload.invoice_id}",
+            receipt_message_id=first_message_id,
+        )
+    else:
+        db.set_payment_delivery_state(
+            payment_id,
+            delivered=False,
+            error_text="Mini App admin delivery failed: " + ",".join(errors[:5]),
+        )
     if not sent_any:
         raise HTTPException(status_code=503, detail="receipt saved but admin delivery failed; retry is allowed")
     return {"ok": True, "payment_id": payment_id, "status": "pending"}

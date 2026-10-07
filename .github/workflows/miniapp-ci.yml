@@ -47,4 +47,4 @@ jobs:
         run: python -m compileall -q app run_api.py
 
       - name: Run Mini App integration tests
-        run: python -m pytest tests/test_miniapp_api.py -q
+        run: python -m pytest tests/test_miniapp_api.py tests/test_data_access_consolidation.py -q
