@@ -358,17 +358,19 @@ async def submit_receipt(payload: ReceiptRequest, x_telegram_init_data: str | No
     finally:
         await bot.session.close()
 
-    with db.conn() as con:
-        if sent_any:
-            con.execute(
-                "UPDATE payments SET receipt_file_id=?,receipt_message_id=? WHERE id=?",
-                (first_file_id or f"miniapp:{payload.invoice_id}", first_message_id, payment_id),
-            )
-        else:
-            con.execute(
-                "UPDATE payments SET status='failed',admin_note=? WHERE id=?",
-                ("Mini App admin delivery failed: " + ",".join(errors[:5]), payment_id),
-            )
+    if sent_any:
+        db.set_payment_delivery_state(
+            payment_id,
+            delivered=True,
+            receipt_file_id=first_file_id or f"miniapp:{payload.invoice_id}",
+            receipt_message_id=first_message_id,
+        )
+    else:
+        db.set_payment_delivery_state(
+            payment_id,
+            delivered=False,
+            error_text="Mini App admin delivery failed: " + ",".join(errors[:5]),
+        )
     if not sent_any:
         raise HTTPException(status_code=503, detail="receipt saved but admin delivery failed; retry is allowed")
     return {"ok": True, "payment_id": payment_id, "status": "pending"}
