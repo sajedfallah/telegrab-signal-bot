@@ -298,3 +298,19 @@ Priority direct SQL was moved behind new exact-contract helpers in `app/db.py`:
 Regression coverage locks filtering, projection, ordering, configured fallback, role filtering, case-insensitive signal matching and managed OPEN/PENDING semantics. No schema or signal/execution semantics changed.
 
 Remaining direct SQL is deferred where equivalence has not yet been demonstrated.
+
+
+## DATA-ACCESS-CONSOLIDATION-004 — CLOSURE
+
+The repository was re-inventoried after phases 001–003.
+
+One remaining core business/service SQL consumer was found in `app/services/analytics_service.py`. Its closed-signal analytics query and active-current-cycle count were moved behind exact-contract helpers in `app/db.py`:
+
+- `analytics_closed_signals(start_iso, end_iso)`
+- `analytics_active_signal_count()`
+
+The remaining direct SQL outside `app/db.py` is now explicitly whitelisted as subsystem-owned repository/storage or maintenance tooling in `DATA_ACCESS_CONSOLIDATION_004.md`.
+
+Primary Mini App, Admin Mini App, AutoTrade API, analytics service, subscription/license/pricing service and API router layers no longer open direct core DB connections.
+
+**Data Access Consolidation status: CLOSED**, subject to the branch CI for this revision.
