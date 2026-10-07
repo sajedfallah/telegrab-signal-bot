@@ -247,8 +247,10 @@ def test_atomic_live_repair_deduplicates_business_identity_across_transport_even
     uid = 990040
     db.upsert_user(uid, "repair", "Repair")
     signal = db.create_signal(
-        "FOREX", "EURUSD", "BUY", 1.10, 1.09, 1.11, None, None,
-        1.0, 1.0, None, "BOTH", uid,
+        market_type="FOREX", symbol="EURUSD", direction="BUY",
+        entry_price=1.10, stop_loss=1.09, targets=[1.11],
+        risk_percent=1.0, rr_ratio=1.0, destination="BOTH",
+        chart_file_id=None, created_by=uid,
     )
     sid = int(signal["id"])
     base = {
@@ -293,8 +295,10 @@ def test_atomic_live_repair_reuses_same_transport_event_without_duplicate(monkey
     uid = 990041
     db.upsert_user(uid, "repair2", "Repair2")
     signal = db.create_signal(
-        "FOREX", "GBPUSD", "BUY", 1.25, 1.24, 1.26, None, None,
-        1.0, 1.0, None, "BOTH", uid,
+        market_type="FOREX", symbol="GBPUSD", direction="BUY",
+        entry_price=1.25, stop_loss=1.24, targets=[1.26],
+        risk_percent=1.0, rr_ratio=1.0, destination="BOTH",
+        chart_file_id=None, created_by=uid,
     )
     sid = int(signal["id"])
     payload = {
@@ -329,3 +333,44 @@ def test_phase3_callers_no_longer_embed_payment_delivery_or_live_repair_sql():
 
     assert "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=?" not in autotrade
     assert "db.reconcile_live_trade_execution(" in autotrade
+
+
+def test_atomic_live_repair_serializes_concurrent_different_event_ids(monkeypatch, tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    db = _fresh_db(monkeypatch, tmp_path)
+    uid = 990042
+    db.upsert_user(uid, "concurrent", "Concurrent")
+    signal = db.create_signal(
+        market_type="FOREX", symbol="USDJPY", direction="BUY",
+        entry_price=150.0, stop_loss=149.0, targets=[151.0],
+        risk_percent=1.0, rr_ratio=1.0, destination="BOTH",
+        chart_file_id=None, created_by=uid,
+    )
+    sid = int(signal["id"])
+    base = {
+        "event": "OPEN", "ticket": "T-RACE", "signal_id": str(signal["code"]),
+        "symbol": "USDJPY", "direction": "BUY", "volume": 0.01,
+        "entry_price": 150.0, "stop_loss": 149.0, "take_profit": 151.0,
+        "destination": "BOTH", "position_id": "POS-RACE",
+    }
+
+    def run(event_id):
+        return db.reconcile_live_trade_execution(
+            uid, sid, "T-RACE", "OPEN", {**base, "event_id": event_id},
+            destination="BOTH",
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(run, ["LIVE-RACE-A", "LIVE-RACE-B"]))
+
+    with db.conn() as con:
+        rows = con.execute(
+            "SELECT * FROM autotrade_trade_executions "
+            "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type='OPEN'",
+            (uid, "T-RACE", sid),
+        ).fetchall()
+
+    assert len(rows) == 1
+    assert sorted(bool(r["created"]) for r in results) == [False, True]
+    assert str(rows[0]["status"]) == "RECONCILED"
