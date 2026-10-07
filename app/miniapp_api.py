@@ -137,11 +137,7 @@ def _autotrade(uid: int) -> dict[str, Any]:
     ent = _entitlements(uid)
     mt5 = db.mt5_account(uid)
     exchange = db.exchange_account(uid)
-    with db.conn() as con:
-        history = con.execute(
-            "SELECT id,ticket,event_type,symbol,direction,volume,entry_price,exit_price,profit,status,created_at "
-            "FROM autotrade_trade_executions WHERE telegram_id=? ORDER BY id DESC LIMIT 20", (uid,),
-        ).fetchall()
+    history = db.miniapp_execution_history(uid, limit=20)
     positions: list[dict[str, Any]] = []
     orders: list[dict[str, Any]] = []
     if mt5 and mt5["account_number"]:
@@ -297,11 +293,7 @@ async def submit_receipt(payload: ReceiptRequest, x_telegram_init_data: str | No
         raise HTTPException(status_code=404, detail="invoice not found")
     if not invoice_is_valid(invoice):
         raise HTTPException(status_code=409, detail="invoice is no longer payable")
-    with db.conn() as con:
-        existing = con.execute(
-            "SELECT id,status FROM payments WHERE invoice_id=? AND telegram_id=? AND status IN ('pending','approved') ORDER BY id DESC LIMIT 1",
-            (payload.invoice_id, uid),
-        ).fetchone()
+    existing = db.find_invoice_payment(uid, payload.invoice_id)
     if existing:
         return {"ok": True, "payment_id": int(existing["id"]), "status": str(existing["status"]), "duplicate": True}
 
