@@ -30,18 +30,7 @@ def period(key: str) -> Period:
 
 
 def _rows(p: Period):
-    with db.conn() as con:
-        return list(con.execute(
-            """
-            SELECT id,code,market_type,symbol,direction,entry_price,exit_price,result_value,result_unit,
-                   rr_ratio,destination,trailing_code,trailing_name,created_at,closed_at
-            FROM signals
-            WHERE status='CLOSED' AND closed_at>=? AND closed_at<?
-              AND COALESCE(cycle_id, ?) = ?
-            ORDER BY closed_at DESC
-            """,
-            (p.start_iso, p.end_iso, db.current_cycle_id(), db.current_cycle_id()),
-        ).fetchall())
+    return db.analytics_closed_signals(p.start_iso, p.end_iso)
 
 
 def _summarize(rows: Iterable) -> dict:
@@ -83,8 +72,7 @@ def overview(key: str = "30") -> dict:
     p = period(key)
     rows = _rows(p)
     summary = _summarize(rows)
-    with db.conn() as con:
-        active = int(con.execute("SELECT COUNT(*) FROM signals WHERE status<>'CLOSED' AND COALESCE(cycle_id,?)=?", (db.current_cycle_id(), db.current_cycle_id())).fetchone()[0])
+    active = db.analytics_active_signal_count()
     return {"period": p, "active": active, **summary}
 
 
