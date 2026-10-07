@@ -56,3 +56,50 @@ No SQL was moved when filters, ordering, row projection, case handling, lifecycl
 - No signal/risk/TP/SL/trailing changes.
 - No MT5 execution behavior changes.
 - No broad repository/storage rewrite.
+
+
+# DATA-ACCESS-CONSOLIDATION-002
+
+## Scope
+
+Priority SQL remaining after phase 001:
+
+1. Payment receipt idempotency.
+2. Mini App execution history.
+3. Admin MT5 account/live-state queries.
+
+## Canonical helpers added
+
+| Caller behavior | New canonical helper | Equivalence contract |
+| --- | --- | --- |
+| Find duplicate payment for same user/invoice | `db.find_invoice_payment(telegram_id, invoice_id)` | Same statuses: pending/approved; same newest-id ordering; same two-column projection |
+| Mini App recent execution history | `db.miniapp_execution_history(telegram_id, limit=20)` | Same selected columns; same `ORDER BY id DESC`; same default limit 20 |
+| Admin MT5 account selection | `db.latest_admin_mt5_account(configured_accounts)` | Same ADMIN-only filtering, latest heartbeat preference, configured-first fallback |
+| Admin heartbeat status row | `db.admin_mt5_heartbeat(account_number)` | Same three-column projection and ADMIN/account filtering |
+| Admin live signal row | `db.mt5_latest_managed_signal_state(account_number, signal_code)` | Same case-insensitive signal-code match, managed-only filter, OPEN/PENDING filter, newest heartbeat |
+| Admin active live rows | `db.mt5_managed_active_state(account_number)` | Same managed-only OPEN/PENDING filter and `last_seen_at DESC` ordering |
+
+## Regression evidence
+
+`tests/test_data_access_consolidation.py` now verifies:
+
+- payment idempotency ignores failed rows and returns the newest pending/approved row for the same user+invoice;
+- execution-history projection, ordering and limit are unchanged;
+- Admin account selection preserves configured fallback and latest-seen behavior;
+- Admin heartbeat lookup preserves role/account filtering;
+- live signal lookup remains case-insensitive and managed-only;
+- active Admin live-state rows preserve POSITION/ORDER data used by caller-side classification;
+- migrated API callers no longer contain the priority SQL strings.
+
+The existing Mini App CI already runs this test file, so the new phase-002 cases are release-gated.
+
+## Deferred SQL
+
+The following remain outside `app/db.py` because this phase did not establish exact equivalence with an existing/new bounded helper:
+
+- Mini App payment delivery success/failure UPDATE statements;
+- AutoTrade live-state repair execution identity lookup;
+- analytics/report queries;
+- intentional subsystem repositories/storage modules.
+
+No schema or lifecycle semantics changed.
