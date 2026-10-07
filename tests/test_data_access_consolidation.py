@@ -374,3 +374,73 @@ def test_atomic_live_repair_serializes_concurrent_different_event_ids(monkeypatc
     assert len(rows) == 1
     assert sorted(bool(r["created"]) for r in results) == [False, True]
     assert str(rows[0]["status"]) == "RECONCILED"
+
+
+def test_analytics_data_access_preserves_cycle_filter_projection_and_active_count(monkeypatch, tmp_path):
+    db = _fresh_db(monkeypatch, tmp_path)
+    db.start_new_cycle("CYCLE-DAC-004")
+    uid = 990050
+    db.upsert_user(uid, "analytics", "Analytics")
+
+    closed = db.create_signal(
+        market_type="FOREX", symbol="EURUSD", direction="BUY",
+        entry_price=1.10, stop_loss=1.09, targets=[1.11],
+        risk_percent=1.0, rr_ratio=1.0, destination="VIP",
+        chart_file_id=None, created_by=uid,
+    )
+    db.close_signal(int(closed["id"]), 1.11, 10.0, "PIPS", None)
+
+    active = db.create_signal(
+        market_type="FOREX", symbol="GBPUSD", direction="SELL",
+        entry_price=1.25, stop_loss=1.26, targets=[1.24],
+        risk_percent=1.0, rr_ratio=1.0, destination="FREE",
+        chart_file_id=None, created_by=uid,
+    )
+
+    rows = db.analytics_closed_signals(
+        "2000-01-01T00:00:00+00:00",
+        "2999-01-01T00:00:00+00:00",
+    )
+    assert [int(r["id"]) for r in rows] == [int(closed["id"])]
+    assert list(rows[0].keys()) == [
+        "id", "code", "market_type", "symbol", "direction", "entry_price",
+        "exit_price", "result_value", "result_unit", "rr_ratio", "destination",
+        "trailing_code", "trailing_name", "created_at", "closed_at",
+    ]
+    assert db.analytics_active_signal_count() == 1
+    assert int(active["id"]) != int(closed["id"])
+
+
+def test_data_access_closure_business_layers_do_not_open_direct_db_connections():
+    business_layers = [
+        ROOT / "app" / "miniapp_api.py",
+        ROOT / "app" / "miniapp_admin_api.py",
+        ROOT / "app" / "autotrade" / "api.py",
+        ROOT / "app" / "services" / "analytics_service.py",
+        ROOT / "app" / "services" / "license_service.py",
+        ROOT / "app" / "services" / "pricing_service.py",
+        ROOT / "app" / "routers" / "analytics.py",
+        ROOT / "app" / "routers" / "subscriptions.py",
+    ]
+    offenders = []
+    for path in business_layers:
+        src = path.read_text(encoding="utf-8")
+        if "db.conn()" in src or "sqlite3.connect(" in src:
+            offenders.append(str(path.relative_to(ROOT)))
+    assert offenders == []
+
+
+def test_data_access_closure_whitelist_is_explicit_and_narrow():
+    whitelisted_runtime_sql = {
+        "app/analysis_center.py",
+        "app/content/repository.py",
+        "app/daily_stickers/storage.py",
+        "app/storage/sqlite_storage.py",
+        "app/signal_agent/context/store.py",
+        "app/signal_agent/ict/store.py",
+        "app/signal_agent/market_data/store.py",
+        "reset_clean_cycle.py",
+    }
+    closure = (ROOT / "DATA_ACCESS_CONSOLIDATION_004.md").read_text(encoding="utf-8")
+    for path in sorted(whitelisted_runtime_sql):
+        assert f"`{path}`" in closure
