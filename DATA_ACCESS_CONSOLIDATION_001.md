@@ -103,3 +103,78 @@ The following remain outside `app/db.py` because this phase did not establish ex
 - intentional subsystem repositories/storage modules.
 
 No schema or lifecycle semantics changed.
+
+
+# DATA-ACCESS-CONSOLIDATION-003
+
+## Scope
+
+Only two remaining priority SQL paths were considered:
+
+1. Mini App payment admin-delivery state persistence.
+2. AutoTrade live-state repair business-identity lookup/write.
+
+Analytics and subsystem storage repositories remain explicitly out of scope.
+
+## Payment delivery state
+
+Previous caller behavior in `app/miniapp_api.py`:
+
+- successful admin delivery updated `receipt_file_id` and `receipt_message_id` only;
+- failed admin delivery set `status='failed'` and `admin_note`;
+- each outcome used one SQLite UPDATE.
+
+Canonical helper:
+
+`db.set_payment_delivery_state(...)`
+
+The helper preserves those exact field semantics and executes each outcome as one DB transaction. Regression verifies repeated identical success/failure writes remain idempotent and do not alter unrelated status fields.
+
+## Live-state repair identity
+
+Previous API behavior used:
+
+`SELECT business identity -> enqueue transport event -> update ledger`
+
+where business identity is:
+
+`(telegram_id, ticket, signal_id, event_type)`
+
+The ledger's schema uniqueness is only:
+
+`UNIQUE(telegram_id, ticket, event_id)`
+
+Therefore moving only the SELECT would not prove atomicity: two concurrent repairs carrying different transport event IDs could both observe no business row and create duplicates.
+
+Canonical helper:
+
+`db.reconcile_live_trade_execution(...)`
+
+The helper now:
+
+1. opens one DB connection;
+2. executes `BEGIN IMMEDIATE` before reading business identity;
+3. checks the business identity;
+4. reconciles the existing row, or inserts the notification + ledger row;
+5. commits as one transaction.
+
+This serializes concurrent repair writers before the business-identity read while retaining transport-event uniqueness.
+
+## Regression evidence
+
+`tests/test_data_access_consolidation.py` verifies:
+
+- payment delivery success is repeatable and keeps payment status pending;
+- payment delivery failure is repeatable and keeps the failure note stable;
+- two different transport event IDs for the same business execution result in one ledger row;
+- repeating the same transport event does not duplicate a row;
+- two concurrent repairs with different event IDs serialize to exactly one business execution;
+- migrated callers no longer embed the moved SQL.
+
+Existing `tests/test_v062_live_truth.py::test_live_repair_does_not_duplicate_business_execution` continues to exercise the API-level repair path.
+
+## Behavior boundaries
+
+No schema, execution strategy, signal semantics, TP/SL, trailing, destination semantics, or Telegram lifecycle behavior was changed.
+
+Analytics queries and dedicated storage/repository modules were not modified.
