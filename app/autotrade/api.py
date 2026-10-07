@@ -798,26 +798,17 @@ def live_state(
                 publications.append(int(row["id"]))
             event_type="OPEN" if live_status=="executed" else "PENDING"
             event_id=f"LIVE-{event_type}-{item['identifier']}"
-            # Business identity beats transport event_id. A live snapshot may
-            # arrive after the original MT5 trade-event and must repair/link that
-            # execution rather than creating a second ledger row.
-            with db.conn() as con:
-                existing=con.execute(
-                    "SELECT * FROM autotrade_trade_executions "
-                    "WHERE telegram_id=? AND ticket=? AND signal_id=? AND event_type=? "
-                    "ORDER BY id DESC LIMIT 1",
-                    (uid,str(item["ticket"]),int(row["id"]),event_type),
-                ).fetchone()
+            # Business identity beats transport event_id. Reconciliation is
+            # atomic in app.db so concurrent/live retries cannot create a second
+            # business execution merely because the transport event_id differs.
             payload={"event":event_type,"ticket":str(item["ticket"]),"signal_id":code,"symbol":str(item["symbol"]).upper(),"direction":str(item["direction"]).upper(),
                      "volume":float(item["volume"] or 0),"entry_price":float(item["entry_price"] or 0),"stop_loss":float(item["stop_loss"] or 0),
                      "take_profit":float(item["take_profit"] or 0),"event_id":event_id,"destination":str(row["destination"] or "BOTH"),
                      "order_type":str(item.get("order_type") or "MARKET").upper(),"position_id":str(item.get("identifier") or "") }
-            if existing:
-                # Update the already-recorded execution with broker-confirmed live data.
-                db.update_trade_execution(uid,str(existing["ticket"]),str(existing["event_id"]),signal_id=int(row["id"]),status="RECONCILED",destination=str(row["destination"] or "BOTH"))
-            else:
-                db.enqueue_autotrade_trade_event(uid,event_type,payload,str(item["ticket"]))
-                db.update_trade_execution(uid,str(item["ticket"]),event_id,signal_id=int(row["id"]),status="RECONCILED",destination=str(row["destination"] or "BOTH"))
+            db.reconcile_live_trade_execution(
+                uid, int(row["id"]), str(item["ticket"]), event_type, payload,
+                destination=str(row["destination"] or "BOTH"),
+            )
         except ValueError:
             continue
     for sid in sorted(set(publications)):
