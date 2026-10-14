@@ -72,3 +72,56 @@ def format_shadow_scenarios(data: Mapping[str, Any]) -> str:
         lines.append("• شروط تکمیل‌نشده: " + ", ".join(str(s) for s in data["blocks"][:6]))
     lines.append("⛔ صرفاً ارزیابی Shadow؛ مجوز معامله واقعی صادر نشده است.")
     return "\n".join(lines)
+
+
+def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = None) -> str:
+    """Single glanceable report for every supported analysis timeframe."""
+    tf = str(record.get("analysis_timeframe") or "M5")
+    scenario = record.get("shadow_scenarios_v2") or {}
+    assessments = record.get("assessments") or []
+    ict = next((a for a in assessments if isinstance(a, Mapping) and str(a.get("agent", "")).startswith("nexus-ict")), {})
+    evidence = [str(e) for e in ict.get("evidence", [])]
+    h1 = next((e for e in evidence if e.startswith("1H structure")), "")
+    bias = "نزولی" if ("bearish" in h1 or "LH/LL" in h1) else ("صعودی" if ("bullish" in h1 or "HH/HL" in h1) else "خنثی")
+    levels = scenario.get("reference_levels") or {}
+    def fmt(value):
+        return f"{float(value):g}" if value is not None else "—"
+    def has(fragment):
+        return any(fragment in e for e in evidence)
+    def mark(flag):
+        return "✅" if flag else "⬜"
+    long_sweep = has(f"{tf} sell-side liquidity sweep/reclaim")
+    short_sweep = has(f"{tf} buy-side liquidity sweep/reclaim")
+    long_mss = has(f"{tf} bullish displacement/MSS")
+    short_mss = has(f"{tf} bearish displacement/MSS")
+    fast = record.get("fast_scalp") or {}
+    fast_state = str(fast.get("state") or "") if tf == "M1" else ""
+    poi_ok = fast_state not in {"SEARCHING", "APPROACHING_POI"} if tf == "M1" else False
+    # Evidence-only checks are observations, not complete sequential ICT confirmation.
+    # A completed strategy plan alone can promote numerical fields.
+    lines = [
+        f"📊 NEXUS | {record.get('symbol', 'XAUUSD')} {tf} | {scenario.get('status', 'WAIT')}",
+        f"💰 Bid {fmt(record.get('bid'))} / Ask {fmt(record.get('ask'))} | H1: {bias}",
+        f"🟢 LONG @ نقدینگی {fmt(levels.get('sell_side_reference'))}",
+        f"{mark(long_sweep)} Sweep پایین  {mark(long_mss)} MSS صعودی  ⬜ FVG جدید + Retest",
+        f"🔴 SHORT @ نقدینگی {fmt(levels.get('buy_side_reference'))}",
+        f"{mark(short_sweep)} Sweep بالا  {mark(short_mss)} MSS نزولی  ⬜ FVG جدید + Retest",
+    ]
+    if tf == "M1":
+        poi = scenario.get("poi")
+        lines.append(f"{mark(poi_ok)} M15 POI: {fmt(poi[0])}–{fmt(poi[1])}" if poi else "⬜ M15 POI معتبر موجود نیست")
+        lines.append(f"⚡ Fast Scalp: {fast_state or 'WAIT'}")
+    elif tf in {"M5", "M15", "H1", "D1", "W1", "MN1"}:
+        lines.append(f"⏳ {tf}: بررسی ساختار؛ ورود فقط با تریگر تأییدشده و Risk Gate")
+    if scenario.get("entry") is not None:
+        lines.append(f"📐 {scenario.get('confirmed_direction')}: Entry {fmt(scenario['entry'])} | SL {fmt(scenario['stop_loss'])}")
+        lines.append("🎯 " + " | ".join(f"TP{i} {fmt(x)}" for i, x in enumerate(scenario.get("take_profits", []), 1)) + f" | RR {float(scenario['rr']):.2f}")
+    else:
+        lines.append("📐 Entry / SL / TP / RR: ⏳ تأیید نشده")
+    if scenario.get("blocks"):
+        lines.append("🚧 انتظار: " + ", ".join(str(x) for x in scenario["blocks"][:2]))
+    if ai_note:
+        note = " ".join(ai_note.strip().split())
+        lines.append("🧠 AI: " + note[:170])
+    lines.append("🔒 Shadow / NO AUTO-EXECUTION")
+    return "\n".join(lines)
