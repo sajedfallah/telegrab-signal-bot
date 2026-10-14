@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.agent_system.tradingview_capture import (
@@ -19,8 +21,7 @@ def test_rejects_unknown_timeframe():
         _tv_interval("M2")
 
 
-@pytest.mark.asyncio
-async def test_capture_is_opt_in(monkeypatch):
+def test_capture_is_opt_in(monkeypatch):
     monkeypatch.delenv("NEXUS_AGENT_CHART_SOURCE", raising=False)
     with pytest.raises(TradingViewCaptureError, match="tradingview_not_enabled"):
-        await capture_tradingview_chart("XAUUSD", "M1")
+        asyncio.run(capture_tradingview_chart("XAUUSD", "M1"))
