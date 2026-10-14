@@ -110,11 +110,14 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
     lines = [
         f"📊 NEXUS | {record.get('symbol', 'XAUUSD')} {tf} | {scenario.get('status', 'WAIT')}",
         f"💰 Bid {fmt(record.get('bid'))} / Ask {fmt(record.get('ask'))} | H1: {bias}",
+        "",
         f"🟢 LONG @ نقدینگی {fmt(levels.get('sell_side_reference'))}",
         f"{step(long_sweep, sweep_confirmed and is_long)} Sweep پایین  {step(long_mss, mss_confirmed and is_long)} MSS صعودی  {step(False, retest_confirmed and is_long)} FVG Retest",
+        "",
         f"🔴 SHORT @ نقدینگی {fmt(levels.get('buy_side_reference'))}",
         f"{step(short_sweep, sweep_confirmed and is_short)} Sweep بالا  {step(short_mss, mss_confirmed and is_short)} MSS نزولی  {step(False, retest_confirmed and is_short)} FVG Retest",
     ]
+    lines.append("")
     if tf == "M1":
         poi = scenario.get("poi")
         lines.append(f"{step(False, poi_ok)} M15 POI: {fmt(poi[0])}–{fmt(poi[1])}" if poi else "☐ M15 POI معتبر موجود نیست")
@@ -125,7 +128,10 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
     if pois:
         selected = pois[:2]
         parts = [f"{p['timeframe']} {p['source']} {fmt(p['low'])}–{fmt(p['high'])} ({p['state']})" for p in selected]
-        lines.append("📍 POI زیر نظر: " + " | ".join(parts))
+        lines.append("")
+        lines.append("📍 POI زیر نظر:")
+        lines.extend("• " + part for part in parts)
+    lines.append("")
     if scenario.get("entry") is not None:
         lines.append(f"📐 {scenario.get('confirmed_direction')}: Entry {fmt(scenario['entry'])} | SL {fmt(scenario['stop_loss'])}")
         lines.append("🎯 " + " | ".join(f"TP{i} {fmt(x)}" for i, x in enumerate(scenario.get("take_profits", []), 1)) + f" | RR {float(scenario['rr']):.2f}")
@@ -134,8 +140,10 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
     if scenario.get("blocks"):
         lines.append("🚧 انتظار: " + ", ".join(str(x) for x in scenario["blocks"][:2]))
     if ai_note:
+        lines.append("")
         note = " ".join(ai_note.strip().split())
         lines.append("🧠 AI: " + note[:170])
+    lines.append("")
     lines.append("◉ مشاهده  ✅ تأیید استراتژی  ☐ منتظر")
     lines.append("🔒 Shadow / NO AUTO-EXECUTION")
     return "\n".join(lines)
