@@ -7,7 +7,7 @@ from app.agent_system.setup_lifecycle_v32 import observe
 
 def snapshot():
     rows=tuple({"time":1000+i*60,"open":100.0,"high":102.0,"low":98.0,"close":100.0} for i in range(35))
-    return MarketSnapshot(snapshot_id="v32",symbol="XAUUSD",as_of=datetime.now(timezone.utc),
+    return MarketSnapshot(snapshot_id="v32-test-snapshot",symbol="XAUUSD",as_of=datetime.now(timezone.utc),
         source="test",timeframes={"M1":rows},bid=100.0,ask=100.1,data_freshness_ms=0)
 
 
