@@ -12,6 +12,7 @@ from aiogram.types import BufferedInputFile, Message
 from .ai_brain import explain_ict_analysis
 from .agents.ict import assess_ict
 from .chart_renderer import render_ict_chart
+from .tradingview_capture import capture_tradingview_chart
 from .fast_scalp import assess_fast_scalp
 from .scenario_v2 import build_shadow_scenarios, format_compact_checklist
 from .poi_scanner_v23 import scan_pois
@@ -105,8 +106,20 @@ async def analysis_command(message: Message):
         snapshot, assessment, record = await asyncio.to_thread(_analysis_record, _config, symbol, timeframe)
         if timeframe not in snapshot.timeframes or len(snapshot.timeframes.get(timeframe, ())) < 20:
             raise ValueError(f"داده کافی {timeframe} در MT5 Market Feed موجود نیست")
-        png = await asyncio.to_thread(render_ict_chart, snapshot, assessment, timeframe=timeframe)
-        await message.answer_photo(BufferedInputFile(png, filename=f"nexus_{symbol}_ict.png"))
+        use_tv = os.getenv("NEXUS_AGENT_CHART_SOURCE", "MT5").upper() == "TRADINGVIEW"
+        chart_source = "NEXUS MT5"
+        if use_tv:
+            try:
+                png = await capture_tradingview_chart(symbol, timeframe)
+                chart_source = "TradingView reference (unannotated)"
+            except Exception as chart_error:
+                print(f"TradingView visual capture failed: {type(chart_error).__name__}; MT5 fallback")
+                png = await asyncio.to_thread(render_ict_chart, snapshot, assessment, timeframe=timeframe)
+        else:
+            png = await asyncio.to_thread(render_ict_chart, snapshot, assessment, timeframe=timeframe)
+        caption = ("TradingView reference chart — zones/prices in the accompanying report are from MT5; "
+                   "feeds may differ.") if chart_source.startswith("TradingView") else None
+        await message.answer_photo(BufferedInputFile(png, filename=f"nexus_{symbol}_ict.png"), caption=caption)
         ai_commentary = await asyncio.to_thread(explain_ict_analysis, record)
         await message.answer(format_compact_checklist(record, ai_commentary))
         await status.delete()
