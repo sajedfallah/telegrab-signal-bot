@@ -5,6 +5,7 @@ import re
 from typing import Mapping
 
 from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime, timezone
 
 from .contracts import MarketSnapshot
 from .quadrant import derive_daily_quadrant
@@ -56,10 +57,10 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
         pad=max((pmax-pmin)*0.18,0.01)
     pmin-=pad
     pmax+=pad
-    W,H=1600,900; left,right,top,bottom=72,1425,105,735
-    im=Image.new("RGB",(W,H),(15,18,24)); d=ImageDraw.Draw(im, "RGB")
+    W,H=1600,900; left,right,top,bottom=78,1400,112,717
+    im=Image.new("RGB",(W,H),(12,17,27)); d=ImageDraw.Draw(im, "RGB")
     title=_font(38); normal=_font(22); small=_font(18); tiny=_font(15)
-    d.text((left,25),f"NEXUS ICT • {snapshot.symbol} • {timeframe}",font=title,fill=(235,238,244))
+    d.text((left,25),f"NEXUS PRO  •  {snapshot.symbol}  •  {timeframe}",font=title,fill=(235,238,244))
     d.text((right-260,35),f"Bid {snapshot.bid or '-'}  Ask {snapshot.ask or '-'}",font=small,fill=(190,196,207))
     def y(v): return bottom-(v-pmin)/(pmax-pmin)*(bottom-top)
     for i in range(6):
@@ -74,7 +75,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     }
     level_styles = {"Q25": (145, 125, 210), "Q50": (190, 155, 245), "Q75": (220, 180, 255)}
     step=(right-left)/len(rows)
-    body=max(3,int(step*0.55))
+    body=max(4,int(step*0.64))
 
     # ICT zones are rays: they begin at the candle that created them and extend
     # only to the right. Never back-fill a zone across candles that predate it.
@@ -131,17 +132,29 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
         if bottom_y-top_y<5: bottom_y=top_y+5
         # Approved minimal template: FVG/OB zones are visual only.
         # Their meaning is carried by color + legend; no text is drawn inside zones.
-        d.rectangle((x1,top_y,right,bottom_y),fill=fill,outline=outline,width=2)
+        overlay=Image.new("RGBA",(W,H),(0,0,0,0))
+        od=ImageDraw.Draw(overlay)
+        od.rectangle((x1,max(top,top_y),right,min(bottom,bottom_y)),fill=(*outline,42),outline=(*outline,180),width=2)
+        im=Image.alpha_composite(im.convert("RGBA"),overlay).convert("RGB")
+        d=ImageDraw.Draw(im,"RGB")
 
     for i,r in enumerate(rows):
         x=left+(i+0.5)*step; o,c,h,l=map(float,(r["open"],r["close"],r["high"],r["low"]))
-        up=c>=o; col=(105,190,150) if up else (215,105,115)
+        up=c>=o; col=(58,209,161) if up else (242,97,112)
         d.line((x,y(h),x,y(l)),fill=col,width=2)
         d.rectangle((x-body/2,min(y(o),y(c)),x+body/2,max(y(o),y(c))+1),fill=col)
     if snapshot.bid and snapshot.ask:
         mid=(snapshot.bid+snapshot.ask)/2
         if pmin<=mid<=pmax:
             yy=y(mid); d.line((left,yy,right,yy),fill=(235,200,90),width=2); d.rounded_rectangle((right+12,yy-14,right+150,yy+14),radius=6,fill=(15,18,24),outline=(235,200,90),width=1); d.text((right+20,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
+    if all("time" in bar for bar in rows):
+        for j in range(5):
+            idx=round(j*(len(rows)-1)/4)
+            ts=datetime.fromtimestamp(int(rows[idx]["time"]),timezone.utc)
+            label=ts.strftime("%d %b %H:%M" if timeframe in {"M1","M5","M15","H1"} else "%d %b %Y")
+            xx=left+(idx+0.5)*step
+            d.line((xx,bottom+5,xx,bottom+12),fill=(84,102,122),width=1)
+            d.text((xx-37,bottom+18),label,font=tiny,fill=(146,157,174))
     guide_y=785
     d.rounded_rectangle((left,guide_y,right,855),radius=12,outline=(48,58,72),width=2)
     guide=[("Daily Quadrant",(170,135,255)),("Bullish FVG",(70,205,150)),("Bearish FVG",(235,95,110)),("Bullish OB",(70,150,235)),("Bearish OB",(240,155,65)),("Current Price",(235,200,90))]
@@ -150,7 +163,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
         d.rounded_rectangle((gx,guide_y+18,gx+24,guide_y+42),radius=4,fill=col)
         d.text((gx+34,guide_y+18),name,font=tiny,fill=(210,216,226))
         gx+=205
-    d.text((left,H-28),"SAME DATA  •  CLEANER PICTURE  •  RIGHT-EXTENSION ZONES",font=tiny,fill=(145,150,162))
+    d.text((left,H-28),"MT5 PRO  •  REAL BROKER CANDLES  •  ICT ZONES",font=tiny,fill=(145,150,162))
     footer="Source: NEXUS MT5 Market Feed  •  Zones derived from the same ICT snapshot"
     fw=d.textbbox((0,0),footer,font=tiny)[2]
     d.text((right-fw,H-28),footer,font=tiny,fill=(145,150,162))
