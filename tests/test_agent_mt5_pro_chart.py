@@ -30,3 +30,19 @@ def test_pro_chart_without_timestamp_still_renders():
         as_of=datetime.now(timezone.utc),source="test",
         timeframes={"M5":rows},bid=100.4,ask=100.6,data_freshness_ms=0)
     assert render_ict_chart(snap,{"evidence":[]},timeframe="M5").startswith(b"\x89PNG\r\n\x1a\n")
+
+
+def test_pro_chart_does_not_draw_full_width_yellow_quote_line():
+    from PIL import Image
+    rows=tuple({"time":1760000000+i*60,"open":100+i*.01,"close":100+i*.01+.03,
+                "high":100+i*.01+.2,"low":100+i*.01-.2} for i in range(70))
+    snap=MarketSnapshot(snapshot_id="price-badge-only",symbol="XAUUSD",
+        as_of=datetime.now(timezone.utc),source="test",timeframes={"M1":rows},
+        bid=100.49,ask=100.51,data_freshness_ms=0)
+    with Image.open(io.BytesIO(render_ict_chart(snap,{"evidence":[]},timeframe="M1"))) as im:
+        # Full-width yellow line formerly crossed the chart at x=80.
+        lo,hi=100-.2,(100+69*.01+.23)
+        span=hi-lo
+        pad=span*.14
+        y=717-round(((100.5-(lo-pad))/(span+2*pad))*(717-112))
+        assert im.getpixel((78,y)) != (235,200,90)
