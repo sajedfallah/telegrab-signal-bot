@@ -126,13 +126,17 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
         lines.append(f"⏳ {tf}: بررسی ساختار؛ ورود فقط با تریگر تأییدشده و Risk Gate")
     tracker=scenario.get("setup_tracker") or {}
     if tracker.get("setup_id"):
-        lines.append(f"🔎 ICT Sequence: {tracker['status']} | ID {tracker['setup_id'][:8]}")
+        bound = "POI: BOUND" if tracker.get("poi_bound") else "POI: UNVERIFIED"
+        persistence = "SAVED" if tracker.get("persistent") else "VOLATILE"
+        lines.append(f"🔎 ICT Sequence: {tracker['status']} | ID {tracker['setup_id'][:8]} | {bound} | {persistence}")
     elif tf in {"M1","M5"}:
         lines.append("🔎 ICT Sequence: WAIT")
     pois = scenario.get("poi_candidates") or []
     if pois:
         selected = pois[:2]
-        parts = [f"{p['timeframe']} {p['source']} {fmt(p['low'])}–{fmt(p['high'])} ({p['state']})" for p in selected]
+        def position(p):
+            return {"BELOW":"ناحیه بالای قیمت", "ABOVE":"ناحیه پایین قیمت", "INSIDE":"قیمت داخل ناحیه"}.get(p["state"], "موقعیت نامشخص")
+        parts = [f"{p['timeframe']} {p['source']} {fmt(p['low'])}–{fmt(p['high'])} ({position(p)})" for p in selected]
         lines.append("")
         lines.append("📍 POI زیر نظر:")
         lines.extend("• " + part for part in parts)
