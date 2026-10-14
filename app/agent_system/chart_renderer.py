@@ -36,16 +36,26 @@ def _zones(evidence):
 
 
 def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], *, timeframe: str="M15", candle_count: int=180) -> bytes:
-    # One fixed visual scale policy for every timeframe: same candle count, plot box,
-    # horizontal spacing ratio, candle body ratio and vertical padding.
-    rows=list(snapshot.timeframes.get(timeframe, ()))[-candle_count:]
+    # Execution timeframes use a local price scale; distant Daily Quadrants are context.
+    effective_count = min(candle_count, 70) if timeframe == "M1" else (min(candle_count, 120) if timeframe == "M5" else candle_count)
+    rows=list(snapshot.timeframes.get(timeframe, ()))[-effective_count:]
     if len(rows)<20: raise ValueError(f"not enough {timeframe} candles for chart")
     evidence=list(assessment.get("evidence") or [])
     zones=_zones(evidence)
     highs=[float(x["high"]) for x in rows]; lows=[float(x["low"]) for x in rows]
-    zvals=[v for _,lo,hi,_ in zones for v in (lo,hi)]
-    visible_z=[v for v in zvals if min(lows)*0.97 <= v <= max(highs)*1.03]
-    pmin=min(lows+visible_z); pmax=max(highs+visible_z); pad=max((pmax-pmin)*0.18,0.01); pmin-=pad; pmax+=pad
+    local_min, local_max = min(lows), max(highs)
+    local_span = max(local_max-local_min, 0.01)
+    if timeframe in {"M1", "M5"}:
+        # Remote HTF levels must never determine execution-chart zoom.
+        pmin, pmax = local_min, local_max
+        pad = max(local_span * (0.14 if timeframe == "M1" else 0.17), 0.01)
+    else:
+        zvals=[v for _,lo,hi,_ in zones for v in (lo,hi)]
+        visible_z=[v for v in zvals if local_min-local_span <= v <= local_max+local_span]
+        pmin=min(lows+visible_z); pmax=max(highs+visible_z)
+        pad=max((pmax-pmin)*0.18,0.01)
+    pmin-=pad
+    pmax+=pad
     W,H=1600,900; left,right,top,bottom=72,1425,105,735
     im=Image.new("RGB",(W,H),(15,18,24)); d=ImageDraw.Draw(im, "RGB")
     title=_font(38); normal=_font(22); small=_font(18); tiny=_font(15)
