@@ -40,7 +40,8 @@ def _eligible_poi(snapshot, tracker):
 
 
 def observe(snapshot, timeframe: str, db_path: str | None = None) -> dict:
-    result=track_ict_setup(snapshot,timeframe)
+    source=track_ict_setup(snapshot,timeframe)
+    result={**source, "blocks": list(source.get("blocks") or [])}
     result["timeframe"]=timeframe
     result["poi_bound"]=False
     result["bound_poi"]=None
