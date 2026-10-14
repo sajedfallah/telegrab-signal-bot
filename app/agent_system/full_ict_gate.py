@@ -52,6 +52,8 @@ def verify_full_ict(snapshot: MarketSnapshot, direction: Direction, timeframe: s
         direction == Direction.SHORT and (stop <= entry or targets[0] >= entry)
     ):
         return FullICTGate(False, tuple(checks), ("invalid_directional_plan",))
+    if entry == stop:
+        return FullICTGate(False, tuple(checks), ("zero_risk",))
     rr = abs(targets[0] - entry) / abs(entry - stop)
     if not isfinite(rr) or rr < min_rr:
         return FullICTGate(False, tuple(checks), ("rr_below_policy",))
