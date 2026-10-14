@@ -63,6 +63,7 @@ def verify_full_ict(snapshot: MarketSnapshot, direction: Direction, timeframe: s
     bars = rows[:-1]
     pois = [p for p in scan_pois(snapshot)
             if p["source"] in {"FVG", "OB", "DAILY_QUADRANT"}
+            and p.get("quality") != "TOO_WIDE"
             and p["direction"] in {direction.value, "BOTH"}]
     if not pois:
         return FullICTGate(False, tuple(checks), ("no_directional_poi",))
