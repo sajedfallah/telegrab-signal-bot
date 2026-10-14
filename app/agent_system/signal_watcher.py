@@ -7,6 +7,8 @@ import time
 from datetime import datetime, timezone
 
 from .fast_scalp import FastScalpState, assess_fast_scalp, build_fast_scalp_signal
+from .full_ict_gate import verify_full_ict
+from .contracts import Direction
 from .orchestrator import run_shadow
 from .risk_gate import RiskPolicy
 from .snapshot_adapter import build_mt5_snapshot
@@ -54,8 +56,17 @@ def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
     sent=sent if sent is not None else {}
     for symbol in symbols:
         try:
-            standard=_summary(run_shadow(account,symbol,risk_policy=standard_policy))
+            result = run_shadow(account,symbol,risk_policy=standard_policy)
+            standard=_summary(result)
             if standard.get("entry") is not None and standard.get("risk_allowed") is True:
+                gate_snap = result.fresh_snapshot
+                gate = verify_full_ict(gate_snap, result.signal.direction, "M5",
+                    result.signal.entry, result.signal.stop_loss, result.signal.take_profits,
+                    standard_min_rr) if gate_snap is not None and result.signal is not None else None
+                if gate is None or not gate.allowed:
+                    print(json.dumps({"symbol":symbol,"strategy":"ICT_STANDARD_M5",
+                        "full_ict_gate":"BLOCKED","reasons":list(gate.blocks) if gate else ["no_reverified_snapshot"]},ensure_ascii=False))
+                    continue
                 fp=_standard_fingerprint(standard)
                 if sent.get((symbol,"M5"))!=fp:
                     reporter.send_text("📐 Strategy: ICT_STANDARD_M5\\n\\n"+format_shadow_record(standard))
@@ -67,6 +78,11 @@ def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
             if setup.state==FastScalpState.ENTRY_READY:
                 plan,_=build_fast_scalp_signal(snap,setup)
                 if plan is not None and not _fast_gate(snap,plan,fast_policy):
+                    gate = verify_full_ict(snap,plan.direction,"M1",plan.entry,plan.stop_loss,plan.take_profits,fast_min_rr)
+                    if not gate.allowed:
+                        print(json.dumps({"symbol":symbol,"strategy":"ICT_FAST_SCALP_M1",
+                            "full_ict_gate":"BLOCKED","reasons":list(gate.blocks)},ensure_ascii=False))
+                        continue
                     fp=_fast_fingerprint(plan)
                     if sent.get((symbol,"M1"))!=fp:
                         reporter.send_text(_format_fast(plan))
