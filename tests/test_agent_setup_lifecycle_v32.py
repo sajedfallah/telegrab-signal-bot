@@ -44,7 +44,7 @@ def test_stable_state_and_no_regression(tmp_path):
 
 def test_changed_poi_invalidates_setup(tmp_path):
     db=str(tmp_path/"test.db")
-    with patch("app.agent_system.setup_lifecycle_v32.track_ict_setup",return_value=tracker()):
+    with patch("app.agent_system.setup_lifecycle_v32.track_ict_setup",side_effect=lambda *args: tracker()):
         with patch("app.agent_system.setup_lifecycle_v32.scan_pois",return_value=[zone()]):
             first=observe(snapshot(),"M1",db)
         with patch("app.agent_system.setup_lifecycle_v32.scan_pois",return_value=[zone(99.5)]):
