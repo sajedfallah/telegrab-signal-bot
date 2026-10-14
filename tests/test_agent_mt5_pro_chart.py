@@ -29,4 +29,4 @@ def test_pro_chart_without_timestamp_still_renders():
     snap=MarketSnapshot(snapshot_id="pro-chart-no-time",symbol="XAUUSD",
         as_of=datetime.now(timezone.utc),source="test",
         timeframes={"M5":rows},bid=100.4,ask=100.6,data_freshness_ms=0)
-    assert render_ict_chart(snap,{"evidence":[]},timeframe="M5").startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+    assert render_ict_chart(snap,{"evidence":[]},timeframe="M5").startswith(b"\x89PNG\r\n\x1a\n")
