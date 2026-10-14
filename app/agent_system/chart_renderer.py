@@ -43,6 +43,16 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     if len(rows)<20: raise ValueError(f"not enough {timeframe} candles for chart")
     evidence=list(assessment.get("evidence") or [])
     zones=_zones(evidence)
+    # Visual-only de-duplication: do not change the ICT decision engine.
+    seen=set()
+    compact=[]
+    for zone in reversed(zones):
+        label,lo,hi,_=zone
+        key=(label,round(lo,3),round(hi,3))
+        if key not in seen:
+            compact.append(zone)
+            seen.add(key)
+    zones=list(reversed(compact))
     highs=[float(x["high"]) for x in rows]; lows=[float(x["low"]) for x in rows]
     local_min, local_max = min(lows), max(highs)
     local_span = max(local_max-local_min, 0.01)
@@ -146,7 +156,7 @@ def render_ict_chart(snapshot: MarketSnapshot, assessment: Mapping[str,object], 
     if snapshot.bid and snapshot.ask:
         mid=(snapshot.bid+snapshot.ask)/2
         if pmin<=mid<=pmax:
-            yy=y(mid); d.line((left,yy,right,yy),fill=(235,200,90),width=2); d.rounded_rectangle((right+12,yy-14,right+150,yy+14),radius=6,fill=(15,18,24),outline=(235,200,90),width=1); d.text((right+20,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
+            yy=y(mid); d.rounded_rectangle((right+12,yy-14,right+150,yy+14),radius=6,fill=(15,18,24),outline=(235,200,90),width=1); d.text((right+20,yy-10),f"NOW {mid:.2f}",font=small,fill=(235,200,90))
     if all("time" in bar for bar in rows):
         for j in range(5):
             idx=round(j*(len(rows)-1)/4)
