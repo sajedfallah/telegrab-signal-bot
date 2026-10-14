@@ -121,6 +121,11 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
         lines.append(f"⚡ Fast Scalp: {fast_state or 'WAIT'}")
     elif tf in {"M5", "M15", "H1", "D1", "W1", "MN1"}:
         lines.append(f"⏳ {tf}: بررسی ساختار؛ ورود فقط با تریگر تأییدشده و Risk Gate")
+    pois = scenario.get("poi_candidates") or []
+    if pois:
+        selected = pois[:2]
+        parts = [f"{p['timeframe']} {p['source']} {fmt(p['low'])}–{fmt(p['high'])} ({p['state']})" for p in selected]
+        lines.append("📍 POI زیر نظر: " + " | ".join(parts))
     if scenario.get("entry") is not None:
         lines.append(f"📐 {scenario.get('confirmed_direction')}: Entry {fmt(scenario['entry'])} | SL {fmt(scenario['stop_loss'])}")
         lines.append("🎯 " + " | ".join(f"TP{i} {fmt(x)}" for i, x in enumerate(scenario.get("take_profits", []), 1)) + f" | RR {float(scenario['rr']):.2f}")
