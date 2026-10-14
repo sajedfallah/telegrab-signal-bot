@@ -19,3 +19,7 @@ mt5/**/Files/NEXUS_Shots/
 test-results/
 dist/
 build/
+
+# Telegram collector session credentials
+*.session
+*.session-journal
