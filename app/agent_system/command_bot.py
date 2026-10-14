@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
 from aiogram.types import BufferedInputFile, Message
 
+from .ai_brain import explain_ict_analysis
 from .agents.ict import assess_ict
 from .chart_renderer import render_ict_chart
 from .fast_scalp import assess_fast_scalp
@@ -101,6 +102,9 @@ async def analysis_command(message: Message):
         png = await asyncio.to_thread(render_ict_chart, snapshot, assessment, timeframe=timeframe)
         await message.answer_photo(BufferedInputFile(png, filename=f"nexus_{symbol}_ict.png"))
         await message.answer(format_hourly_analysis(record))
+        ai_commentary = await asyncio.to_thread(explain_ict_analysis, record)
+        if ai_commentary:
+            await message.answer("🧠 سناریوهای مشروط AI Brain (Shadow):\n\n" + ai_commentary)
         await status.delete()
     except Exception as exc:
         await status.edit_text(f"آپدیت ساخته نشد: {type(exc).__name__}: {exc}")
