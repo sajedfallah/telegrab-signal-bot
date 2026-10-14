@@ -42,6 +42,18 @@ def scan_pois(snapshot: MarketSnapshot) -> list[dict[str, Any]]:
         epsilon=span * 0.02
         add("SELL_SIDE_LIQUIDITY", "M5", low-epsilon, low+epsilon, "LONG", 40)
         add("BUY_SIDE_LIQUIDITY", "M5", high-epsilon, high+epsilon, "SHORT", 40)
+    # Quality screening is conservative: provisional zones are NOT entry permission.
+    m15_ranges = sorted(float(r["high"])-float(r["low"]) for r in m15[-20:]) if len(m15)>=20 else []
+    median_range = m15_ranges[len(m15_ranges)//2] if m15_ranges else 0.0
+    for zone in candidates:
+        width=zone["high"]-zone["low"]
+        too_wide=(zone["source"] in {"OB","FVG"} and
+                  (median_range<=0 or width>2*median_range))
+        zone["quality"] = "TOO_WIDE" if too_wide else "PROVISIONAL"
+        zone["eligible_for_entry"] = False
+        zone["quality_reasons"] = (["zone_width_exceeds_2x_m15_median"] if too_wide
+                                   else ["mitigation_and_origin_not_reverified"])
+    # Prefer narrower plausible zones and preserve Daily Quadrant prominence.
     # Prioritize price-inside and then distance; priority resolves comparable distances.
-    candidates.sort(key=lambda p: (p["distance"]>0, p["distance"], -p["priority"]))
+    candidates.sort(key=lambda p: (p["quality"]=="TOO_WIDE", p["distance"]>0, p["distance"], -p["priority"]))
     return candidates
