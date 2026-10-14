@@ -66,12 +66,12 @@ def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
                 if gate is None or not gate.allowed:
                     print(json.dumps({"symbol":symbol,"strategy":"ICT_STANDARD_M5",
                         "full_ict_gate":"BLOCKED","reasons":list(gate.blocks) if gate else ["no_reverified_snapshot"]},ensure_ascii=False))
-                    continue
-                fp=_standard_fingerprint(standard)
-                if sent.get((symbol,"M5"))!=fp:
-                    reporter.send_text("📐 Strategy: ICT_STANDARD_M5\\n\\n"+format_shadow_record(standard))
-                    sent[(symbol,"M5")]=fp
-                    print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"standard_m5_signal":fp},ensure_ascii=False))
+                else:
+                    fp=_standard_fingerprint(standard)
+                    if sent.get((symbol,"M5"))!=fp:
+                        reporter.send_text("📐 Strategy: ICT_STANDARD_M5\\n\\n"+format_shadow_record(standard))
+                        sent[(symbol,"M5")]=fp
+                        print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"standard_m5_signal":fp},ensure_ascii=False))
 
             snap=build_mt5_snapshot(account,symbol)
             setup=assess_fast_scalp(snap)
@@ -82,12 +82,13 @@ def run_cycle(account,symbols,reporter,standard_min_rr,fast_min_rr,sent=None):
                     if not gate.allowed:
                         print(json.dumps({"symbol":symbol,"strategy":"ICT_FAST_SCALP_M1",
                             "full_ict_gate":"BLOCKED","reasons":list(gate.blocks)},ensure_ascii=False))
-                        continue
-                    fp=_fast_fingerprint(plan)
-                    if sent.get((symbol,"M1"))!=fp:
-                        reporter.send_text(_format_fast(plan))
-                        sent[(symbol,"M1")]=fp
-                        print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"fast_m1_signal":fp},ensure_ascii=False))
+                    else:
+                        fp=_fast_fingerprint(plan)
+                        if sent.get((symbol,"M1"))!=fp:
+                            reporter.send_text(_format_fast(plan))
+                            sent[(symbol,"M1")]=fp
+                            print(json.dumps({"at":datetime.now(timezone.utc).isoformat(),"fast_m1_signal":fp},ensure_ascii=False))
+
         except Exception as exc:
             print(json.dumps({"symbol":symbol,"signal_watcher_error":f"{type(exc).__name__}: {exc}"},ensure_ascii=False))
     return sent
