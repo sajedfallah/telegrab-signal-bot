@@ -124,6 +124,11 @@ def format_compact_checklist(record: Mapping[str, Any], ai_note: str | None = No
         lines.append(f"⚡ Fast Scalp: {fast_state or 'WAIT'}")
     elif tf in {"M5", "M15", "H1", "D1", "W1", "MN1"}:
         lines.append(f"⏳ {tf}: بررسی ساختار؛ ورود فقط با تریگر تأییدشده و Risk Gate")
+    tracker=scenario.get("setup_tracker") or {}
+    if tracker.get("setup_id"):
+        lines.append(f"🔎 ICT Sequence: {tracker['status']} | ID {tracker['setup_id'][:8]}")
+    elif tf in {"M1","M5"}:
+        lines.append("🔎 ICT Sequence: WAIT")
     pois = scenario.get("poi_candidates") or []
     if pois:
         selected = pois[:2]
