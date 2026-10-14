@@ -56,8 +56,16 @@ async def capture_tradingview_chart(symbol: str, timeframe: str) -> bytes:
         browser = await pw.chromium.launch(headless=True)
         try:
             page = await browser.new_page(viewport={"width": 1600, "height": 900}, device_scale_factor=1)
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            response = await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            if response is None or response.status >= 400:
+                raise TradingViewCaptureError("tradingview_http_error")
             await page.wait_for_timeout(3500)
+            visible_text = (await page.locator("body").inner_text(timeout=3000)).lower()
+            if any(error in visible_text for error in (
+                "403 error", "request could not be satisfied",
+                "request blocked", "access denied", "502 bad gateway",
+            )):
+                raise TradingViewCaptureError("tradingview_error_page")
             png = await page.screenshot(full_page=False, timeout=12000)
         finally:
             await browser.close()
