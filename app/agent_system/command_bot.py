@@ -16,6 +16,7 @@ from .tradingview_capture import capture_tradingview_chart
 from .fast_scalp import assess_fast_scalp
 from .scenario_v2 import build_shadow_scenarios, format_compact_checklist
 from .poi_scanner_v23 import scan_pois
+from .setup_tracker_v31 import track_ict_setup
 from .shadow_runner import ShadowRunnerConfig, _assessment_summary
 from .snapshot_adapter import build_mt5_snapshot
 from .telegram_reporter import TelegramShadowReporter, format_hourly_analysis
@@ -36,6 +37,7 @@ def _analysis_record(config: ShadowRunnerConfig, symbol: str, timeframe: str = "
     fast = assess_fast_scalp(snapshot) if timeframe == "M1" else None
     scenarios = build_shadow_scenarios(snapshot, timeframe, fast)
     scenarios["poi_candidates"] = scan_pois(snapshot)
+    scenarios["setup_tracker"] = track_ict_setup(snapshot, timeframe)
     return snapshot, assessment, {
         "symbol": snapshot.symbol,
         "snapshot_id": snapshot.snapshot_id,
