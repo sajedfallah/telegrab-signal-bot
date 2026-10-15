@@ -31,7 +31,7 @@ def _integrity(setup,frame,policy,sweep_opened_at,result):
 
 def analyze_research(frame: EvidenceFrame, setup: Setup, *, sweep_opened_at: int,
                      policy: DetectorPolicy | None = None) -> ResearchAnalysis:
-    policy=policy or DetectorPolicy()
+    policy=DetectorPolicy() if policy is None else policy
     result=detect_sequence(frame,setup,sweep_opened_at=sweep_opened_at,policy=policy)
     return ResearchAnalysis(setup,frame,policy,sweep_opened_at,result,
                            _integrity(setup,frame,policy,sweep_opened_at,result))

@@ -158,9 +158,12 @@ class LifecycleStore:
         finally:
             db.close()
 
-    def create(self, setup: Setup, *, snapshot_ref: str):
+    def create(self, setup: Setup, *, snapshot_ref: str, observed_at: int | None = None):
         if not snapshot_ref:
             raise ValueError("snapshot reference required")
+        observed_at=setup.created_at if observed_at is None else observed_at
+        if type(observed_at) is not int or observed_at<setup.created_at:
+            raise ValueError("discovery observation cannot predate setup creation")
         with self._connect() as db:
             db.execute("BEGIN IMMEDIATE")
             encoded = canonical(asdict(setup))
@@ -170,7 +173,7 @@ class LifecycleStore:
                     raise ValueError("immutable setup collision")
                 return setup.setup_id
             db.execute("INSERT INTO v33_setups VALUES (?,?)", (setup.setup_id, encoded))
-            self._insert(db, setup.setup_id, "discovered", State.DISCOVERED, setup.created_at,
+            self._insert(db, setup.setup_id, "discovered", State.DISCOVERED, observed_at,
                          snapshot_ref, encode_evidence(Decision("setup_discovered")))
         return setup.setup_id
 

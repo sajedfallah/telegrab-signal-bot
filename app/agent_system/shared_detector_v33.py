@@ -72,7 +72,7 @@ def _validate(frame,setup):
 
 def detect_sequence(frame: EvidenceFrame, setup: Setup, *, sweep_opened_at: int,
                     policy: DetectorPolicy | None = None) -> SequenceResult:
-    policy=policy or DetectorPolicy()
+    policy=DetectorPolicy() if policy is None else policy
     if type(policy) is not DetectorPolicy or type(sweep_opened_at) is not int:
         raise ValueError("explicit sweep anchor and policy required")
     _validate(frame,setup)
