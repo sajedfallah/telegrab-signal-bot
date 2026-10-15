@@ -41,14 +41,7 @@ if (@($incoming | Where-Object { $_ -eq 'data' -or $_ -like 'data/*' }).Count -g
 git merge --ff-only refs/nexus/recovery-v33
 if ($LASTEXITCODE -ne 0) { throw 'Fast-forward merge failed' }
 git rev-parse HEAD
-python -m pytest tests/test_agent_setup_tracker_v31.py tests/test_agent_setup_lifecycle_v32.py -q
-if ($LASTEXITCODE -ne 0) { throw 'V3.2 pytest gate failed; preserve and return the complete output' }
-python -m unittest discover -s tests -p test_agent_v32_recovery_unittest.py -v
-if ($LASTEXITCODE -ne 0) { throw 'V3.2 regression checks failed' }
-python -m unittest discover -s tests -p test_agent_lifecycle_v33_unittest.py -v
-if ($LASTEXITCODE -ne 0) { throw 'V3.3 lifecycle checks failed' }
-python -m unittest discover -s tests -p test_agent_lifecycle_snapshot_v33_unittest.py -v
-if ($LASTEXITCODE -ne 0) { throw 'V3.3 snapshot boundary checks failed' }
+& (Join-Path $testRoot 'tools/run_nexus_v33_regressions.ps1')
 git status --short
 Write-Output 'Focused test commands passed. Return this output for review; watcher integration remains disabled.'
 Write-Output 'This script does not push, publish, start services or deploy.'
