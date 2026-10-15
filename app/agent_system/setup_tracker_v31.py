@@ -8,9 +8,29 @@ from __future__ import annotations
 
 from hashlib import sha256
 from typing import Any
+from math import isfinite
 
 from .contracts import Direction, MarketSnapshot
 from .agents.ict import _h1_bias
+
+
+def _closed_rows(rows, timeframe, as_of):
+    """Validate broker UTC opens; the trailing row remains conservatively excluded."""
+    seconds={"M1":60,"M5":300,"H1":3600}[timeframe]
+    now=as_of.timestamp()
+    previous=None
+    for i, row in enumerate(rows):
+        stamp=row.get("time")
+        if type(stamp) is not int or (previous is not None and stamp<=previous) or stamp>now:
+            raise ValueError("invalid candle timestamps")
+        values=[float(row[k]) for k in ("open","high","low","close")]
+        o,h,l,c=values
+        if not all(isfinite(v) and v>0 for v in values) or not l<=min(o,c)<=max(o,c)<=h:
+            raise ValueError("invalid candle geometry")
+        if i<len(rows)-1 and stamp+seconds>now:
+            raise ValueError("unconfirmed historical candle")
+        previous=stamp
+    return rows[:-1]
 
 
 def track_ict_setup(snapshot: MarketSnapshot, timeframe: str) -> dict[str, Any]:
@@ -26,6 +46,12 @@ def track_ict_setup(snapshot: MarketSnapshot, timeframe: str) -> dict[str, Any]:
         return output
     rows=list(snapshot.timeframes.get(timeframe, ()))
     h1=list(snapshot.timeframes.get("H1", ()))
+    try:
+        bars=_closed_rows(rows,timeframe,snapshot.as_of)
+        h1=_closed_rows(h1,"H1",snapshot.as_of)
+    except (ValueError,TypeError,KeyError):
+        output["blocks"]=["candle_close_or_geometry_unverified"]
+        return output
     if len(rows)<30 or len(h1)<24:
         output["blocks"]=["insufficient_candles"]
         return output
@@ -34,7 +60,6 @@ def track_ict_setup(snapshot: MarketSnapshot, timeframe: str) -> dict[str, Any]:
         output["blocks"]=["neutral_h1_bias"]
         return output
     # Last candle may still be forming. All evidence below uses closed bars only.
-    bars=rows[:-1]
     candidate=None
     for idx in range(max(12,len(bars)-20),len(bars)):
         prior=bars[idx-12:idx]

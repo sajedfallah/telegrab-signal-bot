@@ -7,7 +7,8 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from copy import deepcopy
+from contextlib import closing
 from pathlib import Path
 
 from .poi_scanner_v23 import scan_pois
@@ -41,7 +42,8 @@ def _eligible_poi(snapshot, tracker):
 
 def observe(snapshot, timeframe: str, db_path: str | None = None) -> dict:
     source=track_ict_setup(snapshot,timeframe)
-    result={**source, "blocks": list(source.get("blocks") or [])}
+    result=deepcopy(source)
+    result["blocks"]=list(source.get("blocks") or [])
     result["timeframe"]=timeframe
     result["poi_bound"]=False
     result["bound_poi"]=None
@@ -51,6 +53,22 @@ def observe(snapshot, timeframe: str, db_path: str | None = None) -> dict:
     poi=_eligible_poi(snapshot,result)
     if poi is None:
         result["blocks"].append("sweep_not_bound_to_qualified_htf_poi")
+        # An existing identity must not silently survive loss of its POI.
+        # Never create a database merely to record an unbound observation.
+        if db_path:
+            path=Path(db_path).resolve()
+            if (path.is_file() and path.suffix.lower() in {".sqlite",".sqlite3",".db"}
+                and not any(p.lower()=="nexus_deploy" for p in path.parts)):
+                with closing(sqlite3.connect(str(path),timeout=10)) as db, db:
+                    db.execute("BEGIN IMMEDIATE")
+                    if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='setup_lifecycle'").fetchone():
+                        prior=db.execute("SELECT evidence_json FROM setup_lifecycle WHERE setup_id=?",(result["setup_id"],)).fetchone()
+                        if prior:
+                            result=json.loads(prior[0])
+                            result.update(status="INVALIDATED",poi_bound=False,persistent=True,confirmed_for_signal=False)
+                            result["blocks"]=list(dict.fromkeys([*result.get("blocks",[]),"bound_poi_unavailable"]))
+                            db.execute("UPDATE setup_lifecycle SET state=?,evidence_json=?,last_seen=? WHERE setup_id=?",
+                                       ("INVALIDATED",json.dumps(result),snapshot.as_of.isoformat(),result["setup_id"]))
         return result
     result["poi_bound"]=True
     result["bound_poi"]=poi
@@ -59,17 +77,20 @@ def observe(snapshot, timeframe: str, db_path: str | None = None) -> dict:
         result["blocks"].append("lifecycle_persistence_not_configured")
         return result
     path=Path(db_path).resolve()
-    if path.suffix.lower() not in {".sqlite",".sqlite3",".db"}:
+    if (path.suffix.lower() not in {".sqlite",".sqlite3",".db"}
+        or any(p.lower()=="nexus_deploy" for p in path.parts)):
         result["blocks"].append("invalid_lifecycle_db_path")
         return result
     path.parent.mkdir(parents=True,exist_ok=True)
-    now=datetime.now(timezone.utc).isoformat()
-    with sqlite3.connect(str(path),timeout=10) as db:
+    now=snapshot.as_of.isoformat()
+    with closing(sqlite3.connect(str(path),timeout=10)) as db, db:
+        db.execute("BEGIN IMMEDIATE")
         db.execute(_SCHEMA)
         existing=db.execute("SELECT state,poi_json,evidence_json FROM setup_lifecycle WHERE setup_id=?",
                             (result["setup_id"],)).fetchone()
         if existing:
             previous_state,previous_poi,previous_data=existing
+            result["bound_poi"]=json.loads(previous_poi)
             if json.loads(previous_poi)!=poi:
                 result["blocks"].append("poi_binding_changed")
                 result["status"]="INVALIDATED"
