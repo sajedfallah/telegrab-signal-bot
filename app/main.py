@@ -4617,6 +4617,43 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
         # A manual LIMIT activation carries the existing NEXUS signal id. Reuse
         # that lifecycle row instead of creating a second signal.
         existing = db.get_signal_by_code(signal_id) if signal_id else None
+        account_number = str(payload.get("account_number") or "").strip()
+        # Reconciliation-generated LIVE-OPEN payloads may omit account_number.
+        # An existing canonical NEXUS id must never be reissued just because
+        # the event account is blank. Require the same issuer user and reject
+        # only an explicit conflicting broker account.
+        if existing and (
+            str(existing["issuer_type"] or "").upper() != "MT5_ADMIN"
+            or int(existing["created_by"] or 0) != uid
+            or (account_number and str(existing["issuer_account"] or "").strip()
+                and str(existing["issuer_account"]).strip() != account_number)
+        ):
+            log.warning("[NEXUS][MT5-OPEN] conflicting canonical signal identity: signal=%s ticket=%s",
+                        signal_id, ticket)
+            return
+        if not existing and signal_id.startswith("NX-"):
+            # Never transform an unknown canonical reference into a new
+            # executable signal, even if reconciliation races a deletion.
+            log.warning("[NEXUS][MT5-OPEN] unknown canonical signal: %s ticket=%s",
+                        signal_id, ticket)
+            return
+        if not existing and ticket and account_number:
+            # The broker's OPEN event can arrive without signal_id. Resolve its
+            # ticket/position against the live snapshot or execution ledger before
+            # deciding it was an independently opened manual position.
+            existing = db.get_mt5_admin_signal_for_open(
+                account_number, ticket, str(payload.get("position_id") or "")
+            )
+        if existing and str(existing["order_type"] or "MARKET").upper() == "MARKET":
+            event_id = str(payload.get("event_id") or f"OPEN:{ticket}")
+            if not db.has_trade_execution(uid, ticket, event_id):
+                db.update_trade_execution(
+                    uid, ticket, event_id, signal_id=int(existing["id"]),
+                    status="OPEN", destination=str(existing["destination"] or "BOTH")
+                )
+            log.info("[NEXUS][MT5-OPEN] linked broker OPEN to existing signal=%s ticket=%s",
+                     existing["code"], ticket)
+            return
         if existing and str(existing["order_type"] or "MARKET").upper() != "MARKET":
             event_id = str(payload.get("event_id") or f"OPEN:{ticket}")
             destination = str(existing["destination"] or "BOTH")

@@ -2724,15 +2724,62 @@ def touch_autotrade_session(telegram_id: int, account_number: str, ea_version: s
         con.execute("UPDATE autotrade_mt5_accounts SET last_seen_at=?,ea_version=COALESCE(?,ea_version) WHERE telegram_id=?", (now, ea_version, telegram_id))
 
 
-def autotrade_active_signals(after_id: int = 0, limit: int = 50):
+def autotrade_active_signals(after_id: int = 0, limit: int = 50, *,
+                             exclude_manual_origin_account: str | None = None):
+    # A broker OPEN event is an observation, not a new order for the same
+    # admin terminal. Other accounts can still follow independently issued
+    # manual signals under the existing distribution policy.
+    extra = ""
+    args: list = [int(after_id)]
+    if exclude_manual_origin_account:
+        # Broker-originated manual OPENs must never be executed by the
+        # issuing admin EA, even when reconciliation omitted issuer_account.
+        # Client distribution remains governed by the separate client path.
+        extra = " AND COALESCE(trailing_name,'') <> 'Manual MT5'"
+    args.append(max(1, min(int(limit), 100)))
     with conn() as con:
         return list(con.execute(
             """SELECT * FROM signals
                WHERE id>? AND status='ACTIVE'
-                 AND issuer_type='MT5_ADMIN'
-               ORDER BY id ASC LIMIT ?""",
-            (int(after_id), max(1, min(int(limit), 100))),
+                 AND issuer_type='MT5_ADMIN'""" + extra +
+            " ORDER BY id ASC LIMIT ?", tuple(args)
         ).fetchall())
+
+
+def get_mt5_admin_signal_for_open(account_number: str, ticket: str,
+                                  position_id: str = ""):
+    """Resolve a broker OPEN to the signal that caused it, without issuing one."""
+    account = str(account_number).strip()
+    ticket = str(ticket).strip()
+    position_id = str(position_id).strip()
+    if not account or not ticket:
+        return None
+    with conn() as con:
+        # Live state is authoritative for the broker ticket and position.
+        live = con.execute(
+            """SELECT signal_code FROM mt5_live_state
+               WHERE account_number=? AND state_type='POSITION'
+                 AND (ticket=? OR (?<>'' AND identifier=?))
+                 AND signal_code LIKE 'NX-%'
+               ORDER BY last_seen_at DESC LIMIT 1""",
+            (account, ticket, position_id, position_id),
+        ).fetchone()
+        if live:
+            row = con.execute(
+                """SELECT * FROM signals
+                   WHERE code=? AND issuer_type='MT5_ADMIN' AND issuer_account=?""",
+                (live["signal_code"], account),
+            ).fetchone()
+            if row:
+                return row
+        return con.execute(
+            """SELECT s.* FROM signals s
+               JOIN autotrade_trade_executions e ON e.signal_id=s.id
+               WHERE s.issuer_type='MT5_ADMIN' AND s.issuer_account=?
+                 AND (e.ticket=? OR (?<>'' AND e.position_id=?))
+               ORDER BY e.id DESC LIMIT 1""",
+            (account, ticket, position_id, position_id),
+        ).fetchone()
 
 
 def create_autotrade_command(signal_id: int, command: str, payload: dict | None = None, *, actor_type: str = "MT5_ADMIN", actor_id: str | int | None = None, account_number: str | None = None) -> int:
