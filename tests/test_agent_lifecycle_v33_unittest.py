@@ -32,7 +32,10 @@ class LifecycleTests(unittest.TestCase):
                                   at=at, snapshot_ref="snapshot-1", feed_fresh=True, **kwargs)
 
     def c(self,*args):
-        return candle(*args,tf=self.spec.timeframe)
+        c=candle(*args,tf=self.spec.timeframe)
+        if self.spec.direction=="SHORT":
+            return replace(c,open=200.-c.open,high=200.-c.low,low=200.-c.high,close=200.-c.close)
+        return c
 
     def location(self):
         for stage in (State.POI_SELECTED, State.APPROACHING_POI, State.POI_TOUCHED):
@@ -47,7 +50,7 @@ class LifecycleTests(unittest.TestCase):
         self.mss_id = self.event(State.MSS_CONFIRMED, self.mss)
         if through == State.MSS_CONFIRMED: return
         self.displacement = Displacement(self.c(13,105.,110.,104.,109.),
-            tuple(self.c(t,100.,102.,98.,101.) for t in (7,8,9)), self.mss_id)
+            tuple(self.c(t,100.,102.,98.,101.) for t in (4,5,6)), self.mss_id)
         self.disp_id = self.event(State.DISPLACEMENT_CONFIRMED, self.displacement)
         if through == State.DISPLACEMENT_CONFIRMED: return
         self.fvg = FVG(self.displacement.candle, self.c(14,109.,114.,108.,113.),
@@ -139,7 +142,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_same_candle_displacement_is_explicit_exception(self):
         self.sequence(State.MSS_CONFIRMED)
-        ev=Displacement(self.mss.candle,tuple(candle(t,100.,102.,98.,101.) for t in (7,8,9)),self.mss_id)
+        ev=Displacement(self.mss.candle,tuple(candle(t,100.,102.,98.,101.) for t in (4,5,6)),self.mss_id)
         with self.assertRaises(ValueError): self.event(State.DISPLACEMENT_CONFIRMED,ev)
         self.spec=replace(self.spec,allow_same_candle_displacement=True)
         self.sid=self.store.create(self.spec,snapshot_ref="snapshot-1")
@@ -217,6 +220,65 @@ class LifecycleTests(unittest.TestCase):
         with self.assertRaises(ValueError): candle(0,l=110.)
         self.event(State.POI_SELECTED,Observation(candle(10),"select"))
         with self.assertRaises(ValueError): self.event(State.APPROACHING_POI,Observation(candle(10),"backdated"),at=1799)
+
+    def test_revised_candle_cannot_be_reused_as_fvg_origin(self):
+        self.sequence(State.DISPLACEMENT_CONFIRMED)
+        revised=replace(self.displacement.candle,high=111.)
+        with self.assertRaisesRegex(ValueError,"revised"):
+            self.event(State.FVG_CREATED,FVG(revised,candle(14,109.,114.,108.,113.),candle(15,113.,115.,112.,114.),self.disp_id))
+
+    def test_monitor_invalidation_is_terminal_and_has_source_candle(self):
+        self.sequence()
+        invalid=candle(30,100.,101.,88.,89.)
+        result=self.store.monitor(self.sid,invalid,at=1860,snapshot_ref="monitor-1",feed_fresh=True)
+        self.assertEqual(result,State.INVALIDATED)
+        self.assertEqual(self.store.recover(self.sid)[1][-1]["state"],"INVALIDATED")
+        self.assertIn('"opened_at":1800',self.store.recover(self.sid)[1][-1]["payload"])
+        self.assertEqual(self.store.monitor(self.sid,invalid,at=1860,snapshot_ref="monitor-1",feed_fresh=True),State.INVALIDATED)
+        with self.assertRaises(ValueError): self.claim(at=1860)
+
+    def test_monitor_valid_price_does_not_promote_state(self):
+        count=len(self.store.recover(self.sid)[1])
+        result=self.store.monitor(self.sid,candle(30),at=1860,snapshot_ref="monitor",feed_fresh=True)
+        self.assertEqual(result,State.DISCOVERED)
+        self.assertEqual(len(self.store.recover(self.sid)[1]),count)
+
+    def test_monitor_rejects_stale_or_unclosed_candle(self):
+        for at,fresh in ((1801,True),(1860,False)):
+            with self.assertRaises(ValueError):
+                self.store.monitor(self.sid,candle(30),at=at,snapshot_ref="monitor",feed_fresh=fresh)
+
+    def test_monitor_expires_while_feed_unavailable(self):
+        result=self.store.monitor(self.sid,candle(30),at=6000,snapshot_ref="expiry",feed_fresh=False)
+        self.assertEqual(result,State.EXPIRED)
+
+    def test_missing_append_only_trigger_rejects_reopen(self):
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("DROP TRIGGER v33_events_update")
+            db.commit()
+        with self.assertRaises(ValueError): LifecycleStore(self.path)
+
+    def test_short_sequences_on_both_timeframes(self):
+        for tf in ("M1","M5"):
+            with self.subTest(timeframe=tf):
+                multiplier=1 if tf=="M1" else 5
+                self.spec=replace(self.spec,direction="SHORT",timeframe=tf,
+                    strategy="ICT_FAST_SCALP_M1" if tf=="M1" else "ICT_STANDARD_M5",
+                    poi_origin=candle(0,tf=tf),invalidation_price=110.,
+                    created_at=600*multiplier,expires_at=6000*multiplier,
+                    poi_eligible_at=60*multiplier)
+                self.sid=self.store.create(self.spec,snapshot_ref="snapshot-1")
+                self.clock=1800*multiplier
+                self.sequence()
+                self.assertEqual(self.store.recover(self.sid)[1][-1]["state"],"ENTRY_READY")
+
+    def test_replay_of_identical_input_is_deterministic(self):
+        self.sequence()
+        original=self.store.recover(self.sid)
+        self.store=LifecycleStore(Path(self.temp.name)/"replay.db")
+        self.sid=self.store.create(self.spec,snapshot_ref="snapshot-1")
+        self.sequence()
+        self.assertEqual(original,self.store.recover(self.sid))
 
 
 if __name__ == "__main__":

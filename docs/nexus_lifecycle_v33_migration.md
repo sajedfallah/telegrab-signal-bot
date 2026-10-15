@@ -1,7 +1,9 @@
 # V3.2 recovery and V3.3 lifecycle foundation
 
-Status: isolated implementation verified by standard-library tests; external
-pytest and watcher integration remain BLOCKED. No phase-wide PASS is claimed.
+Status: user-supplied VPS output verifies the six baseline V3.2 pytest tests
+(6 passed in 2.29s). The tested SHA was not included. Recovery/V3.3 code still
+requires external verification; watcher integration remains BLOCKED. No
+phase-wide V3.3 PASS is claimed.
 
 ## Scope and ownership
 
@@ -15,6 +17,18 @@ Retest contracts. Candle identities include source, symbol, timeframe, explicit
 UTC open/close times and OHLC values. Numeric prices are normalized before
 hashing. Typed evidence is copied to canonical JSON in SQLite, so caller-side
 objects cannot mutate persisted history.
+
+The engine rejects OHLC revisions of the same source candle across events.
+`monitor` records terminal closed-price invalidation with exact candle evidence,
+or expiration using the supplied decision clock; normal monitoring cannot promote
+state. Reopening verifies the append-only triggers and migration ledger.
+
+`lifecycle_snapshot_v33.evidence_frame` copies immutable closed candles from a
+single MarketSnapshot and explicit shared context reference for M1/M5. It requires
+source-provided closed_at metadata; the existing MT5 adapter lacks this field and
+therefore fails this boundary until a separately verified metadata migration.
+The trailing live candle is excluded from completed evidence. Missing timeframes,
+quotes, stale data, overlapping/future bars or missing metadata fail closed.
 
 The engine verifies geometry and availability of supplied evidence. It does not
 discover or prove genuine swing windows, POI qualification, HTF alignment or
@@ -102,7 +116,14 @@ Local environment: bundled Python has pydantic but no pytest. No package downloa
 was attempted during recovery. Existing six test functions were executed verbatim
 via a unittest adapter (tmp_path replaced by TemporaryDirectory), plus four V3.2
 regressions. That is actual assertion evidence, but is not pytest collection or
-validation on C:\NEXUS_AGENT_TEST, which is absent on this host.
+validation on C:\NEXUS_AGENT_TEST, which is absent on this host. Subsequent
+user-supplied evidence confirms six baseline pytest tests passed on that VPS;
+see nexus_v32_vps_evidence.md. Untracked data/ was present and must be preserved.
+The verification script now permits only that known untracked directory and
+rejects incoming changes under data/ before updating the checkout.
+
+Latest local V3.3 run: 32 lifecycle tests plus 6 snapshot-boundary tests passed,
+including identical-input replay and full LONG/SHORT sequences on M1/M5.
 
 Run on the authorized Windows test host:
 

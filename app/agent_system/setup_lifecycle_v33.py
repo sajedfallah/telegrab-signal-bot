@@ -141,6 +141,11 @@ class LifecycleStore:
             actual = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
             if not required <= actual:
                 raise ValueError("incomplete lifecycle schema")
+            triggers={r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='trigger'")}
+            expected={f"{table}_{op}" for table in required for op in ("update","delete")}
+            ledger=[r[0] for r in db.execute("SELECT version FROM v33_migrations ORDER BY version")]
+            if not expected <= triggers or ledger != [self.SCHEMA_VERSION]:
+                raise ValueError("lifecycle append-only schema/ledger damaged")
 
     @contextmanager
     def _connect(self):
@@ -238,9 +243,63 @@ class LifecycleStore:
                 self._validate(setup, state, evidence, at, previous)
             return self._insert(db, setup_id, event_key, state, at, snapshot_ref, payload)
 
+    def monitor(self, setup_id, candle: Candle, *, at: int, snapshot_ref: str, feed_fresh: bool):
+        """Persist closed-price invalidation/expiry even without a new setup stage.
+
+        Normal monitoring grants no state promotion or publication permission.
+        """
+        if type(at) is not int or not snapshot_ref or type(candle) is not Candle:
+            raise ValueError("explicit monitoring candle and decision required")
+        with self._connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            spec=db.execute("SELECT spec FROM v33_setups WHERE setup_id=?",(setup_id,)).fetchone()
+            if spec is None:
+                raise KeyError(setup_id)
+            setup=_decode_setup(spec[0])
+            history=tuple(db.execute("SELECT * FROM v33_events WHERE setup_id=? ORDER BY seq",(setup_id,)))
+            current=State(history[-1]["state"])
+            if current in TERMINAL:
+                return current
+            if at<history[-1]["at"]:
+                raise ValueError("retroactive monitoring decision")
+            if at>=setup.expires_at:
+                self._insert(db,setup_id,"absolute_expiry",State.EXPIRED,at,snapshot_ref,
+                             encode_evidence(Decision("absolute_setup_deadline")))
+                return State.EXPIRED
+            if feed_fresh is not True:
+                raise ValueError("stale or missing monitoring feed")
+            if (candle.symbol!=setup.symbol or candle.timeframe!=setup.timeframe
+                or candle.source!=setup.poi_origin.source or candle.closed_at>at
+                or candle.closed_at<setup.created_at):
+                raise ValueError("unverified monitoring candle")
+            prior_bars=tuple(c for e in history for c in _candles(decode_evidence(json.loads(e["payload"]))))
+            self._consistent_candles((*prior_bars,candle))
+            if prior_bars and candle.opened_at<max(c.opened_at for c in prior_bars):
+                raise ValueError("monitoring predates recorded evidence")
+            invalid=(candle.close<=setup.invalidation_price if setup.direction=="LONG"
+                     else candle.close>=setup.invalidation_price)
+            if invalid:
+                self._insert(db,setup_id,"price_invalidation:"+candle.identity,State.INVALIDATED,at,
+                             snapshot_ref,encode_evidence(Observation(candle,"structural_close_invalidation")))
+                return State.INVALIDATED
+            return current
+
+    @staticmethod
+    def _consistent_candles(candles):
+        seen={}
+        for c in candles:
+            key=(c.symbol,c.timeframe,c.source,c.opened_at)
+            if key in seen and seen[key]!=c.identity:
+                raise ValueError("source candle revised within setup evidence")
+            seen[key]=c.identity
+
     @staticmethod
     def _validate(setup, state, evidence, at, history):
         bars = tuple(_candles(evidence))
+        LifecycleStore._consistent_candles((
+            *(c for e in history for c in _candles(decode_evidence(json.loads(e["payload"])))),
+            *bars,
+        ))
         for c in bars:
             if c.symbol != setup.symbol or c.timeframe != setup.timeframe or c.closed_at > at:
                 raise ValueError("foreign or unclosed source candle")
