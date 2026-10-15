@@ -19,10 +19,13 @@ class Mt5OpenFeedbackLoopTests(unittest.TestCase):
         self.assertIn('str(payload.get("position_id") or "")', block)
         self.assertIn('existing["id"]', block)
         self.assertIn('existing["issuer_account"]', block)
+        self.assertIn('signal_id.startswith("NX-")', block)
+        self.assertIn('existing["created_by"]', block)
+        self.assertIn('if existing and str(existing["order_type"] or "MARKET").upper() == "MARKET":', block)
 
     def test_admin_does_not_reconsume_broker_originated_manual_signals(self):
         self.assertIn("exclude_manual_origin_account=account", API)
-        self.assertIn("issuer_account=? AND trailing_name='Manual MT5'", DB)
+        self.assertIn("COALESCE(trailing_name,'') <> 'Manual MT5'", DB)
         self.assertIn("def get_mt5_admin_signal_for_open(", DB)
         self.assertIn("e.position_id=?", DB)
 
