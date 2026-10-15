@@ -4782,11 +4782,14 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
             m, sec = divmod(rem, 60)
             duration_text = f"{h:02d}:{m:02d}:{sec:02d}"
 
-        result_type = "WIN" if profit > 0 else ("LOSS" if profit < 0 else "BREAK EVEN")
+        # Channel-facing results must be based on price movement, not on the
+        # admin account's monetary P/L (which varies with volume and costs).
+        # Keep the broker profit solely in private events and audit records.
+        result_type = "WIN" if result_pips > 0 else ("LOSS" if result_pips < 0 else "BREAK EVEN")
         pips_text = f"{result_pips:+g} {result_unit}"
         reply = (
             f"TRADE CLOSED | {row['code']} | {row['symbol']} | direction={row['direction']} | "
-            f"exit={exit_price:g} | pnl={profit:+.2f} | result={result_type} | performance={pips_text} | "
+            f"exit={exit_price:g} | result={result_type} | performance={pips_text} | "
             f"duration={duration_text} | reason={reason_labels.get(reason, reason)} | ticket={ticket}"
         )
 
