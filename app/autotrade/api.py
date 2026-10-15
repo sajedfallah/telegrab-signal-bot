@@ -717,7 +717,9 @@ def get_signals(
     key, account, _, _, _ = _ea_auth_headers(x_license_key, x_mt5_account)
     admin = _admin_auth(x_admin_mode, x_admin_token, account)
     if admin:
-        rows = db.autotrade_active_signals(after_id, limit)
+        rows = db.autotrade_active_signals(
+            after_id, limit, exclude_manual_origin_account=account
+        )
         from .service import signal_to_payload
         return {"license_status":"ADMIN", "signals":[signal_to_payload(r) for r in rows]}
     try:
