@@ -4618,9 +4618,25 @@ async def _process_mt5_trade_event(bot: Bot, n, payload: dict) -> None:
         # that lifecycle row instead of creating a second signal.
         existing = db.get_signal_by_code(signal_id) if signal_id else None
         account_number = str(payload.get("account_number") or "").strip()
-        if existing and (str(existing["issuer_type"] or "").upper() != "MT5_ADMIN"
-                         or str(existing["issuer_account"] or "") != account_number):
-            existing = None
+        # Reconciliation-generated LIVE-OPEN payloads may omit account_number.
+        # An existing canonical NEXUS id must never be reissued just because
+        # the event account is blank. Require the same issuer user and reject
+        # only an explicit conflicting broker account.
+        if existing and (
+            str(existing["issuer_type"] or "").upper() != "MT5_ADMIN"
+            or int(existing["created_by"] or 0) != uid
+            or (account_number and str(existing["issuer_account"] or "").strip()
+                and str(existing["issuer_account"]).strip() != account_number)
+        ):
+            log.warning("[NEXUS][MT5-OPEN] conflicting canonical signal identity: signal=%s ticket=%s",
+                        signal_id, ticket)
+            return
+        if not existing and signal_id.startswith("NX-"):
+            # Never transform an unknown canonical reference into a new
+            # executable signal, even if reconciliation races a deletion.
+            log.warning("[NEXUS][MT5-OPEN] unknown canonical signal: %s ticket=%s",
+                        signal_id, ticket)
+            return
         if not existing and ticket and account_number:
             # The broker's OPEN event can arrive without signal_id. Resolve its
             # ticket/position against the live snapshot or execution ledger before
