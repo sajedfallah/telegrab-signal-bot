@@ -2732,8 +2732,10 @@ def autotrade_active_signals(after_id: int = 0, limit: int = 50, *,
     extra = ""
     args: list = [int(after_id)]
     if exclude_manual_origin_account:
-        extra = " AND NOT (issuer_account=? AND trailing_name='Manual MT5')"
-        args.append(str(exclude_manual_origin_account))
+        # Broker-originated manual OPENs must never be executed by the
+        # issuing admin EA, even when reconciliation omitted issuer_account.
+        # Client distribution remains governed by the separate client path.
+        extra = " AND COALESCE(trailing_name,'') <> 'Manual MT5'"
     args.append(max(1, min(int(limit), 100)))
     with conn() as con:
         return list(con.execute(
